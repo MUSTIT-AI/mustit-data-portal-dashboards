@@ -5,7 +5,22 @@
 
 - **URL:** https://mustit-ai.github.io/mustit-data-portal-dashboards/
 - **데이터:** Supabase(서울) · KST 기준 · 매일 08:00 갱신
-- **개인정보:** 집계 API가 **개인정보(구매자·회원번호·연령·성별·지역)를 원천 제외**하므로 게이트 없이 공개해도 노출되지 않음.
+- **로그인 필수:** Supabase Auth(이메일+비밀번호). 로그인해야 화면이 열리고, 데이터 RPC도 `authenticated`+**허용목록**에 등록된 계정만 호출 가능(DB 레벨 차단).
+
+## 로그인 · 계정 관리 (관리자)
+
+접근 = ①Supabase Auth 계정 존재 + ②`public.dash_allowed` 허용목록 등록, **둘 다** 필요.
+
+**계정 추가**
+1. Supabase 대시보드 → Authentication → Users → **Add user** (이메일·비밀번호, Auto Confirm 켜기)
+2. SQL Editor에서 허용목록 등록:
+   ```sql
+   insert into public.dash_allowed(email, note)
+   values (lower('someone@mustit.co.kr'), '담당자') on conflict do nothing;
+   ```
+**계정 제거**: Authentication에서 유저 삭제 + `delete from public.dash_allowed where email = lower('someone@mustit.co.kr');`
+
+**권장 보안설정**: Authentication → Sign In / Providers → Email → **"Allow new users to sign up" 끄기**(공개 자가가입 차단). 허용목록이 이미 막지만 이중 안전.
 
 ## 구조
 
@@ -21,21 +36,18 @@ dashboards/
 
 브라우저에서 publishable 키로 `POST /rest/v1/rpc/<함수>` 를 호출합니다. (키는 공개용, 권한은 RPC가 제한)
 
+페이지 `<head>`에 supabase-js + `auth.js`(공통 로그인 게이트)를 넣으면 `window.MUSTIT` 가 생깁니다.
+```html
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../auth.js"></script>   <!-- dashboards/ 안에서는 ../auth.js, 루트는 auth.js -->
+```
 ```js
-const SB  = "https://hhvmhtejmhhxksnldfmi.supabase.co";
-const KEY = "sb_publishable_3qHI5hEv90wiU03q3mmS4Q_nUdAovOw";
-async function rpc(fn, body){
-  const r = await fetch(SB+"/rest/v1/rpc/"+fn, {
-    method:"POST",
-    headers:{apikey:KEY, Authorization:"Bearer "+KEY, "Content-Type":"application/json"},
-    body: JSON.stringify(body||{})
-  });
-  if(!r.ok) throw new Error(await r.text());
-  return r.json();
-}
-// 예: 기간 필터로 KPI 요약
-const p = { from:"2026-07-01", to:"2026-08-06", filters:{ brand:["Moncler"] } };
-const kpi = await rpc("dash_summary", { p });
+// 로그인 완료 후에만 실행됨. MUSTIT.rpc 가 인증 토큰을 자동으로 붙임.
+window.MUSTIT.ready(async function(){
+  const p = { from:"2026-07-01", to:"2026-08-06", filters:{ brand:["Moncler"] } };
+  const kpi = await window.MUSTIT.rpc("dash_summary", { p });
+  // ... 렌더링 ...
+});
 ```
 
 ### 제공 RPC (모두 집계·비PII, `anon` 실행 허용)
@@ -45,19 +57,14 @@ const kpi = await rpc("dash_summary", { p });
 | `dash_daily(p jsonb)` | 일별 시계열(거래액·주문수·구매수량·할인·순매출·순이익·적립금 등) |
 | `dash_coupon(p jsonb)` | 쿠폰별 일별 추이(item/member/cps) |
 | `dash_raw(p jsonb, p_limit int)` | RAW 주문라인 — 개인정보 제외 89컬럼 (②탭 seq 순서) |
-| `dash_raw_full(p jsonb, p_limit int, passphrase text)` | RAW 전체 99컬럼(개인정보 포함) — **비밀번호 게이트**, DB에서 검증 |
+| `dash_raw_all(p jsonb, p_limit int)` | RAW 전체 99컬럼(개인정보 포함) — 로그인 사용자 전용 |
 | `dash_filters()` | 필터 드롭다운 옵션 |
 
-### RAW 개인정보 컬럼 게이트
-- RAW 기본은 **89컬럼(개인정보 제외)** → 게이트 없이 공개해도 안전.
-- 대시보드 RAW 우측 **🔓 개인정보 포함 전체** 버튼 → 비밀번호 입력 시 전체 **99컬럼**(연령대·성별·회원번호·구매자ID·지역·나이·가입일 등 포함) 표시.
-- 비밀번호는 `public._dash_gate` 에 **sha256 해시로만** 저장(anon 접근 불가). `dash_raw_full` 이 SECURITY DEFINER로 검증하므로 publishable 키만으로는 개인정보를 못 가져옴.
-- **비밀번호 변경(SQL):**
-  ```sql
-  update public._dash_gate
-     set pass_hash = encode(sha256(convert_to('새비밀번호','utf8')),'hex'), updated_at = now()
-   where id = 1;
-  ```
+모든 RPC는 `authenticated`+허용목록(`_dash_guard`) 검사를 통과해야 실행됩니다.
+
+### RAW 개인정보 컬럼
+- RAW 기본은 **89컬럼(개인정보 제외)**. 대시보드 RAW 우측 **🔓 개인정보 포함 전체** 버튼으로 **99컬럼**(연령대·성별·회원번호·구매자ID·지역·나이·가입일 등) 토글.
+- 사이트 자체가 로그인 게이트라, 로그인=인가로 보고 전체 컬럼은 별도 비밀번호 없이 열림(`dash_raw_all`).
 
 `p` 필터 객체: `{ from, to, filters:{ 컬럼:[값…] }, product_name }`
 필터 컬럼: `brand, category_gender, category_l, order_status, order_type, product_division, payment_method, platform, member_grade, age_band, buyer_gender, region_sido, customer_type, seller_id, seller_grade, join_year, ship_origin, naver_discount_applied`
@@ -77,6 +84,8 @@ git add -A && git commit -m "새 대시보드: xxx" && git push   # → GitHub P
 ```
 
 ## 보안 메모
-- 게이트 없이 공개되나, **RPC가 집계·비PII만 반환**하고 원본 뷰(`orders_v`)·PII 컬럼은 `anon` 접근 차단됨.
-- 임의 SQL RPC(`dash_query`)와 `anon`의 원본 뷰 직접권한은 **보안상 회수(비활성)** 됨.
-  → 구버전 서버 방식(`server.js` + 비밀번호 게이트 + `dashQuery(SQL)`)과 `dashboards/월별매출.html`(샘플)은 더 이상 동작하지 않음. 새 대시보드는 위의 **RPC 직접 호출** 방식을 쓸 것.
+- **로그인(Supabase Auth) 필수** + **허용목록(`public.dash_allowed`)** 검사 → 관리자가 등록한 계정만 데이터 조회. 로그인 안 하거나 미등록 계정은 데이터 RPC가 DB에서 거부됨.
+- `anon`은 모든 데이터 RPC에서 회수됨. 원본 뷰(`orders_v`)·PII 직접권한, 임의 SQL RPC(`dash_query`)도 회수(비활성).
+- 데이터는 브라우저↔서울 Supabase 직결(정적 호스팅은 데이터 미경유) → 지역 규칙 충족.
+- 구버전 서버 방식(`server.js`+`dashQuery`)·`dashboards/월별매출.html`(샘플)은 비동작(레거시).
+- 권장: Supabase에서 **자가 회원가입(signup) 끄기**(위 로그인·계정 관리 참고).

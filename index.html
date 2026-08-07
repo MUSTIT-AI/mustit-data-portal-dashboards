@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MUST IT 데이터 대시보드</title>
+<style>
+  body{font-family:'Pretendard','Malgun Gothic',system-ui,sans-serif;margin:0;background:#eef0f2;color:#1c1b19}
+  .wrap{max-width:860px;margin:0 auto;padding:40px 24px}
+  h1{font-size:23px;margin:0 0 4px}
+  .sub{color:#6b6a66;font-size:14px;margin:0 0 22px}
+  a.card{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e2e0da;border-radius:12px;
+    padding:18px 20px;margin:10px 0;text-decoration:none;color:inherit;font-weight:700;font-size:15px;transition:border-color .15s}
+  a.card:hover{border-color:#c8102e}
+  a.card .ico{font-size:22px}
+  a.card small{display:block;color:#8a8880;font-weight:500;font-size:12px;margin-top:2px}
+  .foot{color:#a7a49c;font-size:12px;margin-top:26px;line-height:1.7}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>📊 MUST IT 데이터 대시보드</h1>
+  <p class="sub">브라우저에서 서울 Supabase 집계 API를 직접 조회합니다 · KST 기준 · 매일 08:00 갱신</p>
+
+  <a class="card" href="dashboards/%EC%A0%84%EC%B2%B4%EC%A3%BC%EB%AC%B8_%EC%A3%BC%EB%AC%B8%EC%9D%BC_Master.html">
+    <span class="ico">🛍️</span>
+    <span>[분석] 전체주문_주문일 (Master)
+      <small>전체 주문상태 기준 · 거래·할인·수수료·순이익 추이 + 쿠폰별 + RAW DATA</small>
+    </span>
+  </a>
+
+  <p class="foot">
+    * 개인정보(구매자·회원번호·연령·성별·지역)는 집계 API에서 원천 제외됩니다.<br>
+    * 새 대시보드는 <code>dashboards/</code> 폴더에 HTML을 추가하고 push하면 됩니다.
+  </p>
+</div>
+</body>
+</html>

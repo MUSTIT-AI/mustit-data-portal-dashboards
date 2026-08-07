@@ -63,8 +63,17 @@
   .kpi .v.rate{color:var(--red)}
   /* raw */
   .rawwrap{padding:6px 12px 40px}
-  .rawwrap h3{font-size:14px;margin:14px 0 2px}
+  .rawhead{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:14px 0 2px;flex-wrap:wrap}
+  .rawwrap h3{font-size:14px;margin:0}
+  .rawtools{display:flex;align-items:center;gap:10px}
+  .rawcount{color:var(--sub);font-size:12px;font-variant-numeric:tabular-nums}
+  .btn.csv{background:#1f8a4c;color:#fff}
+  .btn.csv:disabled{background:#c7ccc8;cursor:default}
   .rawwrap .note{color:var(--sub);font-size:11px;margin:0 0 8px}
+  .pager{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:10px;font-size:12.5px;color:var(--sub)}
+  .pager button{border:1px solid #d6d4ce;background:#fff;border-radius:7px;padding:5px 12px;font-size:12.5px;cursor:pointer;font-weight:600}
+  .pager button:disabled{opacity:.4;cursor:default}
+  .pager .pp{font-variant-numeric:tabular-nums;min-width:92px;text-align:center}
   .tblscroll{overflow-x:auto;border:1px solid var(--border);border-radius:8px;background:#fff}
   table.raw{border-collapse:collapse;white-space:nowrap;font-size:11.5px}
   table.raw th{background:#f4f3ef;color:#33322f;padding:6px 8px;text-align:left;border-bottom:1px solid #e2e0da;position:sticky;top:0;font-weight:700}
@@ -119,9 +128,16 @@
 
 <!-- RAW -->
 <div class="rawwrap">
-  <h3>RAW DATA</h3>
-  <p class="note">* 개인정보(구매자·회원번호·연령·성별·지역)는 제외한 상품·주문라인 정보입니다. 최근순 최대 300행.</p>
+  <div class="rawhead">
+    <h3>RAW DATA</h3>
+    <div class="rawtools">
+      <span class="rawcount" id="rawcount"></span>
+      <button class="btn csv" id="csv">⬇ CSV 다운로드</button>
+    </div>
+  </div>
+  <p class="note">* 개인정보(구매자·회원번호·연령·성별·지역)는 제외한 상품·주문라인 정보입니다. 최근순 최대 2,000행 · 30행씩 페이지.</p>
   <div class="tblscroll"><table class="raw" id="raw"></table></div>
+  <div class="pager" id="pager"></div>
 </div>
 
 <div class="loading" id="loading">불러오는 중…</div>
@@ -186,6 +202,7 @@ function buildDropdowns(){
     var btn = document.createElement("button");
     btn.innerHTML = '<span class="v">전체</span><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 3l4 4 4-4" stroke="#333" fill="none" stroke-width="1.5"/></svg>';
     var panel = document.createElement("div"); panel.className="panel";
+    panel.addEventListener("click", function(e){ e.stopPropagation(); }); // 옵션 클릭해도 창 유지
     var search = document.createElement("input"); search.className="search"; search.placeholder="검색…";
     panel.appendChild(search);
     var list = document.createElement("div");
@@ -316,22 +333,62 @@ var RAW_COLS = [
   ["net_revenue","순매출"],["payment_fee","결제수수료"],["net_profit","순이익"]
 ];
 var RAW_NUM = {quantity:1,total_purchase:1,paid_amount:1,gross_revenue:1,net_revenue:1,payment_fee:1,net_profit:1};
-function renderRaw(rows){
+var PAGE_SIZE = 30;
+var RAW_ROWS = [], RAW_PAGE = 0;
+
+function renderRaw(rows){ RAW_ROWS = rows || []; RAW_PAGE = 0; paintRaw(); }
+
+function paintRaw(){
+  var total = RAW_ROWS.length;
+  var pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  if(RAW_PAGE > pages-1) RAW_PAGE = pages-1;
+  if(RAW_PAGE < 0) RAW_PAGE = 0;
+  var slice = RAW_ROWS.slice(RAW_PAGE*PAGE_SIZE, RAW_PAGE*PAGE_SIZE + PAGE_SIZE);
+
   var thead = "<thead><tr>"+RAW_COLS.map(function(c){return "<th>"+c[1]+"</th>";}).join("")+"</tr></thead>";
-  var tbody = "<tbody>"+rows.map(function(r){
+  var tbody = "<tbody>"+slice.map(function(r){
     return "<tr>"+RAW_COLS.map(function(c){
       var v=r[c[0]]; var num=RAW_NUM[c[0]];
       return "<td"+(num?" class=num":"")+">"+(v==null?"":(num?won(v):String(v)))+"</td>";
     }).join("")+"</tr>";
   }).join("")+"</tbody>";
   $("raw").innerHTML = thead+tbody;
+
+  $("rawcount").textContent = "총 "+won(total)+"행" + (total>=2000 ? " (최대)" : "");
+  $("csv").disabled = total===0;
+  var from = total===0 ? 0 : RAW_PAGE*PAGE_SIZE+1;
+  var to   = Math.min(total, (RAW_PAGE+1)*PAGE_SIZE);
+  $("pager").innerHTML =
+    '<button id="pgprev"'+(RAW_PAGE<=0?" disabled":"")+'>◀ 이전</button>'+
+    '<span class="pp">'+from+'–'+to+' / '+won(total)+'</span>'+
+    '<button id="pgnext"'+(RAW_PAGE>=pages-1?" disabled":"")+'>다음 ▶</button>';
+  var pv=$("pgprev"), nx=$("pgnext");
+  if(pv) pv.onclick=function(){ RAW_PAGE--; paintRaw(); window.scrollTo(0, document.body.scrollHeight); };
+  if(nx) nx.onclick=function(){ RAW_PAGE++; paintRaw(); window.scrollTo(0, document.body.scrollHeight); };
+}
+
+// CSV: 전체 조회분(RAW_ROWS) 내보내기 · Excel 한글 대응 BOM
+function csvCell(v){ v = (v==null?"":String(v)); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+function downloadCSV(){
+  if(!RAW_ROWS.length) return;
+  var head = RAW_COLS.map(function(c){ return csvCell(c[1]); }).join(",");
+  var body = RAW_ROWS.map(function(r){
+    return RAW_COLS.map(function(c){ return csvCell(r[c[0]]); }).join(",");
+  }).join("\r\n");
+  var blob = new Blob(["﻿"+head+"\r\n"+body], {type:"text/csv;charset=utf-8;"});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url;
+  a.download = "RAW_"+$("from").value+"_"+$("to").value+".csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 }
 
 // ── refresh ──
 function refresh(){
   var p = params();
   $("loading").classList.add("on"); $("err").textContent="";
-  Promise.all([ rpc("dash_summary",{p:p}), rpc("dash_daily",{p:p}), rpc("dash_coupon",{p:p}), rpc("dash_raw",{p:p,p_limit:300}) ])
+  Promise.all([ rpc("dash_summary",{p:p}), rpc("dash_daily",{p:p}), rpc("dash_coupon",{p:p}), rpc("dash_raw",{p:p,p_limit:2000}) ])
   .then(function(res){
     var s=res[0], daily=res[1]||[], coup=res[2]||{}, raw=res[3]||[];
     renderKPI(s);
@@ -367,6 +424,7 @@ function setDefaultDates(){
   $("from").value=ymd(from); $("to").value=ymd(to);
 }
 $("go").onclick=refresh;
+$("csv").onclick=downloadCSV;
 $("reset").onclick=function(){ FDEFS.forEach(function(d){ SEL[d.key]=new Set(); d._updateBtn&&d._updateBtn(); });
   $("seller_id").value=""; $("product_name").value=""; setDefaultDates(); refresh(); };
 $("product_name").addEventListener("keydown",function(e){ if(e.key==="Enter")refresh(); });

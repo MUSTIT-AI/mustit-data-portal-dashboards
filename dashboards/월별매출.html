@@ -1,0 +1,42 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>월별 매출 · MUST IT</title>
+<script src="/dash.js"></script>
+<style>
+  body{font-family:'Pretendard',system-ui,sans-serif;margin:0;background:#f4f4f5;color:#1c1b19}
+  .wrap{max-width:820px;margin:0 auto;padding:28px}
+  a.back{font-size:13px;color:#6b6a66;text-decoration:none}
+  h1{font-size:21px;margin:6px 0 2px}.sub{color:#6b6a66;font-size:13px;margin:0 0 16px}
+  table{width:100%;border-collapse:collapse;background:#fff;border:1px solid #e6e4df;border-radius:12px;overflow:hidden}
+  th{background:#c8102e;color:#fff;text-align:left;padding:9px 12px;font-size:13px}
+  td{border-top:1px solid #eee;padding:9px 12px;font-size:14px;font-variant-numeric:tabular-nums}
+  .bar{height:9px;background:#c8102e;border-radius:5px}
+</style>
+<div class="wrap">
+  <a class="back" href="/">← 대시보드 목록</a>
+  <h1>월별 매출 (정산완료 · 총매출)</h1>
+  <p class="sub">최근 12개월 · gross_revenue 합계 · KST 기준 (샘플 대시보드)</p>
+  <div id="out">불러오는 중…</div>
+</div>
+<script>
+(async () => {
+  try {
+    const rows = await dashQuery(
+      "select to_char(date_trunc('month', order_datetime),'YYYY-MM') as month, " +
+      "sum(gross_revenue) as rev, count(*) as cnt " +
+      "from mustit_orders.orders_v where order_status='정산완료' " +
+      "group by 1 order by 1 desc limit 12"
+    );
+    if (!rows.length) { document.getElementById('out').textContent = '데이터 없음'; return; }
+    const max = Math.max.apply(null, rows.map(r => Number(r.rev) || 0)) || 1;
+    const won = n => (Number(n) || 0).toLocaleString('ko-KR');
+    document.getElementById('out').innerHTML =
+      '<table><thead><tr><th>월</th><th>총매출(원)</th><th>건수</th><th style="width:38%">비중</th></tr></thead><tbody>' +
+      rows.map(r =>
+        '<tr><td>' + r.month + '</td><td>' + won(r.rev) + '</td><td>' + won(r.cnt) +
+        '</td><td><div class="bar" style="width:' + Math.round((Number(r.rev) || 0) / max * 100) + '%"></div></td></tr>'
+      ).join('') + '</tbody></table>';
+  } catch (e) {
+    document.getElementById('out').innerHTML = '<p style="color:#c8102e">오류: ' + e.message + '</p>';
+  }
+})();
+</script>

@@ -1,0 +1,7 @@
+{
+  "name": "mustit-data-portal-dashboards",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MUST IT 직원 제작 데이터 대시보드 (읽기전용 · 비밀번호 게이트)",
+  "scripts": { "start": "node server.js" }
+}

@@ -22,17 +22,24 @@
   <h1>📊 MUST IT 데이터 대시보드</h1>
   <p class="sub">브라우저에서 서울 Supabase 집계 API를 직접 조회합니다 · KST 기준 · 매일 08:00 갱신</p>
 
-  <a class="card" href="dashboards/%EC%A0%84%EC%B2%B4%EC%A3%BC%EB%AC%B8_%EC%A3%BC%EB%AC%B8%EC%9D%BC_Master.html">
-    <span class="ico">🛍️</span>
-    <span>[분석] 전체주문_주문일 (Master)
-      <small>전체 주문상태 기준 · 거래·할인·수수료·순이익 추이 + 쿠폰별 + RAW DATA</small>
-    </span>
-  </a>
+  <div id="cards">불러오는 중…</div>
 
   <p class="foot">
     * 개인정보(구매자·회원번호·연령·성별·지역)는 집계 API에서 원천 제외됩니다.<br>
-    * 새 대시보드는 <code>dashboards/</code> 폴더에 HTML을 추가하고 push하면 됩니다.
+    * 새 대시보드는 <code>dashboards/</code> 폴더에 HTML을 추가하고 push하면 <b>이 목록에 자동 표시</b>됩니다.
   </p>
 </div>
+<script>
+  var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  fetch('dashboards.json?cb=' + Date.now()).then(function (r) { return r.json(); }).then(function (list) {
+    var el = document.getElementById('cards');
+    if (!list || !list.length) { el.innerHTML = '<p class="sub">아직 대시보드가 없습니다.</p>'; return; }
+    el.innerHTML = list.map(function (d) {
+      return '<a class="card" href="dashboards/' + encodeURIComponent(d.file) + '">' +
+        '<span class="ico">' + esc(d.icon || '📊') + '</span>' +
+        '<span>' + esc(d.title || d.file) + '<small>' + esc(d.file) + '</small></span></a>';
+    }).join('');
+  }).catch(function () { document.getElementById('cards').innerHTML = '<p class="sub">목록을 불러오지 못했습니다.</p>'; });
+</script>
 </body>
 </html>

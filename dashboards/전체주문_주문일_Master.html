@@ -69,6 +69,8 @@
   .rawcount{color:var(--sub);font-size:12px;font-variant-numeric:tabular-nums}
   .btn.csv{background:#1f8a4c;color:#fff}
   .btn.csv:disabled{background:#c7ccc8;cursor:default}
+  .btn.unlock{background:#3a3f45;color:#fff}
+  .btn.unlock.on{background:#b4523a}
   .rawwrap .note{color:var(--sub);font-size:11px;margin:0 0 8px}
   .pager{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:10px;font-size:12.5px;color:var(--sub)}
   .pager button{border:1px solid #d6d4ce;background:#fff;border-radius:7px;padding:5px 12px;font-size:12.5px;cursor:pointer;font-weight:600}
@@ -132,6 +134,7 @@
     <h3>RAW DATA</h3>
     <div class="rawtools">
       <span class="rawcount" id="rawcount"></span>
+      <button class="btn unlock" id="unlock">🔓 개인정보 포함 전체</button>
       <button class="btn csv" id="csv">⬇ CSV 다운로드</button>
     </div>
   </div>
@@ -323,6 +326,7 @@ function renderKPI(s){
 }
 
 // ── RAW ──
+// 컬럼목록(②탭 portal_columns) seq 순서 그대로. 개인정보 seq64~73 제외(89개).
 var RAW_COLS = [
   ["product_id","상품번호"],["catalog_no","카탈로그번호"],["model_code","마스터품번"],["order_type","비즈니스 구분"],
   ["order_datetime","주문일시"],["order_no","주문번호"],["order_detail_no","주문고유번호"],["brand","브랜드"],
@@ -330,9 +334,54 @@ var RAW_COLS = [
   ["category_s","소분류"],["product_name","상품명"],["product_condition","상품상태"],["product_division","상품구분"],
   ["opt_size","사이즈"],["opt_color","컬러"],["quantity","구매수량"],
   ["total_purchase","총구매금액"],["paid_amount","실결제금액"],["gross_revenue","총매출"],
-  ["net_revenue","순매출"],["payment_fee","결제수수료"],["net_profit","순이익"]
+  ["net_revenue","순매출"],["payment_fee","결제수수료"],["net_profit","순이익"],
+  ["net_profit_after_points","순이익(적립금차감)"],["net_commission_rate","순수수료율"],["net_profit_rate","순이익율"],
+  ["commission_rate","수수료율"],["own_discount_rate","자사 할인율"],["discount_total","할인금액 합계"],
+  ["own_discount_ttl","자사 할인 TTL"],["seller_discount_ttl","판매자 할인 TTL"],
+  ["item_coupon_label","상품쿠폰노출이름"],["item_coupon_name","상품쿠폰이름"],["item_coupon_amount","상품쿠폰금액"],
+  ["item_coupon_own","상품쿠폰(자사)"],["product_coupon_amount_seller","상품쿠폰(판매자)"],
+  ["seller_item_coupon_label","판매자상품쿠폰노출이름"],["seller_item_coupon_name","판매자상품쿠폰이름"],
+  ["seller_item_coupon","판매자상품쿠폰"],["dps_coupon_name","DPS쿠폰명"],["dps_discount","DPS 할인"],
+  ["naver_discount_applied","네이버쇼핑할인 적용여부"],["naver_discount","네이버쇼핑할인금액"],
+  ["naver_discount_own","네이버쇼핑할인(자사)"],["naver_discount_seller","네이버쇼핑할인(판매자)"],
+  ["member_coupon_label","회원쿠폰노출이름"],["member_coupon_name","회원쿠폰이름"],["member_coupon_amount","회원쿠폰금액"],
+  ["comp_coupon_name","보상쿠폰명"],["comp_coupon_amount","보상쿠폰금액"],
+  ["etc_coupon_name","기타쿠폰명"],["etc_coupon_amount","기타쿠폰금액"],
+  ["points_used","사용적립금"],["gift_use","사용상품권"],["membership_discount_amount","멤버십할인"],
+  ["platform","결제기기"],["payment_method","결제수단"],["paid_at","결제일시"],["order_status","주문상태"],
+  ["seller_id","판매자ID"],["member_grade","구매자등급"],
+  ["customer_type","거래구분"],["seller_grade","판매자등급"],["global_seller","글로벌셀러"],
+  ["premium_yn","프리미엄여부"],["prm_cps_yn","프리미엄CPS"],["itpoint_yn","잇포인트"],
+  ["catalog_rank","카탈로그순위"],["catalog_item_count","카탈로그 상품 수"],["extra_coupon","추가쿠폰"],
+  ["market_low_price","시장최저가"],["listing_solution","상품등록솔루션"],["inflow","유입정보"],["sales_code","매출코드"],
+  ["courier","배송회사"],["ship_origin","배송구분"],
+  ["delivery_period_bizdays","배송기간 (영업일 기준)"],["delivery_period","배송기간"],
+  ["delivery_complete_at","배송완료일시"],["settlement_complete_at","정산완료일시"],
+  ["cancel_done_at","취소완료일시"],["return_complete_at","반품완료일시"],
+  ["cancel_type","취소유형"],["cancel_by","취소귀책"],["cancel_reason","취소구분"],
+  ["cancel_reason_detail","취소사유"],["return_reason","반품사유"]
 ];
-var RAW_NUM = {quantity:1,total_purchase:1,paid_amount:1,gross_revenue:1,net_revenue:1,payment_fee:1,net_profit:1};
+function isNum(v){ return typeof v === "number"; }
+function fmtCell(v){
+  if(v==null) return "";
+  if(isNum(v)) return Number.isInteger(v) ? v.toLocaleString("ko-KR") : v.toLocaleString("ko-KR",{maximumFractionDigits:4});
+  return String(v);
+}
+// 개인정보 컬럼(seq 64~73) — 게이트 통과 시에만 표시
+var PII_COLS = [
+  ["age_band","연령대"],["buyer_gender","성별"],["member_no","회원번호"],["buyer_hash","구매자ID"],
+  ["region_sido","지역1"],["region_sigungu","지역2"],["buyer_age","나이"],
+  ["join_year","가입연도"],["join_date","가입날짜"],["prev_order_at","이전 주문일"]
+];
+// 전체 99컬럼 = 89컬럼의 member_grade 뒤에 PII 10개 삽입 (seq 순서 유지)
+var RAW_COLS_FULL = RAW_COLS.slice();
+(function(){
+  var i; for(i=0;i<RAW_COLS_FULL.length;i++){ if(RAW_COLS_FULL[i][0]==="member_grade") break; }
+  Array.prototype.splice.apply(RAW_COLS_FULL, [i+1,0].concat(PII_COLS));
+})();
+var CUR_COLS = RAW_COLS;      // 현재 표시 컬럼셋 (기본 89)
+var RAW_MODE = "safe";        // safe | full
+var GATE_PASS = null;         // 게이트 통과 비밀번호(세션 메모리)
 var PAGE_SIZE = 30;
 var RAW_ROWS = [], RAW_PAGE = 0;
 
@@ -345,11 +394,11 @@ function paintRaw(){
   if(RAW_PAGE < 0) RAW_PAGE = 0;
   var slice = RAW_ROWS.slice(RAW_PAGE*PAGE_SIZE, RAW_PAGE*PAGE_SIZE + PAGE_SIZE);
 
-  var thead = "<thead><tr>"+RAW_COLS.map(function(c){return "<th>"+c[1]+"</th>";}).join("")+"</tr></thead>";
+  var thead = "<thead><tr>"+CUR_COLS.map(function(c){return "<th>"+c[1]+"</th>";}).join("")+"</tr></thead>";
   var tbody = "<tbody>"+slice.map(function(r){
-    return "<tr>"+RAW_COLS.map(function(c){
-      var v=r[c[0]]; var num=RAW_NUM[c[0]];
-      return "<td"+(num?" class=num":"")+">"+(v==null?"":(num?won(v):String(v)))+"</td>";
+    return "<tr>"+CUR_COLS.map(function(c){
+      var v=r[c[0]];
+      return "<td"+(isNum(v)?" class=num":"")+">"+fmtCell(v)+"</td>";
     }).join("")+"</tr>";
   }).join("")+"</tbody>";
   $("raw").innerHTML = thead+tbody;
@@ -371,9 +420,9 @@ function paintRaw(){
 function csvCell(v){ v = (v==null?"":String(v)); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
 function downloadCSV(){
   if(!RAW_ROWS.length) return;
-  var head = RAW_COLS.map(function(c){ return csvCell(c[1]); }).join(",");
+  var head = CUR_COLS.map(function(c){ return csvCell(c[1]); }).join(",");
   var body = RAW_ROWS.map(function(r){
-    return RAW_COLS.map(function(c){ return csvCell(r[c[0]]); }).join(",");
+    return CUR_COLS.map(function(c){ return csvCell(r[c[0]]); }).join(",");
   }).join("\r\n");
   var blob = new Blob(["﻿"+head+"\r\n"+body], {type:"text/csv;charset=utf-8;"});
   var url = URL.createObjectURL(blob);
@@ -384,13 +433,33 @@ function downloadCSV(){
   setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 }
 
+// ── 개인정보 게이트 ──
+function updateUnlockBtn(){
+  var b=$("unlock");
+  if(RAW_MODE==="full"){ b.textContent="🔒 개인정보 숨기기"; b.classList.add("on"); }
+  else { b.textContent="🔓 개인정보 포함 전체"; b.classList.remove("on"); }
+}
+// RAW 요청: full 모드면 게이트 RPC, 실패 시 안전(89컬럼)으로 폴백
+function fetchRaw(p){
+  if(RAW_MODE==="full" && GATE_PASS){
+    return rpc("dash_raw_full",{p:p, p_limit:2000, passphrase:GATE_PASS})
+      .catch(function(e){
+        alert("전체 컬럼 열람 실패 — 비밀번호가 올바르지 않거나 오류입니다.\n"+e.message);
+        RAW_MODE="safe"; GATE_PASS=null; updateUnlockBtn();
+        return rpc("dash_raw",{p:p, p_limit:2000});
+      });
+  }
+  return rpc("dash_raw",{p:p, p_limit:2000});
+}
+
 // ── refresh ──
 function refresh(){
   var p = params();
   $("loading").classList.add("on"); $("err").textContent="";
-  Promise.all([ rpc("dash_summary",{p:p}), rpc("dash_daily",{p:p}), rpc("dash_coupon",{p:p}), rpc("dash_raw",{p:p,p_limit:2000}) ])
+  Promise.all([ rpc("dash_summary",{p:p}), rpc("dash_daily",{p:p}), rpc("dash_coupon",{p:p}), fetchRaw(p) ])
   .then(function(res){
     var s=res[0], daily=res[1]||[], coup=res[2]||{}, raw=res[3]||[];
+    CUR_COLS = (RAW_MODE==="full") ? RAW_COLS_FULL : RAW_COLS;
     renderKPI(s);
     var dates = daily.map(function(d){return d.d;});
     var N=function(k){ return daily.map(function(d){ return Number(d[k])||0; }); };
@@ -425,6 +494,12 @@ function setDefaultDates(){
 }
 $("go").onclick=refresh;
 $("csv").onclick=downloadCSV;
+$("unlock").onclick=function(){
+  if(RAW_MODE==="full"){ RAW_MODE="safe"; GATE_PASS=null; CUR_COLS=RAW_COLS; updateUnlockBtn(); refresh(); return; }
+  var pw=prompt("전체 컬럼(개인정보 포함) 열람 비밀번호를 입력하세요:");
+  if(pw==null || pw==="") return;
+  GATE_PASS=pw; RAW_MODE="full"; updateUnlockBtn(); refresh();
+};
 $("reset").onclick=function(){ FDEFS.forEach(function(d){ SEL[d.key]=new Set(); d._updateBtn&&d._updateBtn(); });
   $("seller_id").value=""; $("product_name").value=""; setDefaultDates(); refresh(); };
 $("product_name").addEventListener("keydown",function(e){ if(e.key==="Enter")refresh(); });

@@ -44,8 +44,20 @@ const kpi = await rpc("dash_summary", { p });
 | `dash_summary(p jsonb)` | KPI 12종(구매수량·총구매금액·총매출·자사할인·순매출·순이익·수수료율·순이익율·배송기간 등) |
 | `dash_daily(p jsonb)` | 일별 시계열(거래액·주문수·구매수량·할인·순매출·순이익·적립금 등) |
 | `dash_coupon(p jsonb)` | 쿠폰별 일별 추이(item/member/cps) |
-| `dash_raw(p jsonb, p_limit int)` | RAW 주문라인 (비PII 컬럼만, 최근순) |
+| `dash_raw(p jsonb, p_limit int)` | RAW 주문라인 — 개인정보 제외 89컬럼 (②탭 seq 순서) |
+| `dash_raw_full(p jsonb, p_limit int, passphrase text)` | RAW 전체 99컬럼(개인정보 포함) — **비밀번호 게이트**, DB에서 검증 |
 | `dash_filters()` | 필터 드롭다운 옵션 |
+
+### RAW 개인정보 컬럼 게이트
+- RAW 기본은 **89컬럼(개인정보 제외)** → 게이트 없이 공개해도 안전.
+- 대시보드 RAW 우측 **🔓 개인정보 포함 전체** 버튼 → 비밀번호 입력 시 전체 **99컬럼**(연령대·성별·회원번호·구매자ID·지역·나이·가입일 등 포함) 표시.
+- 비밀번호는 `public._dash_gate` 에 **sha256 해시로만** 저장(anon 접근 불가). `dash_raw_full` 이 SECURITY DEFINER로 검증하므로 publishable 키만으로는 개인정보를 못 가져옴.
+- **비밀번호 변경(SQL):**
+  ```sql
+  update public._dash_gate
+     set pass_hash = encode(sha256(convert_to('새비밀번호','utf8')),'hex'), updated_at = now()
+   where id = 1;
+  ```
 
 `p` 필터 객체: `{ from, to, filters:{ 컬럼:[값…] }, product_name }`
 필터 컬럼: `brand, category_gender, category_l, order_status, order_type, product_division, payment_method, platform, member_grade, age_band, buyer_gender, region_sido, customer_type, seller_id, seller_grade, join_year, ship_origin, naver_discount_applied`

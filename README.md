@@ -1,59 +1,70 @@
-# MUST IT 데이터 대시보드 (직원용)
+# MUST IT 데이터 대시보드
 
-직원이 만드는 데이터 대시보드 모음. **비밀번호로 접속**하고, 데이터는 **읽기 전용**(orders_v/orders_v_kr)만 조회됩니다.
+브라우저가 **서울 Supabase의 집계 API(RPC)를 직접 조회**하는 정적 대시보드 모음.
+서버·빌드 없음, GitHub Pages로 배포. push하면 자동 반영.
 
-- **URL:** 배포 후 Railway URL (관리자에게 문의)
-- **접속 비밀번호:** 관리자에게 문의 (Railway env `DASH_PASSWORD`)
-- **데이터:** Supabase(서울) · 이 앱은 조회 결과만 전달, 원본 저장 안 함
+- **URL:** https://mustit-ai.github.io/mustit-data-portal-dashboards/
+- **데이터:** Supabase(서울) · KST 기준 · 매일 08:00 갱신
+- **개인정보:** 집계 API가 **개인정보(구매자·회원번호·연령·성별·지역)를 원천 제외**하므로 게이트 없이 공개해도 노출되지 않음.
 
-## 새 대시보드 만들기 (제일 중요)
-
-**대시보드 1개 = HTML 파일 1개.** `dashboards/` 폴더에 `.html` 파일을 추가하면 홈에 자동 표시됩니다. 서로 다른 파일이라 **여러 명이 동시에 만들어도 충돌 없음.**
+## 구조
 
 ```
+index.html                         ← 랜딩(대시보드 목록)
 dashboards/
-  월별매출.html      ← 샘플 (이걸 복사해서 시작하세요)
-  내대시보드.html    ← 새로 추가
+  전체주문_주문일_Master.html        ← QuickSight 마스터뷰 재현 (ECharts)
 ```
 
-### 데이터 가져오기 (한 줄)
-HTML 안에서 `dash.js`를 불러오고 `dashQuery("SELECT ...")` 를 호출하면 행 배열이 옵니다.
+**대시보드 1개 = HTML 파일 1개.** `dashboards/`에 `.html`을 추가하고 push하면 됩니다. 파일이 달라 여러 명이 동시에 만들어도 충돌 없음.
 
-```html
-<script src="/dash.js"></script>
-<script>
-(async () => {
-  const rows = await dashQuery(
-    "select brand, sum(gross_revenue) rev from mustit_orders.orders_v " +
-    "where order_status='정산완료' group by 1 order by rev desc limit 10"
-  );
-  console.log(rows); // [{brand:'...', rev: 12345}, ...]
-})();
-</script>
+## 데이터 가져오기 — 집계 RPC 직접 호출
+
+브라우저에서 publishable 키로 `POST /rest/v1/rpc/<함수>` 를 호출합니다. (키는 공개용, 권한은 RPC가 제한)
+
+```js
+const SB  = "https://hhvmhtejmhhxksnldfmi.supabase.co";
+const KEY = "sb_publishable_3qHI5hEv90wiU03q3mmS4Q_nUdAovOw";
+async function rpc(fn, body){
+  const r = await fetch(SB+"/rest/v1/rpc/"+fn, {
+    method:"POST",
+    headers:{apikey:KEY, Authorization:"Bearer "+KEY, "Content-Type":"application/json"},
+    body: JSON.stringify(body||{})
+  });
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+// 예: 기간 필터로 KPI 요약
+const p = { from:"2026-07-01", to:"2026-08-06", filters:{ brand:["Moncler"] } };
+const kpi = await rpc("dash_summary", { p });
 ```
 
-### 쿼리 규칙 (필독)
-- **SELECT/WITH 조회만** 됩니다 (쓰기·DDL 전부 차단).
-- 테이블은 **`mustit_orders.orders_v`** (영문 컬럼) 또는 **`orders_v_kr`** (한글 컬럼)만.
-- **일시는 이미 KST** → `AT TIME ZONE` 쓰지 말고 그대로: `order_datetime::date`, `date_trunc('month', order_datetime)`, `extract(hour from order_datetime)`.
-- 매출=`gross_revenue`(정산완료 기준), 거래액=`total_purchase`, 순이익=`net_profit`.
-- 15초 넘는 쿼리는 중단됩니다 → 기간 필터로 좁히세요.
+### 제공 RPC (모두 집계·비PII, `anon` 실행 허용)
+| 함수 | 반환 |
+|------|------|
+| `dash_summary(p jsonb)` | KPI 12종(구매수량·총구매금액·총매출·자사할인·순매출·순이익·수수료율·순이익율·배송기간 등) |
+| `dash_daily(p jsonb)` | 일별 시계열(거래액·주문수·구매수량·할인·순매출·순이익·적립금 등) |
+| `dash_coupon(p jsonb)` | 쿠폰별 일별 추이(item/member/cps) |
+| `dash_raw(p jsonb, p_limit int)` | RAW 주문라인 (비PII 컬럼만, 최근순) |
+| `dash_filters()` | 필터 드롭다운 옵션 |
 
-## 배포 (Claude Code 권장)
+`p` 필터 객체: `{ from, to, filters:{ 컬럼:[값…] }, product_name }`
+필터 컬럼: `brand, category_gender, category_l, order_status, order_type, product_division, payment_method, platform, member_grade, age_band, buyer_gender, region_sido, customer_type, seller_id, seller_grade, join_year, ship_origin, naver_discount_applied`
+
+### 규칙 (필독)
+- **일시는 이미 KST** — `AT TIME ZONE` 금지. RPC 내부에서 `order_datetime` 그대로 사용.
+- 기간 필터(`from`/`to`, order_datetime)는 **인덱스**를 타 빠름. 항상 기간을 좁혀 조회.
+- 매출=`gross_revenue`(총매출), 거래액/GMV=`total_purchase`, **순매출=총매출−자사할인**, **순이익=순매출−결제수수료**.
+- 마스터뷰 KPI는 **전체 주문상태** 기준(취소·반품 포함). 정산완료만 보려면 `filters.order_status:["정산완료"]`.
+
+## 배포
 ```bash
 git clone https://github.com/MUSTIT-AI/mustit-data-portal-dashboards
 cd mustit-data-portal-dashboards
-# dashboards/ 에 HTML 추가 (Claude에게 "이런 대시보드 만들어줘")
-git add -A && git commit -m "새 대시보드: xxx" && git push   # → Railway 자동배포(연결 시)
+# dashboards/ 에 HTML 추가/수정 (Claude에게 "이런 대시보드 만들어줘")
+git add -A && git commit -m "새 대시보드: xxx" && git push   # → GitHub Pages 자동배포
 ```
 
-## 환경변수 (Railway)
-| 키 | 용도 |
-|----|------|
-| `SUPABASE_URL` | Supabase 프로젝트 URL |
-| `SUPABASE_ANON_KEY` | 읽기전용 조회용(공개키, 권한은 RPC가 제한) |
-| `DASH_PASSWORD` | 접속 비밀번호 (게이트) |
-
 ## 보안 메모
-- 공개 URL이라 **비밀번호 게이트** 필수. 데이터 조회는 `anon` 권한 RPC로 **orders_v/orders_v_kr만**, 원본 테이블·회원식별자·PIN 등은 접근 불가.
-- 그래도 주문 데이터가 국외(Railway) 경유하므로, 민감 필드는 쿼리에 넣지 말 것.
+- 게이트 없이 공개되나, **RPC가 집계·비PII만 반환**하고 원본 뷰(`orders_v`)·PII 컬럼은 `anon` 접근 차단됨.
+- 임의 SQL RPC(`dash_query`)와 `anon`의 원본 뷰 직접권한은 **보안상 회수(비활성)** 됨.
+  → 구버전 서버 방식(`server.js` + 비밀번호 게이트 + `dashQuery(SQL)`)과 `dashboards/월별매출.html`(샘플)은 더 이상 동작하지 않음. 새 대시보드는 위의 **RPC 직접 호출** 방식을 쓸 것.

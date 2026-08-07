@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>[분석] 전체주문_주문일 (Master) · MUST IT</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../auth.js"></script>
 <style>
   :root{
     --red:#c8102e; --bar:#ee3b52; --ink:#1c1b19; --sub:#6b6a66; --line:#111;
@@ -152,16 +154,8 @@
 // ── Supabase 직결 (publishable 키는 공개용, 안전 집계 RPC만 노출) ──
 var SB  = "https://hhvmhtejmhhxksnldfmi.supabase.co";
 var KEY = "sb_publishable_3qHI5hEv90wiU03q3mmS4Q_nUdAovOw";
-function rpc(fn, body){
-  return fetch(SB+"/rest/v1/rpc/"+fn, {
-    method:"POST",
-    headers:{apikey:KEY, Authorization:"Bearer "+KEY, "Content-Type":"application/json"},
-    body: JSON.stringify(body||{})
-  }).then(function(r){ return r.text().then(function(t){
-    if(!r.ok) throw new Error(fn+" "+r.status+": "+t);
-    return t?JSON.parse(t):null;
-  });});
-}
+// 인증 토큰으로 호출 (auth.js). 로그인 안 되면 데이터 RPC 거부됨.
+function rpc(fn, body){ return window.MUSTIT.rpc(fn, body); }
 
 // 필터 정의 (label ↔ orders_v 컬럼)
 var FDEFS = [
@@ -441,11 +435,11 @@ function updateUnlockBtn(){
 }
 // RAW 요청: full 모드면 게이트 RPC, 실패 시 안전(89컬럼)으로 폴백
 function fetchRaw(p){
-  if(RAW_MODE==="full" && GATE_PASS){
-    return rpc("dash_raw_full",{p:p, p_limit:2000, passphrase:GATE_PASS})
+  if(RAW_MODE==="full"){
+    return rpc("dash_raw_all",{p:p, p_limit:2000})
       .catch(function(e){
-        alert("전체 컬럼 열람 실패 — 비밀번호가 올바르지 않거나 오류입니다.\n"+e.message);
-        RAW_MODE="safe"; GATE_PASS=null; updateUnlockBtn();
+        alert("전체 컬럼 조회 실패\n"+e.message);
+        RAW_MODE="safe"; updateUnlockBtn();
         return rpc("dash_raw",{p:p, p_limit:2000});
       });
   }
@@ -495,10 +489,9 @@ function setDefaultDates(){
 $("go").onclick=refresh;
 $("csv").onclick=downloadCSV;
 $("unlock").onclick=function(){
-  if(RAW_MODE==="full"){ RAW_MODE="safe"; GATE_PASS=null; CUR_COLS=RAW_COLS; updateUnlockBtn(); refresh(); return; }
-  var pw=prompt("전체 컬럼(개인정보 포함) 열람 비밀번호를 입력하세요:");
-  if(pw==null || pw==="") return;
-  GATE_PASS=pw; RAW_MODE="full"; updateUnlockBtn(); refresh();
+  RAW_MODE = (RAW_MODE==="full") ? "safe" : "full";
+  if(RAW_MODE==="safe") CUR_COLS=RAW_COLS;
+  updateUnlockBtn(); refresh();
 };
 $("reset").onclick=function(){ FDEFS.forEach(function(d){ SEL[d.key]=new Set(); d._updateBtn&&d._updateBtn(); });
   $("seller_id").value=""; $("product_name").value=""; setDefaultDates(); refresh(); };
@@ -506,8 +499,11 @@ $("product_name").addEventListener("keydown",function(e){ if(e.key==="Enter")ref
 $("seller_id").addEventListener("keydown",function(e){ if(e.key==="Enter")refresh(); });
 
 setDefaultDates();
-rpc("dash_filters",{}).then(function(o){ OPTS=o||{}; buildDropdowns(); }).catch(function(e){ buildDropdowns(); })
-  .finally(refresh);
+// 로그인 완료 후에만 데이터 로드
+window.MUSTIT.ready(function(){
+  rpc("dash_filters",{}).then(function(o){ OPTS=o||{}; buildDropdowns(); }).catch(function(e){ buildDropdowns(); })
+    .finally(refresh);
+});
 })();
 </script>
 </body>

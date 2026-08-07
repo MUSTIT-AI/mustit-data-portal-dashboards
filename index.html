@@ -16,6 +16,8 @@
   a.card small{display:block;color:#8a8880;font-weight:500;font-size:12px;margin-top:2px}
   .foot{color:#a7a49c;font-size:12px;margin-top:26px;line-height:1.7}
 </style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth.js"></script>
 </head>
 <body>
 <div class="wrap">
@@ -31,6 +33,7 @@
 </div>
 <script>
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  window.MUSTIT.ready(function () {
   fetch('dashboards.json?cb=' + Date.now()).then(function (r) { return r.json(); }).then(function (list) {
     var el = document.getElementById('cards');
     if (!list || !list.length) { el.innerHTML = '<p class="sub">아직 대시보드가 없습니다.</p>'; return; }
@@ -40,6 +43,7 @@
         '<span>' + esc(d.title || d.file) + '<small>' + esc(d.file) + '</small></span></a>';
     }).join('');
   }).catch(function () { document.getElementById('cards').innerHTML = '<p class="sub">목록을 불러오지 못했습니다.</p>'; });
+  });
 </script>
 </body>
 </html>

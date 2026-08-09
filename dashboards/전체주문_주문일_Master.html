@@ -18,11 +18,11 @@
   a{color:inherit}
   /* top bar */
   .topbar{display:flex;align-items:center;gap:14px;background:#fbfbfc;border-bottom:1px solid var(--border);padding:8px 16px;position:sticky;top:0;z-index:40}
-  .topbar .logo{font-weight:800;color:#232a33;display:flex;align-items:center;gap:6px}
-  .topbar .tabs{display:flex;gap:2px;color:var(--sub);font-size:12.5px}
-  .topbar .tabs .t{padding:4px 10px;border-radius:6px}
-  .topbar .tabs .t.on{background:#eef1f4;color:var(--ink);font-weight:700}
-  .topbar .right{margin-left:auto;color:var(--sub);font-size:12px}
+  .topbar .logo{font-weight:800;color:#232a33;display:flex;align-items:center;gap:6px;text-decoration:none;cursor:pointer}
+  .topbar .logo:hover{color:var(--red)}
+  .topbar .right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .topbar .owner{color:var(--ink);font-size:12.5px;font-weight:700;white-space:nowrap}
+  .topbar #dashnav{border:1px solid #d6d4ce;border-radius:7px;padding:5px 9px;font-size:12.5px;background:#fff;max-width:230px}
   /* filter bar */
   .filters{background:#fff;border-bottom:1px solid var(--border);padding:8px 12px;display:flex;flex-wrap:wrap;gap:7px 10px;align-items:flex-end;position:sticky;top:39px;z-index:30}
   .fld{display:flex;flex-direction:column;gap:3px}
@@ -91,12 +91,11 @@
 </head>
 <body>
 <div class="topbar">
-  <span class="logo">🛍️ Data Studio</span>
-  <div class="tabs">
-    <span class="t on">[분석] 전체주문_주문일 (Master)</span>
-    <span class="t">Raw Data</span>
+  <a class="logo" href="../index.html">🛍️ Data Portal</a>
+  <div class="right">
+    <span class="owner" id="dashowner"></span>
+    <select id="dashnav" title="대시보드 이동"></select>
   </div>
-  <span class="right">mustit</span>
 </div>
 
 <div class="filters" id="filters">
@@ -507,12 +506,26 @@ function blockNoAccess(msg){
     (msg?'<p style="font-size:12px;color:#a7a49c">'+msg+'</p>':'')+
     '<p style="margin-top:16px"><a href="../index.html" style="color:#c8102e">← 대시보드 목록</a></p></div>';
 }
+function setupTopbar(){
+  var file = decodeURIComponent(location.pathname.split("/").pop()||"");
+  fetch("../dashboards.json?cb="+Date.now()).then(function(r){return r.json();}).then(function(list){
+    list = list||[];
+    var cur = list.filter(function(d){ return d.file===file; })[0];
+    if(cur){ $("dashowner").textContent = (cur.short||cur.title||"") + (cur.owner_name?(":"+cur.owner_name):""); }
+    var sel=$("dashnav");
+    sel.innerHTML = list.map(function(d){
+      return '<option value="'+encodeURIComponent(d.file)+'"'+(d.file===file?' selected':'')+'>'+(d.short||d.title||d.file)+'</option>';
+    }).join("");
+    sel.onchange=function(){ if(sel.value && decodeURIComponent(sel.value)!==file) location.href=sel.value; };
+  }).catch(function(){});
+}
 // 로그인 + 이 대시보드 열람권한 확인 후 데이터 로드
 window.MUSTIT.ready(function(){
   var DASH_FILE = decodeURIComponent(location.pathname.split("/").pop()||"");
   window.MUSTIT.rpc("dash_access",{p_dashboard:DASH_FILE}).then(function(a){
     if(!a || a.view===false){ blockNoAccess(); return; }
     ACCESS=a;
+    setupTopbar();
     if(!a.pii){ var u=$("unlock"); if(u) u.style.display="none"; }  // 개인정보 권한 없으면 전체컬럼 버튼 숨김
     rpc("dash_filters",{}).then(function(o){ OPTS=o||{}; buildDropdowns(); }).catch(function(e){ buildDropdowns(); })
       .finally(refresh);

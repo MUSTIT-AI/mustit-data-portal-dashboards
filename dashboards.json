@@ -2,8 +2,10 @@
   {
     "file": "전체주문_주문일_Master.html",
     "title": "[분석] 전체주문_주문일 (Master) · MUST IT",
+    "short": "Master",
     "desc": "",
     "icon": "📊",
-    "owner": "ceo@mustit.co.kr"
+    "owner": "ceo@mustit.co.kr",
+    "owner_name": "조용민"
   }
 ]

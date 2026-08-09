@@ -166,7 +166,6 @@
   <div class="modalbox">
     <div class="mhead"><b>대시보드 설정</b><button id="m_close">✕</button></div>
     <div class="mrow"><label>이름</label><input id="m_title" type="text" placeholder="대시보드 이름"></div>
-    <div class="mrow"><label>짧은이름</label><input id="m_short" type="text" placeholder="네비/헤더 표시용 (예: Master)"></div>
     <div><button class="btn" id="m_save" style="padding:8px 16px">이름 저장</button><span class="mmsg" id="m_msg"></span></div>
     <h4>보기 / 수정 권한</h4>
     <p class="mhint">체크하면 바로 저장됩니다. 아무도 지정 안 하면 로그인 전원 열람(수정은 불가). 관리자는 항상 전체.</p>
@@ -549,10 +548,10 @@ function setupTopbar(){
     list = list||[];
     var cur = list.filter(function(d){ return d.file===CUR_FILE; })[0];
     CUR_META = cur;
-    if(cur){ $("dashowner").textContent = (cur.short||cur.title||"") + (cur.owner_name?(":"+cur.owner_name):""); }
+    if(cur){ $("dashowner").textContent = (cur.title||"") + (cur.owner_name?(" · "+cur.owner_name):""); }
     var sel=$("dashnav");
     sel.innerHTML = list.map(function(d){
-      return '<option value="'+encodeURIComponent(d.file)+'"'+(d.file===CUR_FILE?' selected':'')+'>'+esc(d.short||d.title||d.file)+'</option>';
+      return '<option value="'+encodeURIComponent(d.file)+'"'+(d.file===CUR_FILE?' selected':'')+'>'+esc(d.title||d.file)+'</option>';
     }).join("");
     sel.onchange=function(){ if(sel.value && decodeURIComponent(sel.value)!==CUR_FILE) location.href=sel.value; };
     if(cur && cur.manage){ $("editdash").style.display=""; }  // 소유자/관리자만 수정 버튼
@@ -561,7 +560,6 @@ function setupTopbar(){
 function openEditModal(){
   $("m_msg").textContent="";
   $("m_title").value = (CUR_META&&CUR_META.title)||"";
-  $("m_short").value = (CUR_META&&CUR_META.short)||"";
   $("editmodal").style.display="flex";
   $("m_acl").innerHTML='<tr><td colspan="4" style="color:#999">불러오는 중…</td></tr>';
   var RN={viewer:'뷰어',editor:'편집자',admin:'관리자'};
@@ -587,7 +585,7 @@ function openEditModal(){
   }).catch(function(e){ $("m_acl").innerHTML='<tr><td colspan="4" style="color:#c8102e">'+esc(e.message)+'</td></tr>'; });
 }
 function saveMeta(){
-  window.MUSTIT.fn("admin-users",{action:"dash_meta_set",file:CUR_FILE,title:$("m_title").value,short:$("m_short").value})
+  window.MUSTIT.fn("admin-users",{action:"dash_meta_set",file:CUR_FILE,title:$("m_title").value})
     .then(function(){ $("m_msg").textContent="저장되었습니다."; setupTopbar(); })
     .catch(function(e){ $("m_msg").style.color="#c8102e"; $("m_msg").textContent="실패: "+e.message; });
 }

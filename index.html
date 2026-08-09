@@ -15,6 +15,16 @@
   a.card .ico{font-size:22px}
   a.card small{display:block;color:#8a8880;font-weight:500;font-size:12px;margin-top:2px}
   .foot{color:#a7a49c;font-size:12px;margin-top:26px;line-height:1.7}
+  .mkbtn{background:#c8102e;color:#fff;border:0;border-radius:9px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer}
+  .mkbtn:disabled{opacity:.5;cursor:default}
+  .modal{display:none;position:fixed;inset:0;z-index:200;background:rgba(20,18,15,.4);align-items:flex-start;justify-content:center;padding:60px 16px}
+  .modalbox{background:#fff;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.25);width:520px;max-width:100%;max-height:80vh;overflow:auto;padding:20px 22px;color:#1c1b19}
+  .modalbox .mhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+  .modalbox .mhead b{font-size:16px}.modalbox .mhead button{border:0;background:transparent;font-size:18px;cursor:pointer;color:#888}
+  .modalbox label.l{font-size:12.5px;color:#6b6a66;font-weight:600;display:block;margin-bottom:4px}
+  .modalbox input.t{width:100%;border:1px solid #d6d4ce;border-radius:8px;padding:9px 10px;font-size:14px;box-sizing:border-box}
+  .modalbox h4{margin:16px 0 4px;font-size:13.5px}.modalbox .hint{margin:0 0 8px;font-size:11.5px;color:#8a8880}
+  .mtbl{width:100%;border-collapse:collapse;font-size:12.5px}.mtbl th{background:#f4f3ef;text-align:left;padding:6px 8px;border-bottom:1px solid #e2e0da;font-size:11.5px}.mtbl td{padding:6px 8px;border-bottom:1px solid #f0efe9}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="auth.js"></script>
@@ -24,11 +34,25 @@
   <h1>📊 MUST IT 데이터 대시보드</h1>
   <p class="sub">브라우저에서 서울 Supabase 집계 API를 직접 조회합니다 · KST 기준 · 매일 08:00 갱신</p>
 
+  <div id="createbar" style="display:none;margin:2px 0 14px"><button class="mkbtn" id="mkdash">+ 대시보드 생성</button></div>
+
   <div id="cards">불러오는 중…</div>
 
   <p style="margin:20px 0 0">
     <a href="admin.html" style="display:inline-flex;align-items:center;gap:7px;text-decoration:none;color:#c8102e;font-weight:700;font-size:14px;border:1px solid #e2c3c8;background:#fff;border-radius:10px;padding:10px 16px">⚙️ 계정 관리 <span style="color:#a7a49c;font-weight:500;font-size:12px">(관리자)</span></a>
   </p>
+
+  <div class="modal" id="createmodal">
+    <div class="modalbox">
+      <div class="mhead"><b>대시보드 생성</b><button id="nd_close">✕</button></div>
+      <label class="l">이름</label>
+      <input id="nd_title" class="t" type="text" placeholder="예: 브랜드별 매출 대시보드">
+      <h4>보기 / 수정 권한 (선택)</h4>
+      <p class="hint">지정 안 하면 로그인 전원 열람. 만든 사람(본인)이 소유자가 되어 이름·권한을 수정할 수 있습니다.</p>
+      <table class="mtbl"><thead><tr><th>이메일</th><th style="text-align:center">열람</th><th style="text-align:center">수정</th></tr></thead><tbody id="nd_acl"></tbody></table>
+      <div style="margin-top:14px"><button class="mkbtn" id="nd_save">생성</button><span id="nd_msg" style="margin-left:8px;font-size:12.5px;color:#c8102e"></span></div>
+    </div>
+  </div>
 
   <p class="foot">
     * 개인정보(구매자·회원번호·연령·성별·지역)는 집계 API에서 원천 제외됩니다.<br>
@@ -37,16 +61,55 @@
 </div>
 <script>
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
+  var $ = function (id) { return document.getElementById(id); };
+  function refreshCards() {
+    var el = $('cards');
+    return window.MUSTIT.rpc('dash_list', {}).then(function (list) {
+      list = list || [];
+      el.innerHTML = list.length ? list.map(function (d) {
+        return '<a class="card" href="dashboards/' + encodeURIComponent(d.file) + '">' +
+          '<span class="ico">' + esc(d.icon || '📊') + '</span>' +
+          '<span>' + esc(d.title || d.file) + '<small>' + esc(d.file) + '</small></span></a>';
+      }).join('') : '<p class="sub">열람 가능한 대시보드가 없습니다.</p>';
+    }).catch(function () { el.innerHTML = '<p class="sub">목록을 불러오지 못했습니다.</p>'; });
+  }
+  function openCreate() {
+    $('nd_title').value = ''; $('nd_msg').textContent = '';
+    $('createmodal').style.display = 'flex';
+    $('nd_acl').innerHTML = '<tr><td colspan="3" style="color:#999">불러오는 중…</td></tr>';
+    window.MUSTIT.fn('admin-users', { action: 'accounts' }).then(function (res) {
+      var rows = res.rows || [];
+      $('nd_acl').innerHTML = rows.map(function (r) {
+        return '<tr><td>' + esc(r.email) + ' <span style="color:#999;font-size:11px">' + esc(r.note || '') + (r.department ? ' / ' + esc(r.department) : '') + '</span></td>' +
+          '<td style="text-align:center"><input type="checkbox" class="ndv" data-email="' + esc(r.email) + '"></td>' +
+          '<td style="text-align:center"><input type="checkbox" class="nde" data-email="' + esc(r.email) + '"></td></tr>';
+      }).join('');
+    }).catch(function (e) { $('nd_acl').innerHTML = '<tr><td colspan="3" style="color:#c8102e">' + esc(e.message) + '</td></tr>'; });
+  }
+  function submitCreate() {
+    var title = $('nd_title').value.trim();
+    if (!title) { $('nd_msg').textContent = '이름을 입력하세요.'; return; }
+    var perms = [].map.call(document.querySelectorAll('.ndv'), function (v) {
+      var email = v.getAttribute('data-email');
+      var e = document.querySelector('.nde[data-email="' + email + '"]');
+      return { email: email, can_view: v.checked, can_edit: e.checked };
+    }).filter(function (p) { return p.can_view || p.can_edit; });
+    $('nd_save').disabled = true;
+    window.MUSTIT.fn('admin-users', { action: 'dash_create', title: title, perms: perms }).then(function (res) {
+      $('createmodal').style.display = 'none';
+      alert('대시보드가 생성되었습니다.\n파일: ' + res.file + '\n개발자가 이 파일명으로 대시보드 HTML을 만들면 됩니다.');
+      refreshCards();
+    }).catch(function (e) { $('nd_msg').textContent = '실패: ' + e.message; }).finally(function () { $('nd_save').disabled = false; });
+  }
   window.MUSTIT.ready(function () {
-  var el = document.getElementById('cards');
-  window.MUSTIT.rpc('dash_list', {}).then(function (list) {
-    list = list || [];
-    el.innerHTML = list.length ? list.map(function (d) {
-      return '<a class="card" href="dashboards/' + encodeURIComponent(d.file) + '">' +
-        '<span class="ico">' + esc(d.icon || '📊') + '</span>' +
-        '<span>' + esc(d.title || d.file) + '<small>' + esc(d.file) + '</small></span></a>';
-    }).join('') : '<p class="sub">열람 가능한 대시보드가 없습니다.</p>';
-  }).catch(function () { el.innerHTML = '<p class="sub">목록을 불러오지 못했습니다.</p>'; });
+    refreshCards();
+    window.MUSTIT.rpc('dash_me', {}).then(function (me) {
+      if (me && (me.role === 'editor' || me.role === 'admin')) $('createbar').style.display = '';
+    }).catch(function () {});
+    $('mkdash').onclick = openCreate;
+    $('nd_close').onclick = function () { $('createmodal').style.display = 'none'; };
+    $('nd_save').onclick = submitCreate;
+    $('createmodal').onclick = function (e) { if (e.target === $('createmodal')) $('createmodal').style.display = 'none'; };
   });
 </script>
 </body>

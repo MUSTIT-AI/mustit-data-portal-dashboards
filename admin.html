@@ -143,7 +143,7 @@
   function loadDashboards(){
     window.MUSTIT.rpc("dash_list",{}).then(function(list){
       list=list||[];
-      $("dash").innerHTML = list.map(function(d){ return '<option value="'+esc(d.file)+'">'+esc(d.short||d.title||d.file)+'</option>'; }).join("");
+      $("dash").innerHTML = list.map(function(d){ return '<option value="'+esc(d.file)+'">'+esc(d.title||d.file)+'</option>'; }).join("");
       if(list.length){ loadAcl(); }
     }).catch(function(){ $("dash").innerHTML='<option value="">(목록 로드 실패)</option>'; });
   }

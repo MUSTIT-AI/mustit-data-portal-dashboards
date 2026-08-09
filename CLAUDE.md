@@ -41,10 +41,14 @@
 - 이 규칙은 팀 협업용 관례다. **파일 수정을 물리적으로 강제**하려면 GitHub 브랜치보호+CODEOWNERS(관리자에게 문의). 열람 제한(특정 대시보드를 특정 역할만)이 필요하면 데이터단 ACL을 별도 구축.
 
 ## 새 대시보드 추가 순서
-대시보드 목록·이름의 source of truth는 **DB `public.dashboards` 테이블**(정적 `dashboards.json`은 레거시·미사용).
-1. `dashboards/내대시보드.html` 생성 (기존 `전체주문_주문일_Master.html` 구조 참고: auth 스크립트 + MUSTIT.ready + dash_access 열람체크 + ECharts). 로드 시 `dash_access(파일명)` 로 열람권 확인, 헤더/네비는 `dash_list()` 사용.
-2. DB에 등록: SQL — `insert into public.dashboards(file,title,short,icon,owner_email) values ('내대시보드.html','이름','짧은라벨','📊','본인이메일');` (또는 관리자가 Edge Function `admin-users` `dash_register` 액션 사용). 소유자=owner_email → 그 사람만 헤더 "수정"으로 이름·권한 편집 가능.
-3. `git add -A && git commit -m "..." && git push` → 몇 분 뒤 Pages 반영. (캐시면 Ctrl+F5)
+대시보드 목록·이름의 source of truth는 **DB `public.dashboards`**(정적 `dashboards.json`은 레거시·미사용). 이름은 `title` 하나만 사용(짧은이름 없음).
+
+**권장 흐름**: 사용자가 **대시보드 홈의 "+ 대시보드 생성"** 으로 먼저 만든다 → 이때 **생성자가 owner** 로 기록되고, 권한(열람/수정)도 지정됨, `dashboards` 행 + 파일명이 자동 생성됨. 그 뒤 개발자가 그 파일명으로 HTML을 만든다.
+
+1. 홈에서 생성된 대시보드의 **파일명** 확인(생성 시 안내됨). 없으면 SQL로 등록: `insert into public.dashboards(file,title,icon,owner_email) values ('내대시보드.html','이름','📊','소유자이메일');`
+2. `dashboards/<파일명>` 생성 (기존 `전체주문_주문일_Master.html` 구조 참고: auth 스크립트 + `MUSTIT.ready` + `dash_access(파일명)` 열람체크 + 헤더/네비는 `dash_list()`, ECharts).
+3. **소유권 규칙(재확인)**: 기존 대시보드는 `dash_access(파일명).edit` 이 true(= owner 이거나 acl can_edit)일 때만 수정. **owner 가 아니면 그 대시보드 HTML을 수정하지 말 것.** 새로 만들면 owner=만든 사람.
+4. `git add -A && git commit -m "..." && git push` → 몇 분 뒤 Pages 반영. (캐시면 Ctrl+F5)
 
 ## 하지 말 것
 - 원본 `mustit_orders.orders`(관리자 전용) 접근, `AT TIME ZONE` 사용, service_role 노출, 다른 사람 대시보드 파일 임의 수정, 개인정보를 게이트 밖으로 노출.

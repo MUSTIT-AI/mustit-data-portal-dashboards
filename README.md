@@ -75,6 +75,27 @@ window.MUSTIT.ready(async function(){
 - 매출=`gross_revenue`(총매출), 거래액/GMV=`total_purchase`, **순매출=총매출−자사할인**, **순이익=순매출−결제수수료**.
 - 마스터뷰 KPI는 **전체 주문상태** 기준(취소·반품 포함). 정산완료만 보려면 `filters.order_status:["정산완료"]`.
 
+## 개발 준비 (각 PC에서 처음 한 번만)
+
+새 대시보드를 만들거나 고치려면 아래를 한 번 세팅합니다. (개발자 아니어도 순서대로 따라 하면 됩니다)
+
+### 1. Git 설치
+- **Windows:** https://git-scm.com/download/win → 받은 설치파일 실행 → **전부 기본값(Next)**으로 설치 → 설치 후 PC 재부팅 권장
+  - 확인: 명령프롬프트(`cmd`)에서 `git --version` → 버전 숫자가 뜨면 성공
+- **Mac:** 터미널에서 `git --version` 입력 → 안 깔려 있으면 설치 안내창이 뜸(설치 클릭). 또는 `brew install git`
+
+### 2. GitHub 로그인 (레포 write 계정으로, 한 번)
+비공개 레포라 push하려면 GitHub 인증이 필요합니다. 가장 쉬운 방법:
+1. **GitHub CLI 설치:** https://cli.github.com → 받아서 기본값으로 설치
+2. 터미널에서 **`gh auth login`** 실행 → `GitHub.com` → `HTTPS` → `Login with a web browser` 선택 → 뜨는 코드 입력 후 브라우저에서 로그인
+   - ⚠️ **레포 write 권한이 있는 회사 GitHub 계정**으로 로그인할 것
+3. 이후 `git push`가 비밀번호 없이 됩니다.
+
+> 확인: `gh auth status` → `Logged in to github.com` 이 뜨면 완료.
+
+### 3. (선택) Claude Code
+Claude Code를 쓰면 위 준비 후 **"이 대시보드 이렇게 고치고 push해줘"** 라고만 하면 편집·커밋·배포까지 자동으로 처리합니다. GitHub MCP 같은 별도 연결은 필요 없습니다.
+
 ## 배포
 ```bash
 git clone https://github.com/MUSTIT-AI/mustit-data-portal-dashboards

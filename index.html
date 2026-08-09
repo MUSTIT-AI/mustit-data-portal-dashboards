@@ -41,11 +41,18 @@
   fetch('dashboards.json?cb=' + Date.now()).then(function (r) { return r.json(); }).then(function (list) {
     var el = document.getElementById('cards');
     if (!list || !list.length) { el.innerHTML = '<p class="sub">아직 대시보드가 없습니다.</p>'; return; }
-    el.innerHTML = list.map(function (d) {
-      return '<a class="card" href="dashboards/' + encodeURIComponent(d.file) + '">' +
-        '<span class="ico">' + esc(d.icon || '📊') + '</span>' +
-        '<span>' + esc(d.title || d.file) + '<small>' + esc(d.file) + '</small></span></a>';
-    }).join('');
+    function render(items) {
+      el.innerHTML = items.length ? items.map(function (d) {
+        return '<a class="card" href="dashboards/' + encodeURIComponent(d.file) + '">' +
+          '<span class="ico">' + esc(d.icon || '📊') + '</span>' +
+          '<span>' + esc(d.title || d.file) + '<small>' + esc(d.file) + '</small></span></a>';
+      }).join('') : '<p class="sub">열람 가능한 대시보드가 없습니다.</p>';
+    }
+    var files = list.map(function (d) { return d.file; });
+    window.MUSTIT.rpc('dash_access_bulk', { p_dashboards: files }).then(function (acc) {
+      acc = acc || {};
+      render(list.filter(function (d) { var a = acc[d.file]; return !a || a.view !== false; }));
+    }).catch(function () { render(list); });
   }).catch(function () { document.getElementById('cards').innerHTML = '<p class="sub">목록을 불러오지 못했습니다.</p>'; });
   });
 </script>

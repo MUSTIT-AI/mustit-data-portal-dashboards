@@ -499,10 +499,24 @@ $("product_name").addEventListener("keydown",function(e){ if(e.key==="Enter")ref
 $("seller_id").addEventListener("keydown",function(e){ if(e.key==="Enter")refresh(); });
 
 setDefaultDates();
-// 로그인 완료 후에만 데이터 로드
+var ACCESS=null;
+function blockNoAccess(msg){
+  document.body.innerHTML='<div style="font-family:Pretendard,\'Malgun Gothic\',system-ui,sans-serif;max-width:520px;margin:90px auto;padding:28px;background:#fff;border:1px solid #e2e0da;border-radius:12px;text-align:center;color:#6b6a66">'+
+    '<h2 style="margin:0 0 8px;color:#1c1b19">열람 권한이 없습니다</h2>'+
+    '<p style="margin:0 0 6px">이 대시보드를 볼 권한이 없습니다. 관리자에게 요청하세요.</p>'+
+    (msg?'<p style="font-size:12px;color:#a7a49c">'+msg+'</p>':'')+
+    '<p style="margin-top:16px"><a href="../index.html" style="color:#c8102e">← 대시보드 목록</a></p></div>';
+}
+// 로그인 + 이 대시보드 열람권한 확인 후 데이터 로드
 window.MUSTIT.ready(function(){
-  rpc("dash_filters",{}).then(function(o){ OPTS=o||{}; buildDropdowns(); }).catch(function(e){ buildDropdowns(); })
-    .finally(refresh);
+  var DASH_FILE = decodeURIComponent(location.pathname.split("/").pop()||"");
+  window.MUSTIT.rpc("dash_access",{p_dashboard:DASH_FILE}).then(function(a){
+    if(!a || a.view===false){ blockNoAccess(); return; }
+    ACCESS=a;
+    if(!a.pii){ var u=$("unlock"); if(u) u.style.display="none"; }  // 개인정보 권한 없으면 전체컬럼 버튼 숨김
+    rpc("dash_filters",{}).then(function(o){ OPTS=o||{}; buildDropdowns(); }).catch(function(e){ buildDropdowns(); })
+      .finally(refresh);
+  }).catch(function(e){ blockNoAccess(e.message); });
 });
 })();
 </script>

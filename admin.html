@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>계정 관리 · MUST IT 대시보드</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth.js"></script>
+<style>
+  body{font-family:'Pretendard','Malgun Gothic',system-ui,sans-serif;margin:0;background:#eef0f2;color:#1c1b19}
+  .wrap{max-width:820px;margin:0 auto;padding:34px 22px 60px}
+  a.back{font-size:13px;color:#6b6a66;text-decoration:none}
+  h1{font-size:22px;margin:8px 0 2px}
+  .sub{color:#6b6a66;font-size:13px;margin:0 0 20px}
+  .card{background:#fff;border:1px solid #e2e0da;border-radius:12px;padding:18px 20px;margin-bottom:16px}
+  .card h2{font-size:15px;margin:0 0 14px}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+  .fld{display:flex;flex-direction:column;gap:4px}
+  .fld label{font-size:11.5px;color:#6b6a66;font-weight:600}
+  .fld input{border:1px solid #d6d4ce;border-radius:8px;padding:9px 10px;font-size:14px}
+  .fld input[type=email]{width:230px}.fld input[type=text]{width:150px}.fld input[type=password]{width:170px}
+  label.chk{display:flex;align-items:center;gap:6px;font-size:13px;color:#333;padding-bottom:9px}
+  .btn{border:0;border-radius:8px;padding:10px 18px;font-weight:700;font-size:14px;cursor:pointer;color:#fff;background:#c8102e}
+  .btn.sm{padding:5px 11px;font-size:12.5px;background:#b4523a}
+  .btn:disabled{opacity:.5;cursor:default}
+  .msg{font-size:13px;margin-top:10px;min-height:18px}
+  .msg.ok{color:#1f8a4c}.msg.err{color:#c8102e}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{background:#f4f3ef;text-align:left;padding:8px 10px;border-bottom:1px solid #e2e0da;font-size:12px}
+  td{padding:8px 10px;border-bottom:1px solid #f0efe9;vertical-align:middle}
+  .pill{font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px}
+  .pill.admin{background:#fde7ea;color:#c8102e}.pill.viewer{background:#eef1f4;color:#556}
+  .pill.noauth{background:#fff3e0;color:#b26a00}
+  .gate{max-width:520px;margin:80px auto;background:#fff;border:1px solid #e2e0da;border-radius:12px;padding:26px;text-align:center;color:#6b6a66}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <a class="back" href="index.html">← 대시보드 목록</a>
+  <h1>👤 계정 관리</h1>
+  <p class="sub">로그인 계정을 만들고 접근 권한(허용목록)을 관리합니다. 관리자만 사용할 수 있습니다.</p>
+
+  <div id="app" style="display:none">
+    <div class="card">
+      <h2>새 계정 만들기</h2>
+      <div class="row">
+        <div class="fld"><label>이메일</label><input id="email" type="email" placeholder="name@mustit.co.kr"></div>
+        <div class="fld"><label>비밀번호(8자 이상)</label><input id="pw" type="password" placeholder="초기 비밀번호"></div>
+        <div class="fld"><label>이름/메모</label><input id="note" type="text" placeholder="담당자"></div>
+        <label class="chk"><input id="isadmin" type="checkbox"> 관리자 권한</label>
+        <button class="btn" id="create">계정 생성</button>
+      </div>
+      <div class="msg" id="cmsg"></div>
+    </div>
+
+    <div class="card">
+      <h2>등록된 계정</h2>
+      <table>
+        <thead><tr><th>이메일</th><th>메모</th><th>권한</th><th>로그인계정</th><th></th></tr></thead>
+        <tbody id="rows"><tr><td colspan="5" style="color:#999">불러오는 중…</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="gate" id="gate" style="display:none">관리자만 사용할 수 있는 페이지입니다.</div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+  var $ = function(id){ return document.getElementById(id); };
+  function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+  function loadList(){
+    window.MUSTIT.fn("admin-users",{action:"list"}).then(function(res){
+      $("app").style.display="block"; $("gate").style.display="none";
+      var rows=(res.rows||[]);
+      $("rows").innerHTML = rows.length ? rows.map(function(r){
+        return "<tr><td>"+esc(r.email)+"</td><td>"+esc(r.note||"")+"</td>"+
+          "<td>"+(r.is_admin?'<span class="pill admin">관리자</span>':'<span class="pill viewer">뷰어</span>')+"</td>"+
+          "<td>"+(r.hasAuth?'있음':'<span class="pill noauth">계정없음</span>')+"</td>"+
+          '<td style="text-align:right"><button class="btn sm" data-del="'+esc(r.email)+'">삭제</button></td></tr>';
+      }).join("") : '<tr><td colspan="5" style="color:#999">없음</td></tr>';
+      [].forEach.call(document.querySelectorAll("[data-del]"), function(b){
+        b.onclick=function(){
+          var email=b.getAttribute("data-del");
+          if(!confirm(email+" 계정을 삭제할까요? (로그인 계정 + 허용목록에서 제거)")) return;
+          b.disabled=true;
+          window.MUSTIT.fn("admin-users",{action:"delete",email:email})
+            .then(loadList).catch(function(e){ alert("삭제 실패: "+e.message); b.disabled=false; });
+        };
+      });
+    }).catch(function(e){
+      if(/403/.test(e.message) || /관리자/.test(e.message)){ $("gate").style.display="block"; $("app").style.display="none"; }
+      else { $("app").style.display="block"; $("rows").innerHTML='<tr><td colspan="5" style="color:#c8102e">목록 오류: '+esc(e.message)+'</td></tr>'; }
+    });
+  }
+
+  window.MUSTIT.ready(function(){
+    $("create").onclick=function(){
+      var email=$("email").value.trim(), pw=$("pw").value, note=$("note").value.trim(), isadmin=$("isadmin").checked;
+      var m=$("cmsg"); m.className="msg"; m.textContent="";
+      if(!email||!pw){ m.className="msg err"; m.textContent="이메일과 비밀번호를 입력하세요."; return; }
+      $("create").disabled=true;
+      window.MUSTIT.fn("admin-users",{action:"create",email:email,password:pw,note:note,is_admin:isadmin})
+        .then(function(res){
+          m.className="msg ok"; m.textContent = res.existed ? "이미 있는 계정이라 허용목록/권한만 갱신했습니다." : "계정을 만들었습니다.";
+          $("email").value=""; $("pw").value=""; $("note").value=""; $("isadmin").checked=false;
+          loadList();
+        })
+        .catch(function(e){ m.className="msg err"; m.textContent="실패: "+e.message; })
+        .finally(function(){ $("create").disabled=false; });
+    };
+    loadList();
+  });
+})();
+</script>
+</body>
+</html>

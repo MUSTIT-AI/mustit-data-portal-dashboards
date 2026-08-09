@@ -37,6 +37,19 @@
         if(!r.ok) throw new Error(fn+" "+r.status+": "+t);
         return t ? JSON.parse(t) : null;
       });});
+    },
+    // Edge Function 호출 (계정 관리 등 서버측 관리자 기능)
+    fn: function(name, body){
+      var tok = session ? session.access_token : KEY;
+      return fetch(SB+"/functions/v1/"+name, {
+        method:"POST",
+        headers:{ apikey:KEY, Authorization:"Bearer "+tok, "Content-Type":"application/json" },
+        body: JSON.stringify(body||{})
+      }).then(function(r){ return r.text().then(function(t){
+        var d = t ? JSON.parse(t) : null;
+        if(!r.ok) throw new Error((d && d.error) || ("HTTP "+r.status));
+        return d;
+      });});
     }
   };
 

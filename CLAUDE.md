@@ -42,7 +42,7 @@
 
 ## 새 대시보드 추가 순서
 1. `dashboards/내대시보드.html` 생성 (기존 `전체주문_주문일_Master.html` 구조 참고: auth 스크립트 + MUSTIT.ready + ECharts).
-2. `dashboards.json`에 `{ "file": "...", "title": "...", "icon": "📊", "owner": "본인이메일" }` 추가.
+2. `dashboards.json`에 `{ "file": "...", "title": "...", "short": "짧은라벨", "icon": "📊", "owner": "본인이메일", "owner_name": "본인이름" }` 추가. (`short`·`owner_name`은 대시보드 헤더 우측 "short:owner_name" 표시에 사용)
 3. `git add -A && git commit -m "..." && git push` → 몇 분 뒤 Pages 반영. (캐시면 Ctrl+F5)
 
 ## 하지 말 것

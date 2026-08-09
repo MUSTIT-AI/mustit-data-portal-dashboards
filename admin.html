@@ -19,7 +19,8 @@
   .fld label{font-size:11.5px;color:#6b6a66;font-weight:600}
   .fld input{border:1px solid #d6d4ce;border-radius:8px;padding:9px 10px;font-size:14px}
   .fld input[type=email]{width:230px}.fld input[type=text]{width:150px}.fld input[type=password]{width:170px}
-  label.chk{display:flex;align-items:center;gap:6px;font-size:13px;color:#333;padding-bottom:9px}
+  .fld select,select.rolesel{border:1px solid #d6d4ce;border-radius:8px;padding:8px 9px;font-size:13px;background:#fff}
+  select.rolesel{padding:4px 7px;font-size:12.5px}
   .btn{border:0;border-radius:8px;padding:10px 18px;font-weight:700;font-size:14px;cursor:pointer;color:#fff;background:#c8102e}
   .btn.sm{padding:5px 11px;font-size:12.5px;background:#b4523a}
   .btn:disabled{opacity:.5;cursor:default}
@@ -47,7 +48,13 @@
         <div class="fld"><label>이메일</label><input id="email" type="email" placeholder="name@mustit.co.kr"></div>
         <div class="fld"><label>비밀번호(8자 이상)</label><input id="pw" type="password" placeholder="초기 비밀번호"></div>
         <div class="fld"><label>이름/메모</label><input id="note" type="text" placeholder="담당자"></div>
-        <label class="chk"><input id="isadmin" type="checkbox"> 관리자 권한</label>
+        <div class="fld"><label>권한</label>
+          <select id="role">
+            <option value="viewer">뷰어 (열람만)</option>
+            <option value="editor" selected>편집자 (대시보드 제작)</option>
+            <option value="admin">관리자 (계정관리)</option>
+          </select>
+        </div>
         <button class="btn" id="create">계정 생성</button>
       </div>
       <div class="msg" id="cmsg"></div>
@@ -75,12 +82,23 @@
     window.MUSTIT.fn("admin-users",{action:"list"}).then(function(res){
       $("app").style.display="block"; $("gate").style.display="none";
       var rows=(res.rows||[]);
+      var RN={viewer:'뷰어',editor:'편집자',admin:'관리자'};
       $("rows").innerHTML = rows.length ? rows.map(function(r){
+        var sel='<select class="rolesel" data-email="'+esc(r.email)+'">'+
+          ['viewer','editor','admin'].map(function(v){return '<option value="'+v+'"'+(r.role===v?' selected':'')+'>'+RN[v]+'</option>';}).join('')+'</select>';
         return "<tr><td>"+esc(r.email)+"</td><td>"+esc(r.note||"")+"</td>"+
-          "<td>"+(r.is_admin?'<span class="pill admin">관리자</span>':'<span class="pill viewer">뷰어</span>')+"</td>"+
+          "<td>"+sel+"</td>"+
           "<td>"+(r.hasAuth?'있음':'<span class="pill noauth">계정없음</span>')+"</td>"+
           '<td style="text-align:right"><button class="btn sm" data-del="'+esc(r.email)+'">삭제</button></td></tr>';
       }).join("") : '<tr><td colspan="5" style="color:#999">없음</td></tr>';
+      [].forEach.call(document.querySelectorAll(".rolesel"), function(s){
+        s.onchange=function(){
+          var email=s.getAttribute("data-email"), role=s.value;
+          s.disabled=true;
+          window.MUSTIT.fn("admin-users",{action:"setrole",email:email,role:role})
+            .then(loadList).catch(function(e){ alert("권한 변경 실패: "+e.message); loadList(); });
+        };
+      });
       [].forEach.call(document.querySelectorAll("[data-del]"), function(b){
         b.onclick=function(){
           var email=b.getAttribute("data-del");
@@ -98,14 +116,14 @@
 
   window.MUSTIT.ready(function(){
     $("create").onclick=function(){
-      var email=$("email").value.trim(), pw=$("pw").value, note=$("note").value.trim(), isadmin=$("isadmin").checked;
+      var email=$("email").value.trim(), pw=$("pw").value, note=$("note").value.trim(), role=$("role").value;
       var m=$("cmsg"); m.className="msg"; m.textContent="";
       if(!email||!pw){ m.className="msg err"; m.textContent="이메일과 비밀번호를 입력하세요."; return; }
       $("create").disabled=true;
-      window.MUSTIT.fn("admin-users",{action:"create",email:email,password:pw,note:note,is_admin:isadmin})
+      window.MUSTIT.fn("admin-users",{action:"create",email:email,password:pw,note:note,role:role})
         .then(function(res){
-          m.className="msg ok"; m.textContent = res.existed ? "이미 있는 계정이라 허용목록/권한만 갱신했습니다." : "계정을 만들었습니다.";
-          $("email").value=""; $("pw").value=""; $("note").value=""; $("isadmin").checked=false;
+          m.className="msg ok"; m.textContent = res.existed ? "이미 있는 계정이라 권한/역할만 갱신했습니다." : "계정을 만들었습니다.";
+          $("email").value=""; $("pw").value=""; $("note").value=""; $("role").value="editor";
           loadList();
         })
         .catch(function(e){ m.className="msg err"; m.textContent="실패: "+e.message; })

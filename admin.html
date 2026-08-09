@@ -141,9 +141,10 @@
 
   // ── 대시보드별 권한 ──
   function loadDashboards(){
-    fetch("dashboards.json?cb="+Date.now()).then(function(r){return r.json();}).then(function(list){
-      $("dash").innerHTML = (list||[]).map(function(d){ return '<option value="'+esc(d.file)+'">'+esc(d.title||d.file)+'</option>'; }).join("");
-      if(list && list.length){ loadAcl(); }
+    window.MUSTIT.rpc("dash_list",{}).then(function(list){
+      list=list||[];
+      $("dash").innerHTML = list.map(function(d){ return '<option value="'+esc(d.file)+'">'+esc(d.short||d.title||d.file)+'</option>'; }).join("");
+      if(list.length){ loadAcl(); }
     }).catch(function(){ $("dash").innerHTML='<option value="">(목록 로드 실패)</option>'; });
   }
   function loadAcl(){

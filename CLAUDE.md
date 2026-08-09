@@ -41,8 +41,9 @@
 - 이 규칙은 팀 협업용 관례다. **파일 수정을 물리적으로 강제**하려면 GitHub 브랜치보호+CODEOWNERS(관리자에게 문의). 열람 제한(특정 대시보드를 특정 역할만)이 필요하면 데이터단 ACL을 별도 구축.
 
 ## 새 대시보드 추가 순서
-1. `dashboards/내대시보드.html` 생성 (기존 `전체주문_주문일_Master.html` 구조 참고: auth 스크립트 + MUSTIT.ready + ECharts).
-2. `dashboards.json`에 `{ "file": "...", "title": "...", "short": "짧은라벨", "icon": "📊", "owner": "본인이메일", "owner_name": "본인이름" }` 추가. (`short`·`owner_name`은 대시보드 헤더 우측 "short:owner_name" 표시에 사용)
+대시보드 목록·이름의 source of truth는 **DB `public.dashboards` 테이블**(정적 `dashboards.json`은 레거시·미사용).
+1. `dashboards/내대시보드.html` 생성 (기존 `전체주문_주문일_Master.html` 구조 참고: auth 스크립트 + MUSTIT.ready + dash_access 열람체크 + ECharts). 로드 시 `dash_access(파일명)` 로 열람권 확인, 헤더/네비는 `dash_list()` 사용.
+2. DB에 등록: SQL — `insert into public.dashboards(file,title,short,icon,owner_email) values ('내대시보드.html','이름','짧은라벨','📊','본인이메일');` (또는 관리자가 Edge Function `admin-users` `dash_register` 액션 사용). 소유자=owner_email → 그 사람만 헤더 "수정"으로 이름·권한 편집 가능.
 3. `git add -A && git commit -m "..." && git push` → 몇 분 뒤 Pages 반영. (캐시면 Ctrl+F5)
 
 ## 하지 말 것

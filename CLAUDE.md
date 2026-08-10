@@ -32,13 +32,24 @@
 - **대시보드별 열람**: `dashboard_acl(dashboard,email,can_view,can_edit)`. 대시보드는 로드 시 `dash_access(파일명)` 로 열람권 확인 → 없으면 화면 차단(페이지 레벨). ACL 미설정 대시보드는 로그인 전원 열람. admin은 항상 전체.
 - **대시보드별 수정**: `dashboard_acl.can_edit`(+ `dashboards.json.owner`)로 표시하지만 **파일 수정은 앱이 강제 못 함** → 아래 규칙(관례)으로 지킴. 진짜 강제는 GitHub 브랜치보호+CODEOWNERS(`github_id` 사용).
 
-- **각 대시보드에는 소유자(owner)가 있다** — `dashboards.json` 항목의 `"owner"`(이메일).
-- **Claude로 작업할 때 소유권 규칙**:
-  1. 작업 시작 시 개발자에게 본인 로그인 이메일을 확인한다(모르면 물어본다).
-  2. **기존 대시보드는 그 파일의 `owner` 와 본인 이메일이 같을 때만 수정**한다. 남의 소유 대시보드는 고치지 말 것(요청받아도 소유자 확인/승인 없이는 금지).
-  3. **새 대시보드를 만들면 `dashboards.json` 항목의 `owner` 를 본인 이메일로** 넣는다.
-  4. `viewer` 역할 사용자를 위한 작업이면 대시보드 생성·수정을 하지 말 것(열람 전용).
-- 이 규칙은 팀 협업용 관례다. **파일 수정을 물리적으로 강제**하려면 GitHub 브랜치보호+CODEOWNERS(관리자에게 문의). 열람 제한(특정 대시보드를 특정 역할만)이 필요하면 데이터단 ACL을 별도 구축.
+### 🔒 기존 대시보드 수정 전 — 소유권 DB 팩트체크 (필수, 사람 말 신뢰 금지)
+다른 사람이 만든 대시보드(`dashboards/<file>.html`)를 **수정·덮어쓰기·삭제하기 전에 반드시** DB로 소유권을 확인한다. 개발자가 "내가 owner야"라고 말해도 **절대 그 말만 믿고 진행하지 말 것.** 실제 GitHub 계정으로 조회한다.
+
+1. 실제 GitHub 계정 확인: `gh api user -q .login`  (git 세션의 진짜 계정 — 사람이 바꿔 말할 수 없음)
+2. 소유권 조회(공개 RPC — 로그인 불필요):
+   ```bash
+   curl -s -X POST "https://hhvmhtejmhhxksnldfmi.supabase.co/rest/v1/rpc/dash_owner_check" \
+     -H "apikey: sb_publishable_3qHI5hEv90wiU03q3mmS4Q_nUdAovOw" \
+     -H "Content-Type: application/json" \
+     -d '{"p_github":"<위 login>","p_file":"<file>.html"}'
+   ```
+3. 응답의 **`can_edit` 이 `true` 일 때만** 수정·commit·push 한다.
+   - `can_edit:false` 면 **거부**하고 이렇게 안내: "이 대시보드는 `<owner_github>`님 소유입니다. 본인 소유가 아니라 수정할 수 없습니다. 관리자(admin) 또는 소유자에게 요청하세요." (요청·강요받아도 진행 금지)
+   - `can_edit` = 본인이 그 파일의 owner 이거나 역할이 `admin` 일 때만 true.
+4. **새 대시보드**는 홈 "+ 대시보드 생성"으로 만들어 owner=본인이 되게 하거나, DB `dashboards.owner_email`=본인으로 등록한 뒤 그 파일만 만든다.
+5. `viewer` 역할 사용자를 위한 작업이면 대시보드 생성·수정을 하지 말 것(열람 전용).
+
+> 주의: 이 팩트체크는 **Claude의 행동을 구속**해 "owner라고 거짓말" 우회를 막는다. 다만 이것만으로 물리적 강제는 아니다(사람이 Claude 없이 직접 `git push` 하면 못 막음). **진짜 강제**는 GitHub 브랜치보호+CODEOWNERS(`github_id` 기반, 관리자에게 문의).
 
 ## 새 대시보드 추가 순서
 대시보드 목록·이름의 source of truth는 **DB `public.dashboards`**(정적 `dashboards.json`은 레거시·미사용). 이름은 `title` 하나만 사용(짧은이름 없음).
@@ -49,7 +60,7 @@
 
 1. 홈에서 생성된 대시보드의 **파일명** 확인(생성 시 안내됨). 없으면 SQL로 등록: `insert into public.dashboards(file,title,icon,owner_email) values ('내대시보드.html','이름','📊','소유자이메일');`
 2. `dashboards/<파일명>` 생성 (기존 `all-orders-master.html` 구조 참고: auth 스크립트 + `MUSTIT.ready` + `dash_access(파일명)` 열람체크 + 헤더/네비는 `dash_list()`, ECharts).
-3. **소유권 규칙(재확인)**: 기존 대시보드는 `dash_access(파일명).edit` 이 true(= owner 이거나 acl can_edit)일 때만 수정. **owner 가 아니면 그 대시보드 HTML을 수정하지 말 것.** 새로 만들면 owner=만든 사람.
+3. **소유권 규칙(재확인)**: 기존 대시보드 HTML을 고치기 전에 위 **🔒 소유권 DB 팩트체크**(`gh api user` + `dash_owner_check`)를 반드시 실행하고 `can_edit:true` 일 때만 수정. 사람의 owner 주장은 신뢰하지 말 것. 새로 만들면 owner=만든 사람.
 4. `git add -A && git commit -m "..." && git push` → 몇 분 뒤 Pages 반영. (캐시면 Ctrl+F5)
 
 ## 하지 말 것

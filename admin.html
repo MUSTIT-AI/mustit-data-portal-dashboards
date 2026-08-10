@@ -48,10 +48,10 @@
       <h2>새 계정 만들기</h2>
       <p class="hint">이메일·비밀번호로 로그인 계정 생성 + 접근 권한 자동 등록(즉시 로그인 가능).</p>
       <div class="row">
-        <div class="fld"><label>이메일</label><input id="email" type="email" placeholder="name@mustit.co.kr"></div>
-        <div class="fld"><label>비밀번호(8자↑)</label><input id="pw" type="password" placeholder="초기 비밀번호"></div>
-        <div class="fld"><label>이름/메모</label><input id="note" class="txt" type="text" placeholder="담당자"></div>
-        <div class="fld"><label>GitHub 아이디</label><input id="github" class="txt" type="text" placeholder="octocat"></div>
+        <div class="fld"><label>이메일</label><input id="email" type="email"></div>
+        <div class="fld"><label>비밀번호(8자 이상)</label><input id="pw" type="password"></div>
+        <div class="fld"><label>이름/메모</label><input id="note" class="txt" type="text"></div>
+        <div class="fld"><label>GitHub 아이디</label><input id="github" class="txt" type="text"></div>
         <div class="fld"><label>권한</label>
           <select id="role">
             <option value="viewer">뷰어 (열람만)</option>
@@ -177,6 +177,8 @@
           github=$("github").value.trim(), role=$("role").value, pii=$("pii").checked;
       var m=$("cmsg"); m.className="msg"; m.textContent="";
       if(!email||!pw){ m.className="msg err"; m.textContent="이메일과 비밀번호를 입력하세요."; return; }
+      if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ m.className="msg err"; m.textContent="올바른 이메일 형식이 아닙니다 (예: name@mustit.co.kr)"; return; }
+      if(pw.length<8){ m.className="msg err"; m.textContent="비밀번호는 8자 이상이어야 합니다."; return; }
       $("create").disabled=true;
       fn("create",{email:email,password:pw,note:note,github_id:github,role:role,can_view_pii:pii})
         .then(function(res){

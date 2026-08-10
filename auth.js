@@ -105,9 +105,14 @@
     ensureStyle();
     if(document.getElementById("mustit-userbar")) return;
     var bar=document.createElement("div"); bar.id="mustit-userbar";
-    bar.innerHTML='<span>'+(session.user.email||"로그인됨")+'</span><button id="mustit-logout">로그아웃</button>';
+    bar.innerHTML='<span>'+(session.user.email||"로그인됨")+'</span><button id="mustit-pw">비번변경</button><button id="mustit-logout">로그아웃</button>';
     document.body.appendChild(bar);
     document.getElementById("mustit-logout").onclick=function(){ window.MUSTIT.signOut(); };
+    document.getElementById("mustit-pw").onclick=function(){
+      var pw=prompt("새 비밀번호(8자 이상)를 입력하세요:"); if(pw===null)return; pw=pw.trim();
+      if(pw.length<8){ alert("비밀번호는 8자 이상이어야 합니다"); return; }
+      client.auth.updateUser({password:pw}).then(function(res){ alert(res.error ? ("변경 실패: "+res.error.message) : "비밀번호를 변경했습니다."); });
+    };
   }
 
   function runReady(){ readyCbs.forEach(function(cb){ try{cb(session);}catch(e){console.error(e);} }); }

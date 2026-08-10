@@ -71,6 +71,9 @@
       '#'+OV_ID+' button{width:100%;padding:11px;border:0;border-radius:8px;background:#c8102e;color:#fff;font-weight:700;font-size:15px;cursor:pointer}'+
       '#'+OV_ID+' button:disabled{background:#d9a6ad;cursor:default}'+
       '#'+OV_ID+' .msg{color:#c8102e;font-size:12.5px;min-height:16px;margin-top:9px}'+
+      '#'+OV_ID+' .signup{margin:16px 0 0;padding-top:14px;border-top:1px solid #eee;text-align:center;font-size:12.5px;color:#6b6a66;line-height:1.6}'+
+      '#'+OV_ID+' .signup a{color:#c8102e;font-weight:700;text-decoration:none}'+
+      '#'+OV_ID+' .signup a:hover{text-decoration:underline}'+
       '#mustit-userbar{position:fixed;right:10px;bottom:10px;z-index:9999;background:rgba(28,27,25,.86);color:#fff;font-family:system-ui,sans-serif;'+
       'font-size:11.5px;padding:6px 10px;border-radius:20px;display:flex;align-items:center;gap:8px;box-shadow:0 2px 8px rgba(0,0,0,.2)}'+
       '#mustit-userbar button{background:transparent;border:1px solid rgba(255,255,255,.5);color:#fff;border-radius:12px;padding:2px 9px;font-size:11px;cursor:pointer}';
@@ -88,6 +91,7 @@
       '<input id="mustit-pw" type="password" placeholder="비밀번호" autocomplete="current-password">'+
       '<button type="submit" id="mustit-login-btn">로그인</button>'+
       '<div class="msg" id="mustit-msg"></div>'+
+      '<p class="signup">계정이 없으신가요?<br><a href="https://mustit-orders-portal-production.up.railway.app/#devdash" target="_blank" rel="noopener">데이터 포털에서 계정 등록 요청 →</a></p>'+
       '</form>';
     document.body.appendChild(ov);
     var form=ov.querySelector("form");

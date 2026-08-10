@@ -20,6 +20,22 @@
 - 제공 RPC: `dash_summary` `dash_daily` `dash_coupon` `dash_raw`(89컬럼) `dash_raw_all`(99컬럼, 로그인전용) `dash_filters`. 입력 `p = {from,to,filters:{컬럼:[값]},product_name}`.
 - **RAW 행수 상한**: `dash_raw`/`dash_raw_all` 은 `p_limit`(기본 300, **최대 100,000**)까지 `order_datetime desc`로 반환. 기간 전체를 보려면 `p_limit`를 크게(예: 100000) 넣을 것. KPI·차트(`dash_summary`/`dash_daily`/`dash_coupon`)는 서버 집계라 이 상한과 무관. 반환행수가 상한과 같으면 잘렸을 수 있으니 기간을 좁히도록 안내.
 
+### 직접 쿼리: `public.orders_secure` 뷰 (원하는 집계를 RPC 없이)
+정해진 RPC로 부족하면 **`public.orders_secure` 뷰를 직접 쿼리**해서 자유롭게 필터·집계할 수 있다. `mustit_orders.orders_v`(직접 접근 불가)와 달리 이 뷰는 로그인 계정이 조회 가능하다.
+- **개인정보 자동 마스킹**: 뷰가 로그인 계정의 `can_view_pii`를 DB에서 판정 → 권한 있으면 99컬럼 전부, 없으면 개인정보 10컬럼(age_band·buyer_gender·member_no·buyer_hash·region_sido·region_sigungu·buyer_age·join_year·join_date·prev_order_at)이 **NULL**로 나온다. 허용목록에 없으면 0행.
+- 컬럼 타입은 원본 그대로(날짜=timestamp) → 기간·집계 쿼리에 그대로 사용. 일시는 이미 KST(`AT TIME ZONE` 금지).
+- 호출(로그인 세션의 JWT 자동 사용):
+  ```js
+  window.MUSTIT.ready(function(){
+    window.MUSTIT.client.from('orders_secure')
+      .select('brand,total_purchase,order_datetime')
+      .gte('order_datetime','2026-07-01').lt('order_datetime','2026-08-01')
+      .limit(1000)
+      .then(function(res){ var rows = res.data||[]; /* 차트 그리기 */ });
+  });
+  ```
+- PostgREST 기본 응답 상한(~1000행)·집계 한계가 있으니, **대용량·복잡 집계는 여전히 전용 RPC**(SECURITY DEFINER + `_dash_guard()`)가 낫다. 단순 조회·필터·중간규모는 이 뷰가 편하다.
+
 ## 절대 규칙
 1. **일시는 이미 KST** → `AT TIME ZONE` 금지. `order_datetime` 그대로. 기간 필터는 인덱스를 타서 빠름 — 항상 기간을 좁힐 것.
 2. **재무 정의**: 매출=`gross_revenue`(총매출), 거래액/GMV=`total_purchase`, 순매출=총매출−자사할인, 순이익=순매출−결제수수료. 마스터뷰 기본은 **전체 주문상태**(정산완료만 보려면 `filters.order_status:["정산완료"]`).

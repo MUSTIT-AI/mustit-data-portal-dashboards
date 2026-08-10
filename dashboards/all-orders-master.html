@@ -171,6 +171,10 @@
     <p class="mhint">체크하면 바로 저장됩니다. 아무도 지정 안 하면 로그인 전원 열람(수정은 불가). 관리자는 항상 전체.</p>
     <table class="mtbl"><thead><tr><th>이메일</th><th>메모</th><th style="text-align:center">열람</th><th style="text-align:center">수정</th></tr></thead>
       <tbody id="m_acl"><tr><td colspan="4" style="color:#999">불러오는 중…</td></tr></tbody></table>
+    <div id="m_delwrap" style="display:none;margin-top:18px;border-top:1px solid #eee;padding-top:14px">
+      <button class="btn" id="m_del" style="background:#c8102e;color:#fff;padding:8px 16px">이 대시보드 삭제</button>
+      <span style="font-size:11.5px;color:#8a8880;margin-left:8px">생성자만 · 목록에서 삭제 · 되돌릴 수 없음</span>
+    </div>
   </div>
 </div>
 
@@ -566,6 +570,10 @@ function openEditModal(){
   $("m_msg").textContent="";
   $("m_title").value = (CUR_META&&CUR_META.title)||"";
   $("editmodal").style.display="flex";
+  var meEmail=((window.MUSTIT.user&&window.MUSTIT.user()&&window.MUSTIT.user().email)||"").toLowerCase();
+  var isOwner = !!(CUR_META && CUR_META.owner_email && String(CUR_META.owner_email).toLowerCase()===meEmail);
+  $("m_delwrap").style.display = isOwner ? "" : "none";   // 삭제는 생성자만
+  $("m_del").onclick = function(){ deleteDash((CUR_META&&CUR_META.title)||CUR_FILE); };
   $("m_acl").innerHTML='<tr><td colspan="4" style="color:#999">불러오는 중…</td></tr>';
   var RN={viewer:'뷰어',editor:'편집자',admin:'관리자'};
   window.MUSTIT.fn("admin-users",{action:"acl_list",dashboard:CUR_FILE}).then(function(res){
@@ -593,6 +601,17 @@ function saveMeta(){
   window.MUSTIT.fn("admin-users",{action:"dash_meta_set",file:CUR_FILE,title:$("m_title").value})
     .then(function(){ $("m_msg").textContent="저장되었습니다."; setupTopbar(); })
     .catch(function(e){ $("m_msg").style.color="#c8102e"; $("m_msg").textContent="실패: "+e.message; });
+}
+// 삭제(생성자만): 확인 창 + 이름 재입력 2단계
+function deleteDash(name){
+  name=String(name||"").trim();
+  if(!confirm("“"+name+"” 대시보드를 삭제할까요?\n목록에서 사라지며 되돌릴 수 없습니다.")) return;
+  var t=prompt("확인을 위해 대시보드 이름을 그대로 입력하세요:\n"+name);
+  if(t===null) return;
+  if(t.trim()!==name){ alert("이름이 일치하지 않아 취소했습니다."); return; }
+  window.MUSTIT.fn("admin-users",{action:"dash_delete",file:CUR_FILE})
+    .then(function(r){ if(!r.ok) throw new Error(r.error||'실패'); alert("삭제했습니다."); location.href="../index.html"; })
+    .catch(function(e){ alert("삭제 실패: "+e.message); });
 }
 // 로그인 + 이 대시보드 열람권한 확인 후 데이터 로드
 window.MUSTIT.ready(function(){

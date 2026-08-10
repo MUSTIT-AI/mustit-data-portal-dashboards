@@ -40,6 +40,7 @@
   <div class="right">
     <span class="owner" id="dashowner"></span>
     <button class="editbtn" id="editname" style="display:none">이름 변경</button>
+    <button class="editbtn" id="deldash" style="display:none;background:#c8102e;color:#fff;border-color:#c8102e">삭제</button>
     <select id="dashnav" title="대시보드 이동"></select>
   </div>
 </div>
@@ -87,6 +88,10 @@
           if(cur){
             $("dashowner").textContent=(cur.title||FILE)+(cur.owner_name?(" · "+cur.owner_name):"");
             if(cur.manage){ $("editname").style.display=""; $("editname").onclick=function(){ renameDash(cur.title||""); }; }
+            var meEmail=((window.MUSTIT.user()&&window.MUSTIT.user().email)||"").toLowerCase();
+            if(cur.owner_email && meEmail && String(cur.owner_email).toLowerCase()===meEmail){  // 삭제는 생성자(소유자)만
+              $("deldash").style.display=""; $("deldash").onclick=function(){ deleteDash(cur.title||FILE); };
+            }
           }
           var sel=$("dashnav");
           sel.innerHTML=list.map(function(d){return '<option value="_starter.html?f='+encodeURIComponent(d.file)+'"'+(d.file===FILE?' selected':'')+'>'+esc(d.title||d.file)+'</option>';}).join("");
@@ -101,6 +106,17 @@
     window.MUSTIT.fn("admin-users",{action:"dash_meta_set",file:FILE,title:t})
       .then(function(r){ if(!r.ok) throw new Error(r.error||'실패'); $("dashowner").textContent=t; alert("이름을 변경했습니다."); })
       .catch(function(e){ alert("변경 실패: "+e.message); });
+  }
+  // 삭제(생성자만): 확인 창 + 이름 재입력 2단계
+  function deleteDash(name){
+    name=String(name||"").trim();
+    if(!confirm("“"+name+"” 대시보드를 삭제할까요?\n목록에서 사라지며 되돌릴 수 없습니다.")) return;
+    var t=prompt("확인을 위해 대시보드 이름을 그대로 입력하세요:\n"+name);
+    if(t===null) return;
+    if(t.trim()!==name){ alert("이름이 일치하지 않아 취소했습니다."); return; }
+    window.MUSTIT.fn("admin-users",{action:"dash_delete",file:FILE})
+      .then(function(r){ if(!r.ok) throw new Error(r.error||'실패'); alert("삭제했습니다."); location.href="../index.html"; })
+      .catch(function(e){ alert("삭제 실패: "+e.message); });
   }
 })();
 </script>

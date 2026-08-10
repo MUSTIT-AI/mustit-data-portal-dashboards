@@ -440,7 +440,9 @@ function setProgress(done, total){
 var MAX_DAYS = 366;   // 조회 기간 상한(약 12개월). 기간에 비례해 호출 수·시간이 늘어나므로 상한을 둔다.
 
 function loadRanking(){
+  var THUMB = location.hash.indexOf("thumb")>=0;   // 홈 썸네일: 전체 스캔 대신 경량 조회
   var from = $("from").value, to = $("to").value;
+  if(THUMB && to){ from = addDays(to, -4); }        // 최근 5일만
   if(!from || !to){ $("err").textContent = "시작일과 종료일을 입력하세요."; return; }
   if(from>to){ $("err").textContent = "시작일은 종료일보다 늦을 수 없어요."; return; }
   var span = daysBetweenInclusive(from, to);
@@ -457,7 +459,7 @@ function loadRanking(){
   setProgress(0, totalAll);
 
   return fetchAggregated(filters, from, to, stat, bump).then(function(curMap){
-    return fetchAggregated(filters, prevFrom, prevTo, stat, bump).then(function(prevMap){
+    return (THUMB ? Promise.resolve({}) : fetchAggregated(filters, prevFrom, prevTo, stat, bump)).then(function(prevMap){
       var curList = rankMap(curMap), prevList = rankMap(prevMap);
       var prevRankOf = {}; prevList.forEach(function(a){ prevRankOf[a.product_id]=a.rank; });
       curList.forEach(function(a){

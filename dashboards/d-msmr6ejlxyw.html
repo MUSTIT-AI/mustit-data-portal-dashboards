@@ -551,6 +551,7 @@ function renderBreakdown(){
 function refresh(){
   var p = params();
   var lim = parseInt($("raw_limit").value,10)||2000;
+  if(location.hash.indexOf("thumb")>=0) lim = Math.min(lim, 500);  // 홈 썸네일: 표본 축소로 트래픽 절감(차트는 유지)
   $("loading").classList.add("on"); $("err").textContent="";
   Promise.all([ rpc("dash_summary",{p:p}), rpc("dash_daily",{p:p}), rpc("dash_raw",{p:p, p_limit:lim}) ])
   .then(function(res){

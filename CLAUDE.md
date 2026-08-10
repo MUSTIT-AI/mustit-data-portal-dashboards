@@ -17,8 +17,12 @@
   window.MUSTIT.ready(function(){ /* 여기서 MUSTIT.rpc(...) 호출 */ });
   ```
 - 데이터는 **반드시 `window.MUSTIT.rpc(함수, {p})`** 로 가져온다. 직접 fetch로 publishable 키를 Bearer에 넣지 말 것(로그인 토큰을 써야 함).
-- 제공 RPC: `dash_summary` `dash_daily` `dash_coupon` `dash_raw`(89컬럼) `dash_raw_all`(99컬럼, 로그인전용) `dash_filters`. 입력 `p = {from,to,filters:{컬럼:[값]},product_name}`.
-- **RAW 행수 상한**: `dash_raw`/`dash_raw_all` 은 `p_limit`(기본 300, **최대 100,000**)까지 `order_datetime desc`로 반환. 기간 전체를 보려면 `p_limit`를 크게(예: 100000) 넣을 것. KPI·차트(`dash_summary`/`dash_daily`/`dash_coupon`)는 서버 집계라 이 상한과 무관. 반환행수가 상한과 같으면 잘렸을 수 있으니 기간을 좁히도록 안내.
+- 제공 RPC: `dash_summary` `dash_daily` `dash_coupon` `dash_raw`(89컬럼) `dash_raw_all`(99컬럼, 로그인전용) `dash_filters` `dash_product_rank`(상품 랭킹 집계). 입력 `p = {from,to,filters:{컬럼:[값]},product_name}`.
+- **집계는 원본을 내려받지 말고 DB에서 집계할 것 (중요)**: 상품·브랜드 랭킹, 카테고리 비중처럼 "집계가 목적"인 화면은 `dash_raw`로 원본 행을 브라우저로 당겨 접는 방식이 매우 비효율적이다(1년 ≈ 300MB, 왕복 수백 회, 타임아웃 위험). **DB 집계 RPC를 쓰거나 새로 만들 것.** 예: `dash_product_rank(p, p_limit)` = 상품별 GMV·수량·할인·순위(rank)를 한 번에 반환(90일도 ~2초·100행). 같은 패턴으로 필요한 집계 RPC를 추가(SECURITY DEFINER + `_dash_where`).
+- **RAW 행수 상한 & 실질 한계(타임아웃)**: `p_limit` 최대 100,000이지만 **실질 한계는 `authenticated`의 8초 쿼리 타임아웃**이다(무필터 기준 약 19,000행 ≈ 2개월). 그보다 긴 기간에 `p_limit=100000`을 넣으면 **타임아웃(57014)** 난다. → 긴 기간은 **기간을 잘라 여러 번 호출해 합산**할 것. **동시 호출 시엔 쿼리 경합으로 더 빨리 타임아웃**나므로 건당 **2,000행 수준**으로 잡을 것(여러 대시보드를 동시에 열 때도 실패 가능). 반환행수가 `p_limit`과 같으면 잘린 것. KPI·차트(`dash_summary`/`dash_daily`/`dash_coupon`)와 집계 RPC는 서버 집계라 이 문제와 무관 → **가능하면 집계 RPC를 쓸 것.**
+- **필터는 화이트리스트만 적용됨(주의)**: `_dash_where`의 허용 컬럼만 `filters`로 걸린다. 목록에 없는 키는 **에러 없이 조용히 무시**되어 "필터가 걸린 줄 알고 잘못된 결과"를 보게 되니, 없는 컬럼은 클라이언트에서 거를 것. 허용: brand, order_type, category_gender, category_code, category_l, category_m, **category_s**, order_status, product_division, platform, payment_method, member_grade, age_band, buyer_gender, region_sido, customer_type, seller_id, seller_grade, join_year, ship_origin, courier, naver_discount_applied. (category_s는 2026-08-10 추가됨)
+- **카테고리 드릴다운**: `dash_filters()`가 `category_l`(대) + `category_tree`(대>중>소 조합 배열 `[{l,m,s}]`)를 반환한다. 하드코딩하지 말고 `category_tree`에서 중/소 목록·계층을 파생할 것.
+- (레거시) `dash_raw_full`(비밀번호 게이트)은 상한 2,000 그대로·미사용. 전체 컬럼은 로그인 게이트 `dash_raw_all`을 쓸 것.
 
 - **홈 썸네일 절감(필수 규약)**: 홈 갤러리는 각 대시보드를 `dashboards/<file>#thumb` iframe으로 띄워 미리보기한다. 대시보드는 **`location.hash`에 `thumb`이 있으면 무거운 조회(RAW 대용량 `dash_raw`/`dash_raw_all`, 수천 행 `orders_secure` 등)를 건너뛰고** 가벼운 차트(집계 RPC)만 렌더할 것. 예: `var THUMB=location.hash.indexOf('thumb')>=0; if(THUMB) return;`(RAW 로드 스킵). 안 지키면 홈 열 때마다 대시보드 수 × 전체 데이터가 재조회돼 트래픽·DB 부하가 커진다.
 

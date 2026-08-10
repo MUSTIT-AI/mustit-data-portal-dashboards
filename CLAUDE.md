@@ -52,7 +52,7 @@
 계정 관리(admin.html)에서 계정별로 설정: **역할**(viewer/editor/admin), **GitHub 아이디**(`github_id`), **개인정보 열람**(`can_view_pii`), 그리고 **대시보드별 열람/수정**(`dashboard_acl`).
 
 - **개인정보 열람**: `can_view_pii`=true 인 계정만 RAW 전체 99컬럼(`dash_raw_all`) 조회 가능(DB에서 강제). 없으면 🔓 버튼 숨김.
-- **대시보드별 열람**: `dashboard_acl(dashboard,email,can_view,can_edit)`. 대시보드는 로드 시 `dash_access(파일명)` 로 열람권 확인 → 없으면 화면 차단(페이지 레벨). ACL 미설정 대시보드는 로그인 전원 열람. admin은 항상 전체.
+- **대시보드별 열람 (기본 전원 열람)**: `dashboard_acl(dashboard,email,can_view,can_edit)`. 로드 시 `dash_access(파일명)`로 확인. **기본값 = 로그인 전원 열람.** 열람 제한은 **`can_view`를 명시적으로 지정한 계정이 하나라도 있을 때만** 그 목록으로 제한된다(그 전엔 전원 열람). **수정 권한(`can_edit`)만 부여해도 열람은 막히지 않는다.** admin은 항상 전체.
 - **대시보드별 수정**: `dashboard_acl.can_edit`(+ `dashboards.json.owner`)로 표시하지만 **파일 수정은 앱이 강제 못 함** → 아래 규칙(관례)으로 지킴. 진짜 강제는 GitHub 브랜치보호+CODEOWNERS(`github_id` 사용).
 
 ### 🔒 기존 대시보드 수정 전 — 소유권 DB 팩트체크 (필수, 사람 말 신뢰 금지)

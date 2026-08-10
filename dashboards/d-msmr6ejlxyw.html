@@ -83,8 +83,13 @@
   .card .ctools select{border:1px solid #d6d4ce;border-radius:6px;background:#fff;font-size:11.5px;padding:3px 5px;height:25px}
   .chart{width:100%;height:300px}
   .chart.tall{height:420px}
-  .cmsg{display:none;padding:14px 4px;font-size:12px;color:var(--sub);line-height:1.7}
-  .cmsg code{background:rgba(128,128,128,.14);border-radius:4px;padding:1px 5px;font-family:"SF Mono",Consolas,monospace;font-size:11.5px}
+  /* 표본 안내 (차원별 집계는 dash_raw 표본 기반) */
+  .samplebar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:8px 12px 0;padding:8px 11px;
+    border:1px solid var(--border);border-radius:8px;background:#fff;font-size:11.5px;color:var(--sub);line-height:1.6}
+  .samplebar.warn{background:#fff7e8;border-color:#f0d9a8;color:#8a6a1f}
+  .samplebar b{font-weight:700}
+  .samplebar .sp{margin-left:auto;display:flex;align-items:center;gap:6px;white-space:nowrap}
+  .samplebar select{border:1px solid #d6d4ce;border-radius:6px;background:#fff;font-size:11.5px;padding:3px 5px;height:25px;color:var(--ink)}
   /* table */
   .tblwrap{padding:10px 12px 40px}
   .tblhead{display:flex;align-items:center;gap:10px;margin:4px 0 6px;flex-wrap:wrap}
@@ -127,6 +132,18 @@
 <!-- KPI -->
 <div class="kpis" id="kpis"></div>
 
+<!-- 차원별 집계 표본 안내 -->
+<div class="samplebar" id="samplebar">
+  <span id="sampletxt">불러오는 중…</span>
+  <span class="sp"><label for="raw_limit">표본 행수</label>
+    <select id="raw_limit">
+      <option value="2000" selected>2,000행</option>
+      <option value="5000">5,000행</option>
+      <option value="10000">10,000행</option>
+      <option value="20000">20,000행</option>
+    </select></span>
+</div>
+
 <!-- 일별 추이 + 카테고리 도넛 -->
 <div class="grid2">
   <div class="card">
@@ -146,7 +163,6 @@
       </div>
     </div>
     <div id="c_donut" class="chart"></div>
-    <div class="cmsg" id="m_donut"></div>
   </div>
 </div>
 
@@ -187,7 +203,6 @@
       </div>
     </div>
     <div id="c_bar" class="chart tall"></div>
-    <div class="cmsg" id="m_bar"></div>
   </div>
 </div>
 
@@ -410,6 +425,31 @@ function renderKPI(s){
   }).join("");
 }
 
+// ── 차원별 집계 (dash_raw 표본을 브라우저에서 집계) ──
+// RAW 는 최근순 상한이 있어 기간 전체를 못 덮을 수 있다 → 커버리지를 표본바에 명시한다.
+function aggregate(rows, dim){
+  var map = {}, groups = [];
+  rows.forEach(function(r){
+    var k = r[dim];
+    k = (k==null || k==="") ? "(미지정)" : String(k);
+    var g = map[k];
+    if(!g){ g = map[k] = {k:k, tp:0, gross:0, net_rev:0, net_profit:0, qty:0, orders:0, _seen:{}}; groups.push(g); }
+    g.tp         += Number(r.total_purchase)||0;
+    g.gross      += Number(r.gross_revenue)||0;
+    g.net_rev    += Number(r.net_revenue)||0;
+    g.net_profit += Number(r.net_profit)||0;
+    g.qty        += Number(r.quantity)||0;
+    if(r.order_no!=null && !g._seen[r.order_no]){ g._seen[r.order_no]=1; g.orders++; }
+  });
+  groups.sort(function(a,b){ return (b.tp-a.tp) || (a.k<b.k?-1:1); });
+  var tot = {tp:0, gross:0, net_rev:0, net_profit:0, qty:0, groups:groups.length};
+  groups.forEach(function(g){
+    delete g._seen;
+    tot.tp+=g.tp; tot.gross+=g.gross; tot.net_rev+=g.net_rev; tot.net_profit+=g.net_profit; tot.qty+=g.qty;
+  });
+  return { rows:groups, total:tot };
+}
+
 // ── TOP N 표 ──
 var TBL_ROWS = [], TBL_TOTAL = null, TBL_LABEL = "브랜드";
 var TBL_COLS = [
@@ -440,13 +480,15 @@ function renderTable(bd, label){
   }).join("")+"</tbody>";
   var foot = "";
   if(TBL_TOTAL){
-    foot = "<tfoot><tr><td></td><td>전체 합계 ("+won(TBL_TOTAL.groups)+"개 "+esc(label)+")</td>"+
+    foot = "<tfoot><tr><td></td><td>"+(SAMPLE.partial?"표본 합계":"전체 합계")+" ("+won(TBL_TOTAL.groups)+"개 "+esc(label)+")</td>"+
       "<td class=num>"+won(TBL_TOTAL.tp)+"</td><td class=num>100.00%</td>"+
       "<td class=num>"+won(TBL_TOTAL.gross)+"</td><td class=num>"+won(TBL_TOTAL.net_rev)+"</td>"+
       "<td class=num>"+won(TBL_TOTAL.net_profit)+"</td><td class=num>"+won(TBL_TOTAL.qty)+"</td><td class=num>-</td></tr></tfoot>";
   }
   $("tbl").innerHTML = head+body+foot;
-  $("tblcnt").textContent = TBL_ROWS.length ? ("상위 "+won(TBL_ROWS.length)+"개 표시 / 전체 "+won(TBL_TOTAL&&TBL_TOTAL.groups)+"개") : "";
+  $("tblcnt").textContent = TBL_ROWS.length
+    ? ("상위 "+won(TBL_ROWS.length)+"개 표시 / "+(SAMPLE.partial?"표본 내":"전체")+" "+won(TBL_TOTAL&&TBL_TOTAL.groups)+"개")
+    : "";
   $("csv").disabled = !TBL_ROWS.length;
 }
 function csvCell(v){ v = (v==null?"":String(v)); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
@@ -470,51 +512,56 @@ function downloadCSV(){
   setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 }
 
-// ── dash_breakdown 미설치 안내 ──
-var BD_MISSING = false;
-function showBreakdownMsg(e){
-  BD_MISSING = true;
-  var html = '<b style="color:#c8102e">차원별 집계 RPC(<code>dash_breakdown</code>)가 아직 없습니다.</b><br>'+
-    '레포의 <code>sql/dash_breakdown.sql</code> 을 Supabase → SQL Editor 에 붙여넣고 Run 하면 이 차트가 채워집니다.<br>'+
-    '<span style="color:#a7a49c;font-size:11px">'+esc(e && e.message ? e.message : "")+'</span>';
-  ["m_donut","m_bar"].forEach(function(id){ $(id).innerHTML=html; $(id).style.display="block"; });
-  ["c_donut","c_share","c_bar"].forEach(function(id){ $(id).style.display="none"; });
+// ── 표본 커버리지 안내 ──
+// dash_summary(기간 전체 정확값)의 거래액과 RAW 표본 거래액을 비교해 커버리지를 산출한다.
+var RAW = [];          // dash_raw 표본
+var SUM = null;        // dash_summary 결과
+var SAMPLE = { n:0, coverage:1, from:"", to:"", partial:false };
+
+function renderSample(){
+  var totTp = Number(SUM && SUM.total_purchase) || 0;
+  var sTp = RAW.reduce(function(a,r){ return a + (Number(r.total_purchase)||0); }, 0);
+  var cov = totTp ? (sTp/totTp) : (RAW.length ? 1 : 0);
+  var dts = RAW.map(function(r){ return r.order_datetime; }).filter(Boolean).map(String);
+  var mn = dts.length ? dts.reduce(function(a,b){ return a<b?a:b; }) : "";
+  var mx = dts.length ? dts.reduce(function(a,b){ return a>b?a:b; }) : "";
+  SAMPLE = { n:RAW.length, coverage:cov, from:mn.slice(0,10), to:mx.slice(0,10), partial:(cov < 0.995) };
+
+  $("samplebar").classList.toggle("warn", SAMPLE.partial);
+  $("sampletxt").innerHTML = SAMPLE.partial
+    ? '⚠ <b>표본 집계</b> — 아래 차원별(브랜드·카테고리) 차트와 표는 최근순 <b>'+won(SAMPLE.n)+'행</b>만 반영합니다. '+
+      '조회기간 거래액의 <b>'+(cov*100).toFixed(1)+'%</b>'+(SAMPLE.from?(' · '+esc(SAMPLE.from)+'~'+esc(SAMPLE.to)+' 구간'):'')+'. '+
+      '순위·비중이 실제와 다를 수 있으니 기간을 좁히거나 표본 행수를 늘리세요. '+
+      '<span style="opacity:.75">(KPI·일별 추이는 기간 전체 정확값)</span>'
+    : '✓ 차원별 차트·표가 조회기간 <b>전체</b>를 반영합니다 ('+won(SAMPLE.n)+'행 · 거래액 '+(cov*100).toFixed(1)+'%)';
+}
+
+// 차원/TOP N 변경은 표본 재사용 → 재조회 없이 다시 그린다
+function renderBreakdown(){
+  var barN = parseInt($("bar_n").value,10)||20;
+  var barLbl = dimLabel($("bar_dim"));
+  $("bar_title").textContent = barLbl;
+  var bAll = aggregate(RAW, $("bar_dim").value);
+  var bTop = { rows:bAll.rows.slice(0,barN), total:bAll.total };
+  drawBar(bTop);
+  renderTable(bTop, barLbl);
+  drawDonut(aggregate(RAW, $("donut_dim").value));
 }
 
 // ── refresh ──
 function refresh(){
   var p = params();
-  var barDim = $("bar_dim").value, barN = parseInt($("bar_n").value,10)||20;
-  var donutDim = $("donut_dim").value;
-  var barLbl = dimLabel($("bar_dim"));
-  $("bar_title").textContent = barLbl;
+  var lim = parseInt($("raw_limit").value,10)||2000;
   $("loading").classList.add("on"); $("err").textContent="";
-
-  var calls = [ rpc("dash_summary",{p:p}), rpc("dash_daily",{p:p}) ];
-  if(!BD_MISSING){
-    calls.push(rpc("dash_breakdown",{p:p, p_dim:barDim,   p_limit:barN}));
-    calls.push(rpc("dash_breakdown",{p:p, p_dim:donutDim, p_limit:50}));
-  }
-  Promise.all(calls)
+  Promise.all([ rpc("dash_summary",{p:p}), rpc("dash_daily",{p:p}), rpc("dash_raw",{p:p, p_limit:lim}) ])
   .then(function(res){
-    renderKPI(res[0]);
+    SUM = res[0]; RAW = res[2]||[];
+    renderKPI(SUM);
     drawDaily(res[1]||[]);
-    if(!BD_MISSING){
-      drawBar(res[2]);
-      renderTable(res[2], barLbl);
-      drawDonut(res[3]);
-    }
+    renderSample();
+    renderBreakdown();
   })
-  .catch(function(e){
-    // dash_breakdown 미설치(404/PGRST202)면 나머지 차트는 살리고 안내만 표시
-    var m = e.message||"";
-    if(!BD_MISSING && m.indexOf("dash_breakdown")===0 && (/\b404\b/.test(m) || /PGRST202/.test(m))){
-      showBreakdownMsg(e);
-      setTimeout(refresh, 0);   // finally 가 loading 을 끈 뒤 재조회
-      return;
-    }
-    $("err").textContent = "오류: "+m;
-  })
+  .catch(function(e){ $("err").textContent = "오류: "+e.message; })
   .finally(function(){ $("loading").classList.remove("on"); });
 }
 
@@ -526,9 +573,10 @@ function setDefaultDates(){
 }
 $("go").onclick=refresh;
 $("csv").onclick=downloadCSV;
-$("bar_dim").onchange=refresh;
-$("bar_n").onchange=refresh;
-$("donut_dim").onchange=refresh;
+$("bar_dim").onchange=renderBreakdown;
+$("bar_n").onchange=renderBreakdown;
+$("donut_dim").onchange=renderBreakdown;
+$("raw_limit").onchange=refresh;
 $("editdash").onclick=openEditModal;
 $("m_close").onclick=function(){ $("editmodal").style.display="none"; };
 $("m_save").onclick=saveMeta;

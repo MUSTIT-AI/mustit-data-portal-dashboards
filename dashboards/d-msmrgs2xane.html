@@ -249,12 +249,11 @@ function foldRows(map, rows){
         product_id:r.product_id, product_name:r.product_name, brand:r.brand,
         category_l:r.category_l, category_m:r.category_m, category_s:r.category_s,
         seller_id:r.seller_id, catalog_rank:r.catalog_rank, catalog_item_count:r.catalog_item_count,
-        quantity:0, total_purchase:0, gmv:0, own_discount:0, seller_discount:0
+        quantity:0, gmv:0, own_discount:0, seller_discount:0
       };
     }
     a.quantity       += Number(r.quantity)||0;
-    a.total_purchase += Number(r.total_purchase)||0;
-    a.gmv            += Number(r.paid_amount)||0;
+    a.gmv            += Number(r.total_purchase)||0;   // 거래액/GMV = 총구매금액(할인 전)
     a.own_discount   += Number(r.own_discount_ttl)||0;
     a.seller_discount+= Number(r.seller_discount_ttl)||0;
   });
@@ -324,7 +323,7 @@ function renderTable(list){
   var top = list.slice(0,100);
   $("emptymsg").style.display = top.length? "none":"block";
   $("tbody").innerHTML = top.map(function(a){
-    var unit = a.quantity? Math.round(a.total_purchase/a.quantity):0;
+    var unit = a.quantity? Math.round(a.gmv/a.quantity):0;
     var url = detailUrl(a.product_id);
     return '<tr>'+
       '<td>'+won(a.rank)+'</td>'+
@@ -446,7 +445,7 @@ function openPopup(productId, productName){
       var d=dateOf(r.order_datetime);
       if(!byDate[d]) byDate[d]={quantity:0,gmv:0};
       byDate[d].quantity += Number(r.quantity)||0;
-      byDate[d].gmv += Number(r.paid_amount)||0;
+      byDate[d].gmv += Number(r.total_purchase)||0;
     });
     var dates = Object.keys(byDate).sort();
 

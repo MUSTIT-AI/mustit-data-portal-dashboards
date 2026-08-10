@@ -141,7 +141,7 @@
 <div class="modal" id="popmodal">
   <div class="modalbox">
     <div class="mhead">
-      <div><h2>최근 7일 판매 현황</h2><p id="popsub"></p></div>
+      <div><h2 id="poptitle">기간 내 판매 추이</h2><p id="popsub"></p></div>
       <button class="mclose" id="popclose">✕</button>
     </div>
     <div id="popbody"></div>
@@ -315,10 +315,12 @@ function renderCategory(a){ return [a.category_l,a.category_m,a.category_s].filt
 function renderMeta(a){ return [a.brand, renderCategory(a)].filter(Boolean).join(" | "); }
 function detailUrl(pid){ return "https://m.web.mustit.co.kr/v2/m/product/product_detail/"+encodeURIComponent(pid); }
 
+var LAST_LIST = [];   // 팝업이 상품 속성(브랜드·카테고리·판매자)을 그대로 쓰기 위해 보관
 function renderTable(list){
   var top = list.slice(0,100);
+  LAST_LIST = top;
   $("emptymsg").style.display = top.length? "none":"block";
-  $("tbody").innerHTML = top.map(function(a){
+  $("tbody").innerHTML = top.map(function(a, i){
     var unit = a.quantity? Math.round(a.gmv/a.quantity):0;
     var url = detailUrl(a.product_id);
     return '<tr>'+
@@ -334,7 +336,7 @@ function renderTable(list){
       '<td>₩'+won(a.seller_discount)+'</td>'+
       '<td class="qty">'+won(a.quantity)+'</td>'+
       '<td class="gmv">₩'+won(a.gmv)+'</td>'+
-      '<td><button class="recent-btn" data-pid="'+esc(a.product_id)+'" data-pname="'+esc(a.product_name||"")+'">7일 추이</button></td>'+
+      '<td><button class="recent-btn" data-idx="'+i+'">추이</button></td>'+
     '</tr>';
   }).join("");
 }
@@ -412,11 +414,14 @@ window.addEventListener("resize", function(){ Object.keys(POPCHARTS).forEach(fun
 
 function barChart(id, labels, data){
   var c = chart(id); if(!c) return;
+  // 일별(수십만)~월별(수억)까지 범위가 넓어 최대값에 맞춰 단위를 고른다
+  var max = data.reduce(function(a,b){ return Math.max(a, Number(b)||0); }, 0);
+  var div = max>=1e8 ? 1e8 : 1e4, suf = max>=1e8 ? "억" : "만";
   c.setOption({
-    grid:{left:52,right:16,top:20,bottom:40},
+    grid:{left:56,right:16,top:20,bottom:46},
     tooltip:{trigger:"axis",valueFormatter:function(v){return "₩"+won(v);}},
-    xAxis:{type:"category",data:labels,axisLabel:{fontSize:9,color:"#999",rotate:30},axisLine:{lineStyle:{color:"#ddd"}}},
-    yAxis:{type:"value",axisLabel:{formatter:function(v){return Math.round(v/1e4)+"만";},fontSize:9,color:"#999"},splitLine:{lineStyle:{color:"#eee"}}},
+    xAxis:{type:"category",data:labels,axisLabel:{fontSize:9,color:"#999",rotate:38,interval:labels.length>18?Math.ceil(labels.length/18)-1:0},axisLine:{lineStyle:{color:"#ddd"}}},
+    yAxis:{type:"value",axisLabel:{formatter:function(v){return (v/div).toFixed(v/div<10?1:0)+suf;},fontSize:9,color:"#999"},splitLine:{lineStyle:{color:"#eee"}}},
     series:[{name:"거래금액",type:"bar",data:data,itemStyle:{color:"#c8102e"},barMaxWidth:28}]
   });
 }
@@ -436,50 +441,101 @@ var GENDER_COLORS = { "여성":"#c8102e", "남성":"#2f80ed", "기타":"#999", "
 var AGE_COLORS = { "10대이하":"#f7c9cd","20대":"#f2949e","30대":"#ee5c6b","40대":"#df1c30","50대":"#a01423","60대이상":"#5c0c14","미확인":"#ccc" };
 var GRADE_COLORS = { "FRIENDS":"#5B6A7F","MUST GREEN":"#498B4A","MUST BLUE":"#3F82AA","MUST RED":"#B34644","MUST BLACK":"#312D3B","미확인":"#ccc" };
 
-function openPopup(productId, productName){
-  $("popsub").textContent = productName+" ("+productId+")";
+// ── 기간 버킷: 기간 길이에 따라 일/주/월 자동 전환 (막대 개수를 35개 이하로 유지) ──
+function dayOffset(from, d){ return Math.round((new Date(d+"T00:00:00") - new Date(from+"T00:00:00"))/86400000); }
+function makeBuckets(from, to){
+  var span = daysBetweenInclusive(from, to), size, unit, list=[];
+  if(span <= 35)       { size=1; unit="일"; }
+  else if(span <= 210) { size=7; unit="주"; }
+  else                 { size=0; unit="월"; }   // 0 = 달력 월
+  if(size===1){
+    for(var d=from; d<=to; d=addDays(d,1)) list.push({key:d, label:withWeek(d)});
+  } else if(size===7){
+    for(var s2=from, i=0; s2<=to; s2=addDays(s2,7), i++){
+      var e=addDays(s2,6); if(e>to) e=to;
+      list.push({key:String(i), label:s2.slice(5)+"~"+e.slice(5)});
+    }
+  } else {
+    var y=+from.slice(0,4), m=+from.slice(5,7), ey=+to.slice(0,4), em=+to.slice(5,7);
+    while(y<ey || (y===ey && m<=em)){
+      var k=y+"-"+String(m).padStart(2,"0");
+      list.push({key:k, label:k});
+      m++; if(m>12){ m=1; y++; }
+    }
+  }
+  return {size:size, unit:unit, list:list, span:span};
+}
+function bucketKeyOf(dateStr, from, b){
+  if(b.size===1) return dateStr;
+  if(b.size===0) return dateStr.slice(0,7);
+  return String(Math.floor(dayOffset(from, dateStr)/7));
+}
+// 상품을 정확히 집어내는 서버 필터. product_id 는 _dash_where 가 지원하지 않고
+// product_name 은 시간이 지나며 바뀌어 누락이 생기므로(실측 129행 중 18행만 매칭),
+// 시간에 따라 변하지 않는 속성으로 좁힌 뒤 product_id 로 정확히 거른다.
+function productFilters(a){
+  var f={};
+  if(a.brand)      f.brand      = [a.brand];
+  if(a.category_l) f.category_l = [a.category_l];
+  if(a.category_m) f.category_m = [a.category_m];
+  if(a.category_s) f.category_s = [a.category_s];   // null 이면 = any(...) 로 못 잡으므로 생략
+  if(a.seller_id)  f.seller_id  = [a.seller_id];
+  return f;
+}
+var POP_LIMIT = 20000;   // 상위100 상품의 속성필터 결과는 12개월 최대 2,860행(실측)
+
+function openPopup(a){
+  var productId = a.product_id;
+  $("popsub").textContent = (a.product_name||"") + " (" + productId + ")";
   disposeCharts();
   $("popmodal").classList.add("open");
   $("popbody").innerHTML = '<div class="empty">불러오는 중…</div>';
 
-  var targetD = new Date($("to").value+"T00:00:00");
-  var startD = new Date(targetD.getTime()-6*86400000);
-  var p = { from: ymd(startD), to: ymd(targetD), filters:{}, product_name: productName };
+  var from = $("from").value, to = $("to").value;
+  var b = makeBuckets(from, to);
+  $("poptitle").textContent = "기간 내 판매 추이 (" + b.unit + "별)";
+  var p = { from: from, to: to, filters: productFilters(a) };
 
   var wantPii = !!(ACCESS && ACCESS.pii);
   Promise.all([
-    rpc("dash_raw",{p:p, p_limit:500}),
-    wantPii ? rpc("dash_raw_all",{p:p, p_limit:500}).catch(function(){ return null; }) : Promise.resolve(null)
+    rpc("dash_raw",{p:p, p_limit:POP_LIMIT}),
+    wantPii ? rpc("dash_raw_all",{p:p, p_limit:POP_LIMIT}).catch(function(){ return null; }) : Promise.resolve(null)
   ]).then(function(res){
-    var rows = (res[0]||[]).filter(function(r){ return String(r.product_id)===String(productId); });
+    var raw = res[0]||[];
+    var rows = raw.filter(function(r){ return String(r.product_id)===String(productId); });
     var piiRows = res[1] ? res[1].filter(function(r){ return String(r.product_id)===String(productId); }) : null;
 
-    var byDate = {};
-    for(var i=0;i<7;i++){ var dd=ymd(new Date(startD.getTime()+i*86400000)); byDate[dd]={quantity:0,gmv:0}; }
+    var agg = {};
+    b.list.forEach(function(x){ agg[x.key] = {quantity:0, gmv:0}; });
     rows.forEach(function(r){
-      var d=dateOf(r.order_datetime);
-      if(!byDate[d]) byDate[d]={quantity:0,gmv:0};
-      byDate[d].quantity += Number(r.quantity)||0;
-      byDate[d].gmv += Number(r.total_purchase)||0;
+      var k = bucketKeyOf(dateOf(r.order_datetime), from, b);
+      if(!agg[k]) agg[k] = {quantity:0, gmv:0};
+      agg[k].quantity += Number(r.quantity)||0;
+      agg[k].gmv      += Number(r.total_purchase)||0;
     });
-    var dates = Object.keys(byDate).sort();
 
     var byGrade={};
     rows.forEach(function(r){ var g=r.member_grade||"미확인"; byGrade[g]=(byGrade[g]||0)+1; });
     var byAge={}, byGender={};
     if(piiRows){
       piiRows.forEach(function(r){
-        var a=r.age_band||"미확인", s=r.buyer_gender||"미확인";
-        byAge[a]=(byAge[a]||0)+1; byGender[s]=(byGender[s]||0)+1;
+        var ab=r.age_band||"미확인", sx=r.buyer_gender||"미확인";
+        byAge[ab]=(byAge[ab]||0)+1; byGender[sx]=(byGender[sx]||0)+1;
       });
     }
     var hasGrade = Object.keys(byGrade).length>0;
+    var totQty = rows.reduce(function(x,r){ return x+(Number(r.quantity)||0); },0);
+    var totGmv = rows.reduce(function(x,r){ return x+(Number(r.total_purchase)||0); },0);
 
     $("popbody").innerHTML =
+      (raw.length >= POP_LIMIT
+        ? '<div style="color:#c8102e;font-size:11.5px;margin-bottom:8px">⚠ 조회 상한('+won(POP_LIMIT)+'행)에 도달해 일부가 빠졌을 수 있어요.</div>' : '')+
       '<div class="chartbox" id="pop_chart"></div>'+
-      '<table class="pop"><thead><tr><th>날짜</th><th>판매수량</th><th>거래금액</th></tr></thead><tbody>'+
-        dates.map(function(d){ return '<tr><td>'+withWeek(d)+'</td><td>'+won(byDate[d].quantity)+'</td><td>₩'+won(byDate[d].gmv)+'</td></tr>'; }).join("")+
-      '</tbody></table>'+
+      '<table class="pop"><thead><tr><th>'+b.unit+'</th><th>판매수량</th><th>거래금액</th></tr></thead><tbody>'+
+        b.list.map(function(x){
+          return '<tr><td>'+esc(x.label)+'</td><td>'+won(agg[x.key].quantity)+'</td><td>₩'+won(agg[x.key].gmv)+'</td></tr>';
+        }).join("")+
+      '</tbody><tfoot><tr><td><b>합계</b></td><td><b>'+won(totQty)+'</b></td><td><b>₩'+won(totGmv)+'</b></td></tr></tfoot></table>'+
       (hasGrade ?
         '<div class="demo"><h4>구매자 통계</h4><div class="demogrid">'+
           '<div class="box"><div class="lbl">회원등급</div><div id="pop_grade" style="height:160px"></div></div>'+
@@ -488,11 +544,10 @@ function openPopup(productId, productName){
             '<div class="box"><div class="lbl">성별</div><div id="pop_gender" style="height:160px"></div></div>'
             : '<div class="piihint">연령대·성별은 개인정보 열람 권한이 있는 계정만 볼 수 있어요</div>')+
         '</div></div>'
-        : '<div class="demo"><div class="empty">'+esc(dates[0])+' ~ '+esc(dates[dates.length-1])+' 에는 이 상품 주문이 없어요.<br>'+
-          '<span style="font-size:11.5px">이 표는 조회기간 <b>마지막 7일</b>만 봐요 — 상위 랭킹이어도 그 기간에 안 팔렸으면 비어 있어요.</span></div></div>');
+        : '<div class="demo"><div class="empty">'+esc(from)+' ~ '+esc(to)+' 에는 이 상품 주문이 없어요.</div></div>');
 
-    // 아래 setOption 대상은 위에서 실제로 렌더된 노드만 — 조건을 HTML 렌더 조건과 정확히 일치시킨다
-    barChart("pop_chart", dates.map(withWeek), dates.map(function(d){return byDate[d].gmv;}));
+    // setOption 대상은 위에서 실제로 렌더된 노드만 — 조건을 HTML 렌더 조건과 일치시킨다
+    barChart("pop_chart", b.list.map(function(x){return x.label;}), b.list.map(function(x){return agg[x.key].gmv;}));
     if(hasGrade){
       pieChart("pop_grade", byGrade, GRADE_COLORS);
       if(piiRows){ pieChart("pop_age", byAge, AGE_COLORS); pieChart("pop_gender", byGender, GENDER_COLORS); }
@@ -506,7 +561,8 @@ function closePopup(){ $("popmodal").classList.remove("open"); disposeCharts(); 
 $("tbody").addEventListener("click", function(e){
   var btn = e.target.closest(".recent-btn");
   if(!btn) return;
-  openPopup(btn.getAttribute("data-pid"), btn.getAttribute("data-pname"));
+  var a = LAST_LIST[Number(btn.getAttribute("data-idx"))];
+  if(a) openPopup(a);
 });
 $("popclose").onclick = closePopup;
 $("popmodal").addEventListener("click", function(e){ if(e.target===$("popmodal")) closePopup(); });

@@ -92,7 +92,7 @@
           var built = exists[i];
           var href = built ? ('dashboards/' + encodeURIComponent(d.file)) : ('dashboards/_starter.html?f=' + encodeURIComponent(d.file));
           var thumb = built
-            ? '<div class="thumb"><iframe loading="lazy" scrolling="no" tabindex="-1" src="dashboards/' + encodeURIComponent(d.file) + '"></iframe></div>'
+            ? '<div class="thumb"><iframe loading="lazy" scrolling="no" tabindex="-1" src="dashboards/' + encodeURIComponent(d.file) + '#thumb"></iframe></div>'
             : '<div class="thumb"><span class="badge-prep">준비중</span><div class="ph"><span class="pico">' + esc(d.icon || '📊') + '</span><span>준비중</span></div></div>';
           var info = (d.owner_name ? esc(d.owner_name) : '') + (d.updated_at ? (' · ' + fmtDate(d.updated_at)) : '');
           return '<a class="gcard" href="' + href + '">' + thumb +

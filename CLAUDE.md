@@ -20,6 +20,8 @@
 - 제공 RPC: `dash_summary` `dash_daily` `dash_coupon` `dash_raw`(89컬럼) `dash_raw_all`(99컬럼, 로그인전용) `dash_filters`. 입력 `p = {from,to,filters:{컬럼:[값]},product_name}`.
 - **RAW 행수 상한**: `dash_raw`/`dash_raw_all` 은 `p_limit`(기본 300, **최대 100,000**)까지 `order_datetime desc`로 반환. 기간 전체를 보려면 `p_limit`를 크게(예: 100000) 넣을 것. KPI·차트(`dash_summary`/`dash_daily`/`dash_coupon`)는 서버 집계라 이 상한과 무관. 반환행수가 상한과 같으면 잘렸을 수 있으니 기간을 좁히도록 안내.
 
+- **홈 썸네일 절감(필수 규약)**: 홈 갤러리는 각 대시보드를 `dashboards/<file>#thumb` iframe으로 띄워 미리보기한다. 대시보드는 **`location.hash`에 `thumb`이 있으면 무거운 조회(RAW 대용량 `dash_raw`/`dash_raw_all`, 수천 행 `orders_secure` 등)를 건너뛰고** 가벼운 차트(집계 RPC)만 렌더할 것. 예: `var THUMB=location.hash.indexOf('thumb')>=0; if(THUMB) return;`(RAW 로드 스킵). 안 지키면 홈 열 때마다 대시보드 수 × 전체 데이터가 재조회돼 트래픽·DB 부하가 커진다.
+
 ### 직접 쿼리: `public.orders_secure` 뷰 (원하는 집계를 RPC 없이)
 정해진 RPC로 부족하면 **`public.orders_secure` 뷰를 직접 쿼리**해서 자유롭게 필터·집계할 수 있다. `mustit_orders.orders_v`(직접 접근 불가)와 달리 이 뷰는 로그인 계정이 조회 가능하다.
 - **개인정보 자동 마스킹**: 뷰가 로그인 계정의 `can_view_pii`를 DB에서 판정 → 권한 있으면 99컬럼 전부, 없으면 개인정보 10컬럼(age_band·buyer_gender·member_no·buyer_hash·region_sido·region_sigungu·buyer_age·join_year·join_date·prev_order_at)이 **NULL**로 나온다. 허용목록에 없으면 0행.

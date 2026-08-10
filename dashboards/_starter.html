@@ -55,6 +55,7 @@
 - 파일: dashboards/<span id="pfile">...</span>
 - 기존 dashboards/all-orders-master.html 구조(로그인 게이트 auth.js + MUSTIT.ready + dash_access 열람체크 + 헤더/네비 dash_list + ECharts)를 그대로 따라줘.
 - 데이터는 RPC(MUSTIT.rpc: dash_summary/dash_daily/dash_coupon/dash_raw/dash_filters) 또는 직접 쿼리 뷰 MUSTIT.client.from('orders_secure')로 가져와줘. (원본 mustit_orders.orders_v 직접 접근 불가·개인정보는 계정 권한대로 자동 마스킹). 일시는 KST 그대로(AT TIME ZONE 금지).
+- 홈 썸네일 절감: location.hash 에 'thumb' 이 있으면(홈 미리보기) 무거운 RAW/대용량 조회는 건너뛰고 차트만 렌더해줘.
 - [여기에 원하는 차트/표를 적으세요. 예: 브랜드별 월 거래액 막대, 카테고리 비중 도넛]
 완성되면 push만 하면 됩니다. (파일이 올라오면 자동으로 이 페이지가 실제 대시보드로 바뀝니다.)</pre>
     <div class="step"><div class="num">3</div><p><code>git push</code> → 몇 분 뒤 <b>이 URL</b>에서 대시보드가 보입니다. (캐시면 Ctrl+F5)</p></div>

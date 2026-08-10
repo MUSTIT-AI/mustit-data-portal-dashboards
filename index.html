@@ -21,7 +21,10 @@
   .gname{font-weight:700;font-size:14.5px;line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;min-height:2.7em}
   .ginfo{color:#8a8880;font-size:12px;margin-top:5px}
   .foot{color:#a7a49c;font-size:12px;margin-top:26px;line-height:1.7}
-  .mkbtn{background:#c8102e;color:#fff;border:0;border-radius:9px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer}
+  .toolbar{display:flex;gap:10px;align-items:stretch;margin:2px 0 16px;flex-wrap:wrap}
+  .mkbtn{display:inline-flex;align-items:center;gap:7px;height:42px;padding:0 18px;background:#c8102e;color:#fff;border:0;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;text-decoration:none;box-sizing:border-box}
+  .mkbtn.ghost{background:#fff;color:#c8102e;border:1px solid #e2c3c8}
+  .mkbtn.ghost .muted{color:#a7a49c;font-weight:500;font-size:12px}
   .mkbtn:disabled{opacity:.5;cursor:default}
   .modal{display:none;position:fixed;inset:0;z-index:200;background:rgba(20,18,15,.4);align-items:flex-start;justify-content:center;padding:60px 16px}
   .modalbox{background:#fff;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.25);width:520px;max-width:100%;max-height:80vh;overflow:auto;padding:20px 22px;color:#1c1b19}
@@ -40,13 +43,12 @@
   <h1>MUST IT Data Portal 통합 대시보드</h1>
   <p class="sub">서울 Supabase 집계 API 직접 조회 · KST 기준 · 매일 08:00 갱신</p>
 
-  <div id="createbar" style="display:none;margin:2px 0 14px"><button class="mkbtn" id="mkdash">+ 대시보드 생성</button></div>
+  <div class="toolbar">
+    <button class="mkbtn" id="mkdash" style="display:none">+ 대시보드 생성</button>
+    <a class="mkbtn ghost" href="admin.html" id="adminlink">⚙️ 계정 관리 <span class="muted">(관리자)</span></a>
+  </div>
 
   <div id="cards">불러오는 중…</div>
-
-  <p style="margin:20px 0 0">
-    <a href="admin.html" style="display:inline-flex;align-items:center;gap:7px;text-decoration:none;color:#c8102e;font-weight:700;font-size:14px;border:1px solid #e2c3c8;background:#fff;border-radius:10px;padding:10px 16px">⚙️ 계정 관리 <span style="color:#a7a49c;font-weight:500;font-size:12px">(관리자)</span></a>
-  </p>
 
   <div class="modal" id="createmodal">
     <div class="modalbox">
@@ -124,7 +126,7 @@
   window.MUSTIT.ready(function () {
     refreshCards();
     window.MUSTIT.rpc('dash_me', {}).then(function (me) {
-      if (me && (me.role === 'editor' || me.role === 'admin')) $('createbar').style.display = '';
+      if (me && (me.role === 'editor' || me.role === 'admin')) $('mkdash').style.display = '';
     }).catch(function () {});
     $('mkdash').onclick = openCreate;
     $('nd_close').onclick = function () { $('createmodal').style.display = 'none'; };

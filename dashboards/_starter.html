@@ -107,16 +107,20 @@
       .then(function(r){ if(!r.ok) throw new Error(r.error||'실패'); $("dashowner").textContent=t; alert("이름을 변경했습니다."); })
       .catch(function(e){ alert("변경 실패: "+e.message); });
   }
-  // 삭제(생성자만): 확인 창 + 이름 재입력 2단계
+  // 삭제(생성자만): 확인 창 + 계정 비밀번호 검증 2단계
   function deleteDash(name){
     name=String(name||"").trim();
     if(!confirm("“"+name+"” 대시보드를 삭제할까요?\n목록에서 사라지며 되돌릴 수 없습니다.")) return;
-    var t=prompt("확인을 위해 대시보드 이름을 그대로 입력하세요:\n"+name);
-    if(t===null) return;
-    if(t.trim()!==name){ alert("이름이 일치하지 않아 취소했습니다."); return; }
-    window.MUSTIT.fn("admin-users",{action:"dash_delete",file:FILE})
-      .then(function(r){ if(!r.ok) throw new Error(r.error||'실패'); alert("삭제했습니다."); location.href="../index.html"; })
-      .catch(function(e){ alert("삭제 실패: "+e.message); });
+    var email=((window.MUSTIT.user()&&window.MUSTIT.user().email)||"");
+    var pw=prompt("확인을 위해 로그인 계정("+email+") 비밀번호를 입력하세요:");
+    if(pw===null) return;
+    if(!pw){ alert("비밀번호를 입력하세요."); return; }
+    window.MUSTIT.client.auth.signInWithPassword({email:email,password:pw}).then(function(res){
+      if(res.error){ alert("비밀번호가 일치하지 않습니다. 삭제를 취소했습니다."); return; }
+      window.MUSTIT.fn("admin-users",{action:"dash_delete",file:FILE})
+        .then(function(r){ if(!r.ok) throw new Error(r.error||'실패'); alert("삭제했습니다."); location.href="../index.html"; })
+        .catch(function(e){ alert("삭제 실패: "+e.message); });
+    });
   }
 })();
 </script>

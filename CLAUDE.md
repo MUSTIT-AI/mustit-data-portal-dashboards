@@ -48,7 +48,7 @@
 **제작 완료 시 반드시 `built=true`**: 실제 `dashboards/<file>` 를 만들고 push한 뒤, `update public.dashboards set built=true where file='<file>';` (또는 admin-users `dash_meta_set {file, built:true}`) 실행 → 그때부터 카드가 실제 파일로 연결됨.
 
 1. 홈에서 생성된 대시보드의 **파일명** 확인(생성 시 안내됨). 없으면 SQL로 등록: `insert into public.dashboards(file,title,icon,owner_email) values ('내대시보드.html','이름','📊','소유자이메일');`
-2. `dashboards/<파일명>` 생성 (기존 `전체주문_주문일_Master.html` 구조 참고: auth 스크립트 + `MUSTIT.ready` + `dash_access(파일명)` 열람체크 + 헤더/네비는 `dash_list()`, ECharts).
+2. `dashboards/<파일명>` 생성 (기존 `all-orders-master.html` 구조 참고: auth 스크립트 + `MUSTIT.ready` + `dash_access(파일명)` 열람체크 + 헤더/네비는 `dash_list()`, ECharts).
 3. **소유권 규칙(재확인)**: 기존 대시보드는 `dash_access(파일명).edit` 이 true(= owner 이거나 acl can_edit)일 때만 수정. **owner 가 아니면 그 대시보드 HTML을 수정하지 말 것.** 새로 만들면 owner=만든 사람.
 4. `git add -A && git commit -m "..." && git push` → 몇 분 뒤 Pages 반영. (캐시면 Ctrl+F5)
 

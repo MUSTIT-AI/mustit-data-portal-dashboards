@@ -26,7 +26,7 @@
 ```
 index.html                         ← 랜딩(대시보드 목록)
 dashboards/
-  전체주문_주문일_Master.html        ← QuickSight 마스터뷰 재현 (ECharts)
+  all-orders-master.html        ← QuickSight 마스터뷰 재현 (ECharts)
 ```
 
 **대시보드 1개 = HTML 파일 1개.** `dashboards/`에 `.html`을 추가하고 push하면 됩니다. 파일이 달라 여러 명이 동시에 만들어도 충돌 없음.

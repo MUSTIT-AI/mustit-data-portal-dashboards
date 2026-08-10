@@ -426,7 +426,7 @@ function paintRaw(){
   }).join("")+"</tbody>";
   $("raw").innerHTML = thead+tbody;
 
-  $("rawcount").textContent = "총 "+won(total)+"행" + (total>=2000 ? " (최대)" : "");
+  $("rawcount").textContent = "총 "+won(total)+"행" + (total>=RAW_LIMIT ? " (상한 "+won(RAW_LIMIT)+"행 도달 · 기간을 좁히세요)" : "");
   $("csv").disabled = total===0;
   var from = total===0 ? 0 : RAW_PAGE*PAGE_SIZE+1;
   var to   = Math.min(total, (RAW_PAGE+1)*PAGE_SIZE);
@@ -463,16 +463,17 @@ function updateUnlockBtn(){
   else { b.textContent="🔓 개인정보 포함 전체"; b.classList.remove("on"); }
 }
 // RAW 요청: full 모드면 게이트 RPC, 실패 시 안전(89컬럼)으로 폴백
+var RAW_LIMIT = 100000;   // 기간 내 전체 조회 상한(서버와 동일). 도달 시 경고 표시.
 function fetchRaw(p){
   if(RAW_MODE==="full"){
-    return rpc("dash_raw_all",{p:p, p_limit:2000})
+    return rpc("dash_raw_all",{p:p, p_limit:RAW_LIMIT})
       .catch(function(e){
         alert("전체 컬럼 조회 실패\n"+e.message);
         RAW_MODE="safe"; updateUnlockBtn();
-        return rpc("dash_raw",{p:p, p_limit:2000});
+        return rpc("dash_raw",{p:p, p_limit:RAW_LIMIT});
       });
   }
-  return rpc("dash_raw",{p:p, p_limit:2000});
+  return rpc("dash_raw",{p:p, p_limit:RAW_LIMIT});
 }
 
 // ── refresh ──

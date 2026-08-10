@@ -18,6 +18,7 @@
   ```
 - 데이터는 **반드시 `window.MUSTIT.rpc(함수, {p})`** 로 가져온다. 직접 fetch로 publishable 키를 Bearer에 넣지 말 것(로그인 토큰을 써야 함).
 - 제공 RPC: `dash_summary` `dash_daily` `dash_coupon` `dash_raw`(89컬럼) `dash_raw_all`(99컬럼, 로그인전용) `dash_filters`. 입력 `p = {from,to,filters:{컬럼:[값]},product_name}`.
+- **RAW 행수 상한**: `dash_raw`/`dash_raw_all` 은 `p_limit`(기본 300, **최대 100,000**)까지 `order_datetime desc`로 반환. 기간 전체를 보려면 `p_limit`를 크게(예: 100000) 넣을 것. KPI·차트(`dash_summary`/`dash_daily`/`dash_coupon`)는 서버 집계라 이 상한과 무관. 반환행수가 상한과 같으면 잘렸을 수 있으니 기간을 좁히도록 안내.
 
 ## 절대 규칙
 1. **일시는 이미 KST** → `AT TIME ZONE` 금지. `order_datetime` 그대로. 기간 필터는 인덱스를 타서 빠름 — 항상 기간을 좁힐 것.

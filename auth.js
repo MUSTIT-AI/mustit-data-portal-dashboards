@@ -21,6 +21,20 @@
   var readyCbs = [];
   var started = false;
 
+  // 매 호출마다 최신 세션 토큰 확보(자동 갱신 반영). 오래 열어둔 탭의 만료 토큰 → "인증 실패" 방지.
+  function freshToken(){
+    return client.auth.getSession().then(function(res){
+      var s = (res && res.data) ? res.data.session : null;
+      if(s) session = s;
+      return s ? s.access_token : null;
+    }).catch(function(){ return session ? session.access_token : null; });
+  }
+  function callJson(url, body){
+    return freshToken().then(function(tok){
+      return fetch(url, { method:"POST", headers:{ apikey:KEY, Authorization:"Bearer "+(tok||KEY), "Content-Type":"application/json" }, body: JSON.stringify(body||{}) });
+    });
+  }
+
   window.MUSTIT = {
     client: client,
     user: function(){ return session ? session.user : null; },
@@ -28,24 +42,14 @@
     signOut: function(){ client.auth.signOut().then(function(){ location.reload(); }); },
     // 인증 토큰으로 RPC 호출 (로그인 안 됐으면 거부됨)
     rpc: function(fn, body){
-      var tok = session ? session.access_token : KEY;
-      return fetch(SB+"/rest/v1/rpc/"+fn, {
-        method:"POST",
-        headers:{ apikey:KEY, Authorization:"Bearer "+tok, "Content-Type":"application/json" },
-        body: JSON.stringify(body||{})
-      }).then(function(r){ return r.text().then(function(t){
+      return callJson(SB+"/rest/v1/rpc/"+fn, body).then(function(r){ return r.text().then(function(t){
         if(!r.ok) throw new Error(fn+" "+r.status+": "+t);
         return t ? JSON.parse(t) : null;
       });});
     },
     // Edge Function 호출 (계정 관리 등 서버측 관리자 기능)
     fn: function(name, body){
-      var tok = session ? session.access_token : KEY;
-      return fetch(SB+"/functions/v1/"+name, {
-        method:"POST",
-        headers:{ apikey:KEY, Authorization:"Bearer "+tok, "Content-Type":"application/json" },
-        body: JSON.stringify(body||{})
-      }).then(function(r){ return r.text().then(function(t){
+      return callJson(SB+"/functions/v1/"+name, body).then(function(r){ return r.text().then(function(t){
         var d = t ? JSON.parse(t) : null;
         if(!r.ok) throw new Error((d && d.error) || ("HTTP "+r.status));
         return d;
@@ -126,6 +130,7 @@
     });
     client.auth.onAuthStateChange(function(evt, s){
       if(evt==="SIGNED_OUT"){ location.reload(); }
+      else if(s){ session = s; }  // 토큰 갱신·로그인 시 세션 최신화
     });
   }
   if(document.body) boot(); else document.addEventListener("DOMContentLoaded", boot);

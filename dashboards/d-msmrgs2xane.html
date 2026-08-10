@@ -116,7 +116,7 @@
 </div>
 <p class="note">선택한 기간의 거래액(GMV) 기준 상품 Top 100이에요. 판매자를 가리지 않고 상품 단위로 합산해요. 브랜드·카테고리·연령대·성별·판매자ID로 필터링할 수 있어요. 카테고리는 대분류 → 중분류 → 소분류 순으로 좁혀지고, 상위를 고르면 하위 목록이 그에 맞게 줄어들어요(연령대·성별은 구매자 기준이며, 개인정보는 조회되지 않고 필터로만 쓰여요).<br>
 "이전기간 대비"는 선택한 기간과 동일한 길이의 바로 직전 기간과 비교한 순위 변동이에요.<br>
-※ 표본이 아니라 <b>기간 내 전체 주문</b>을 집계해요. 서버가 한 번에 2,000행까지만 주기 때문에 기간을 2일씩 잘라 나눠 받은 뒤 합산하며, 그래서 기간이 길수록 조회에 시간이 걸려요(약 7개월 기준 15초 내외). 조회 기간은 최대 <b id="maxdaystxt">366</b>일(약 12개월)이에요. 상품 이미지는 이 대시보드에서는 제공하지 않아요(정적 사이트라 스크래핑 서버가 없어요).<br>
+※ 표본이 아니라 <b>기간 내 전체 주문</b>을 집계해요. 서버 쿼리 시간제한(약 8초) 때문에 기간을 5일씩 잘라 나눠 받은 뒤 합산하며(느리면 자동으로 더 잘게 쪼개 재시도해요), 그래서 기간이 길수록 조회에 시간이 걸려요(3개월 기준 6초 내외). 조회 기간은 최대 <b id="maxdaystxt">366</b>일(약 12개월)이에요. 상품 이미지는 이 대시보드에서는 제공하지 않아요(정적 사이트라 스크래핑 서버가 없어요).<br>
 <span id="statline"></span></p>
 
 <main>
@@ -307,9 +307,11 @@ function currentFilters(){
 // dash_raw 는 p_limit 과 무관하게 서버에서 최신순 2,000행으로 잘린다(기간 필터는 정상 동작).
 // 그래서 기간을 짧게 쪼개 여러 번 호출하고, 받는 즉시 상품 단위로 접어(fold) 원본 행은 버린다.
 // → 행수 상한 없이 정확한 전체 집계가 되고, 메모리는 '상품 수'에만 비례한다.
-var RAW_CAP   = 2000;  // dash_raw 의 서버측 하드캡 (초과분은 조용히 잘림 → 캡 도달 시 구간을 더 쪼갠다)
-var CHUNK_DAYS = 2;    // 1구간 길이. 실측 일 최대 약 690행이라 2일이면 캡 대비 여유가 충분하다.
-var CONCURRENCY = 6;   // 동시 호출 수
+var RAW_CAP   = 100000; // dash_raw 의 서버측 행수 상한(초과분은 조용히 잘림 → 도달 시 구간을 더 쪼갠다)
+// 실제 제약은 행수보다 서버 쿼리 타임아웃(약 8초)이다. 90일을 한 번에 부르면 타임아웃.
+// 실측(90일 기준): 2일청크 6.1초 / 5일청크 5.4초 / 15일청크는 동시성 6에서 타임아웃 다발.
+var CHUNK_DAYS  = 5;   // 1구간 길이 — 청크당 최대 2.3초로 타임아웃까지 여유가 크다
+var CONCURRENCY = 6;   // 동시 호출 수. 더 올리면 쿼리끼리 경합해 오히려 타임아웃이 난다.
 
 function foldRows(map, rows){
   // 소분류는 서버 필터가 없어 여기서 거른다. 값이 비면 NO_SUB 로 취급.
@@ -350,20 +352,29 @@ function splitRange(fromStr, toStr, stepDays){
   }
   return out;
 }
-// 한 구간 수집. 캡에 도달하면 잘린 것이므로 절반으로 쪼개 재귀 수집한다(데이터 증가에 대한 안전장치).
+function bisect(filters, from, to, map, stat){
+  var mid = addDays(from, Math.floor(daysBetweenInclusive(from,to)/2)-1);
+  stat.split++;
+  return fetchChunk(filters, from, mid, map, stat)
+    .then(function(){ return fetchChunk(filters, addDays(mid,1), to, map, stat); });
+}
+function isTimeout(e){ return /57014|statement timeout/i.test(String(e && e.message)); }
+
+// 한 구간 수집. 상한 도달(잘림) 또는 서버 타임아웃이면 절반으로 쪼개 재귀 수집한다.
+// → 주문이 늘거나 DB가 바쁠 때도 스스로 잘게 나눠 통과하므로 설정을 손댈 필요가 없다.
 function fetchChunk(filters, from, to, map, stat){
   return rpc("dash_raw", {p:{from:from, to:to, filters:filters}, p_limit:RAW_CAP})
     .then(function(rows){
       rows = rows||[];
-      if(rows.length >= RAW_CAP && from < to){
-        var mid = addDays(from, Math.floor(daysBetweenInclusive(from,to)/2)-1);
-        stat.split++;
-        return fetchChunk(filters, from, mid, map, stat)
-          .then(function(){ return fetchChunk(filters, addDays(mid,1), to, map, stat); });
+      if(rows.length >= RAW_CAP){
+        if(from < to) return bisect(filters, from, to, map, stat);
+        stat.truncated++;                                // 하루짜리가 상한 초과 = 더는 못 쪼갬
       }
-      if(rows.length >= RAW_CAP){ stat.truncated++; }   // 하루짜리 구간이 캡을 넘김 = 더는 못 쪼갬
       stat.rows += rows.length;
       foldRows(map, rows);
+    }, function(e){
+      if(isTimeout(e) && from < to){ stat.retry++; return bisect(filters, from, to, map, stat); }
+      throw e;
     });
 }
 // 기간 전체를 구간별로 병렬 수집 → 상품별 집계 맵 반환
@@ -437,7 +448,7 @@ function loadRanking(){
   var prevTo = addDays(from, -1);
   var prevFrom = addDays(prevTo, -(span-1));
   var filters = currentFilters();
-  var stat = { rows:0, chunks:0, split:0, truncated:0 };
+  var stat = { rows:0, chunks:0, split:0, truncated:0, retry:0 };
 
   setLoading(true); $("err").textContent="";
   // 현재기간·이전기간을 각각 구간 분할해 수집한다(이전기간은 순위 변동 계산에만 사용).
@@ -455,7 +466,7 @@ function loadRanking(){
       });
       renderTable(curList);
       $("statline").textContent = "수집 "+won(stat.rows)+"행 · "+won(stat.chunks+stat.split)+"개 구간"+
-        (stat.split? " (자동 분할 "+stat.split+"회)":"");
+        (stat.split? " (자동 분할 "+stat.split+"회"+(stat.retry?", 타임아웃 재시도 "+stat.retry+"회":"")+")":"");
       if(stat.truncated){
         $("err").textContent = "⚠ 하루치가 서버 상한("+won(RAW_CAP)+"행)을 넘는 구간이 "+stat.truncated+
           "개 있어 일부 주문이 누락됐어요. 필터로 범위를 좁혀주세요.";

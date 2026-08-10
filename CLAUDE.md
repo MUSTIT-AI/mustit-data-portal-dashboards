@@ -72,7 +72,7 @@
 4. **새 대시보드**는 홈 "+ 대시보드 생성"으로 만들어 owner=본인이 되게 하거나, DB `dashboards.owner_email`=본인으로 등록한 뒤 그 파일만 만든다.
 5. `viewer` 역할 사용자를 위한 작업이면 대시보드 생성·수정을 하지 말 것(열람 전용).
 
-**대시보드 삭제**: 소유자 관리 UI(이름 변경/수정 모달)에 **삭제** 버튼을 둔다. 삭제는 **생성자(소유자)만**(관리자도 불가) — Edge `admin-users {action:'dash_delete', file}` 호출(서버가 owner_email==로그인이메일 확인). **확인 2단계**(confirm + 이름 재입력 일치) 후 실행하고, 성공하면 홈으로 이동. dash_delete는 `dashboards` 행 + `dashboard_acl`을 지워 **목록에서 사라진다**(HTML 파일 자체는 git에서 별도 삭제). 참고 구현: `_starter.html`(이름 변경 옆 삭제), `all-orders-master.html`(수정 모달 하단 삭제).
+**대시보드 삭제**: 소유자 관리 UI(이름 변경/수정 모달)에 **삭제** 버튼을 둔다. 삭제는 **생성자(소유자)만**(관리자도 불가) — Edge `admin-users {action:'dash_delete', file}` 호출(서버가 owner_email==로그인이메일 확인). **확인 2단계**(confirm + **로그인 계정 비밀번호 검증**: `client.auth.signInWithPassword`로 재인증 성공해야 진행) 후 실행하고, 성공하면 홈으로 이동. dash_delete는 `dashboards` 행 + `dashboard_acl`을 지워 **목록에서 사라진다**(HTML 파일 자체는 git에서 별도 삭제). 참고 구현: `_starter.html`(이름 변경 옆 삭제), `all-orders-master.html`(수정 모달 하단 삭제).
 
 > 주의: 이 팩트체크는 **Claude의 행동을 구속**해 "owner라고 거짓말" 우회를 막는다. 다만 이것만으로 물리적 강제는 아니다(사람이 Claude 없이 직접 `git push` 하면 못 막음). **진짜 강제**는 GitHub 브랜치보호+CODEOWNERS(`github_id` 기반, 관리자에게 문의).
 

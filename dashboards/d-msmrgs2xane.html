@@ -400,12 +400,19 @@ function loadRanking(){
 
 // ── 팝업: 상품 1개 최근 7일 추이 + 구매자 통계 ──
 var POPCHARTS = {};
-function chart(id){ if(!POPCHARTS[id]) POPCHARTS[id]=echarts.init($(id)); return POPCHARTS[id]; }
+// 데이터가 없어 해당 블록이 렌더되지 않았을 수 있으므로 DOM 존재를 먼저 확인한다.
+// (없는 노드로 echarts.init 하면 'getAttribute of null' 로 팝업 전체가 죽는다)
+function chart(id){
+  var el = $(id); if(!el) return null;
+  if(!POPCHARTS[id]) POPCHARTS[id]=echarts.init(el);
+  return POPCHARTS[id];
+}
 function disposeCharts(){ Object.keys(POPCHARTS).forEach(function(k){ POPCHARTS[k].dispose(); }); POPCHARTS={}; }
 window.addEventListener("resize", function(){ Object.keys(POPCHARTS).forEach(function(k){ POPCHARTS[k].resize(); }); });
 
 function barChart(id, labels, data){
-  chart(id).setOption({
+  var c = chart(id); if(!c) return;
+  c.setOption({
     grid:{left:52,right:16,top:20,bottom:40},
     tooltip:{trigger:"axis",valueFormatter:function(v){return "₩"+won(v);}},
     xAxis:{type:"category",data:labels,axisLabel:{fontSize:9,color:"#999",rotate:30},axisLine:{lineStyle:{color:"#ddd"}}},
@@ -414,8 +421,9 @@ function barChart(id, labels, data){
   });
 }
 function pieChart(id, obj, colors){
+  var c = chart(id); if(!c) return;
   var names = Object.keys(obj);
-  chart(id).setOption({
+  c.setOption({
     tooltip:{trigger:"item",formatter:function(p){return p.name+": "+won(p.value)+"명 ("+p.percent+"%)";}},
     legend:{bottom:0,itemWidth:10,itemHeight:8,textStyle:{fontSize:10}},
     series:[{type:"pie",radius:["35%","65%"],center:["50%","42%"],avoidLabelOverlap:true,
@@ -480,11 +488,15 @@ function openPopup(productId, productName){
             '<div class="box"><div class="lbl">성별</div><div id="pop_gender" style="height:160px"></div></div>'
             : '<div class="piihint">연령대·성별은 개인정보 열람 권한이 있는 계정만 볼 수 있어요</div>')+
         '</div></div>'
-        : '<div class="demo"><div class="empty">최근 7일간 구매 데이터가 없어요.</div></div>');
+        : '<div class="demo"><div class="empty">'+esc(dates[0])+' ~ '+esc(dates[dates.length-1])+' 에는 이 상품 주문이 없어요.<br>'+
+          '<span style="font-size:11.5px">이 표는 조회기간 <b>마지막 7일</b>만 봐요 — 상위 랭킹이어도 그 기간에 안 팔렸으면 비어 있어요.</span></div></div>');
 
+    // 아래 setOption 대상은 위에서 실제로 렌더된 노드만 — 조건을 HTML 렌더 조건과 정확히 일치시킨다
     barChart("pop_chart", dates.map(withWeek), dates.map(function(d){return byDate[d].gmv;}));
-    if(hasGrade) pieChart("pop_grade", byGrade, GRADE_COLORS);
-    if(piiRows){ pieChart("pop_age", byAge, AGE_COLORS); pieChart("pop_gender", byGender, GENDER_COLORS); }
+    if(hasGrade){
+      pieChart("pop_grade", byGrade, GRADE_COLORS);
+      if(piiRows){ pieChart("pop_age", byAge, AGE_COLORS); pieChart("pop_gender", byGender, GENDER_COLORS); }
+    }
   }).catch(function(e){
     $("popbody").innerHTML = '<div class="empty">불러오지 못했어요: '+esc(e.message)+'</div>';
   });

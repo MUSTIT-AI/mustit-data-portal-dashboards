@@ -109,14 +109,6 @@
   <div class="fld"><label>종료일</label><input type="date" id="to"></div>
   <div id="dropdowns" style="display:contents"></div>
   <div class="fld"><label>판매자ID</label><input type="text" id="seller_id" placeholder="쉼표로 구분"></div>
-  <div class="fld"><label>표본 행수</label>
-    <select id="raw_limit">
-      <option value="2000">2,000행</option>
-      <option value="5000" selected>5,000행</option>
-      <option value="10000">10,000행</option>
-      <option value="20000">20,000행</option>
-    </select>
-  </div>
   <div class="btns">
     <button class="btn go" id="go">조회</button>
     <button class="btn reset" id="reset">초기화</button>
@@ -124,7 +116,7 @@
 </div>
 <p class="note">선택한 기간의 거래액(GMV) 기준 상품 Top 100이에요. 판매자를 가리지 않고 상품 단위로 합산해요. 브랜드·카테고리·판매자ID로 필터링할 수 있어요.<br>
 "이전기간 대비"는 선택한 기간과 동일한 길이의 바로 직전 기간과 비교한 순위 변동이에요.<br>
-※ 이 대시보드는 RAW 데이터(표본 행수 한도)를 브라우저에서 직접 집계해요 — 기간이 길거나 주문이 매우 많으면 랭킹이 일부 누락될 수 있어요(표본 행수를 늘려보세요). 상품 이미지는 이 대시보드에서는 제공하지 않아요(정적 사이트라 스크래핑 서버가 없어요).</p>
+※ 표본 행수 제한은 없고, 조회 기간을 <b id="maxdaystxt">31</b>일 이내로 제한해요(브라우저가 RAW 데이터를 직접 집계하므로 기간이 너무 길면 느려지거나 멈출 수 있어요). 상품 이미지는 이 대시보드에서는 제공하지 않아요(정적 사이트라 스크래핑 서버가 없어요).</p>
 
 <main>
   <div id="tablewrap">
@@ -310,17 +302,20 @@ function setLoading(on){
   $("go").disabled = on;
 }
 
+var MAX_DAYS = 31;      // 조회 기간 상한 (브라우저 집계 성능 보호용 — 행수 제한 대신 기간으로 제한)
+var RAW_LIMIT = 100000;  // dash_raw 요청 행수 상한. 사실상 무제한 취급 — 실질적 방어선은 MAX_DAYS.
+
 function loadRanking(){
   var from = $("from").value, to = $("to").value;
   if(!from || !to){ $("err").textContent = "시작일과 종료일을 입력하세요."; return; }
   if(from>to){ $("err").textContent = "시작일은 종료일보다 늦을 수 없어요."; return; }
   var span = daysBetweenInclusive(from, to);
+  if(span > MAX_DAYS){ $("err").textContent = "조회 기간은 최대 "+MAX_DAYS+"일까지예요. 기간을 좁혀주세요."; return; }
   var prevTo = addDays(from, -1);
   var prevFrom = addDays(prevTo, -(span-1));
-  var lim = parseInt($("raw_limit").value,10)||5000;
   var p = { from: prevFrom, to: to, filters: currentFilters() };
   setLoading(true); $("err").textContent="";
-  return rpc("dash_raw",{p:p, p_limit:lim}).then(function(rows){
+  return rpc("dash_raw",{p:p, p_limit:RAW_LIMIT}).then(function(rows){
     rows = rows||[];
     var curList = aggregateProducts(rows, from, to);
     var prevList = aggregateProducts(rows, prevFrom, prevTo);
@@ -330,8 +325,8 @@ function loadRanking(){
       a.rank_change = (pr!=null) ? (pr-a.rank) : null;
     });
     renderTable(curList);
-    if(rows.length>=lim){
-      $("err").textContent = "⚠ RAW 데이터가 "+won(lim)+"행 한도에 도달했어요 — 기간이 길거나 주문이 매우 많아 랭킹이 일부 누락됐을 수 있어요. 표본 행수를 늘려보세요.";
+    if(rows.length>=RAW_LIMIT){
+      $("err").textContent = "⚠ RAW 데이터가 "+won(RAW_LIMIT)+"행 한도에 도달했어요 — 매우 이례적인 상황이에요. 기간을 좁혀주세요.";
     }
   }).catch(function(e){ $("err").textContent = "오류: "+e.message; })
   .finally(function(){ setLoading(false); });
@@ -469,6 +464,7 @@ function setDefaultRange(){
   $("from").value = y; $("to").value = y;
 }
 setDefaultRange();
+$("maxdaystxt").textContent = MAX_DAYS;
 $("go").onclick = function(){ loadRanking(); };
 $("reset").onclick = function(){
   FDEFS.forEach(function(def){ SEL[def.key]=new Set(); def._updateBtn&&def._updateBtn(); });

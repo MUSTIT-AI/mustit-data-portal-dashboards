@@ -550,7 +550,8 @@ function setupTopbar(){
     if(cur){ $("dashowner").textContent = (cur.title||"") + (cur.owner_name?(" · "+cur.owner_name):""); }
     var sel=$("dashnav");
     sel.innerHTML = list.map(function(d){
-      var href = d.built ? encodeURIComponent(d.file) : ('_starter.html?f='+encodeURIComponent(d.file));
+      // 모든 이동은 _starter 경유 → 파일이 있으면 자동으로 실제 대시보드로 리다이렉트 (built 플래그 불필요)
+      var href = '_starter.html?f='+encodeURIComponent(d.file);
       return '<option value="'+href+'" data-file="'+esc(d.file)+'"'+(d.file===CUR_FILE?' selected':'')+'>'+esc(d.title||d.file)+'</option>';
     }).join("");
     sel.onchange=function(){ var o=sel.options[sel.selectedIndex]; if(o && o.getAttribute('data-file')!==CUR_FILE) location.href=o.value; };

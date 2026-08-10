@@ -56,7 +56,7 @@
 - 기존 dashboards/all-orders-master.html 구조(로그인 게이트 auth.js + MUSTIT.ready + dash_access 열람체크 + 헤더/네비 dash_list + ECharts)를 그대로 따라줘.
 - 데이터는 mustit_orders.orders_v 기준, 일시는 KST 그대로(AT TIME ZONE 금지).
 - [여기에 원하는 차트/표를 적으세요. 예: 브랜드별 월 거래액 막대, 카테고리 비중 도넛]
-완성되면 push하고 dashboards 테이블의 built을 true로 바꿔줘.</pre>
+완성되면 push만 하면 됩니다. (파일이 올라오면 자동으로 이 페이지가 실제 대시보드로 바뀝니다.)</pre>
     <div class="step"><div class="num">3</div><p><code>git push</code> → 몇 분 뒤 <b>이 URL</b>에서 대시보드가 보입니다. (캐시면 Ctrl+F5)</p></div>
     <p class="lead" style="margin:16px 0 0">CLAUDE.md에 제작 규칙이 있어 Claude가 자동으로 따릅니다. 소유자·권한은 홈의 대시보드 카드/‘수정’에서 관리합니다.</p>
   </div>
@@ -78,18 +78,19 @@
     window.MUSTIT.rpc("dash_access",{p_dashboard:FILE}).then(function(a){
       if(!a || a.view===false){ $("block").style.display="grid"; return; }
       // 상단바 채우기
-      window.MUSTIT.rpc("dash_list",{}).then(function(list){
-        list=list||[];
-        var cur=list.filter(function(d){return d.file===FILE;})[0];
-        if(cur){
-          $("dashowner").textContent=(cur.title||FILE)+(cur.owner_name?(" · "+cur.owner_name):"");
-          // 이미 built면 실제 대시보드로 이동
-          if(cur.built){ location.replace(encodeURIComponent(FILE)); return; }
-          if(cur.manage){ $("editname").style.display=""; $("editname").onclick=function(){ renameDash(cur.title||""); }; }
-        }
-        var sel=$("dashnav");
-        sel.innerHTML=list.map(function(d){var f=d.built?encodeURIComponent(d.file):('_starter.html?f='+encodeURIComponent(d.file));return '<option value="'+f+'"'+(d.file===FILE?' selected':'')+'>'+esc(d.title||d.file)+'</option>';}).join("");
-        sel.onchange=function(){ if(sel.value) location.href=sel.value; };
+      // 실제 파일이 올라와 있으면(=완성) 자동으로 실제 대시보드로 이동 (built 플래그 불필요)
+      fetch(encodeURIComponent(FILE),{method:"HEAD",cache:"no-store"}).then(function(r){ if(r.ok){ location.replace(encodeURIComponent(FILE)); return; }
+        window.MUSTIT.rpc("dash_list",{}).then(function(list){
+          list=list||[];
+          var cur=list.filter(function(d){return d.file===FILE;})[0];
+          if(cur){
+            $("dashowner").textContent=(cur.title||FILE)+(cur.owner_name?(" · "+cur.owner_name):"");
+            if(cur.manage){ $("editname").style.display=""; $("editname").onclick=function(){ renameDash(cur.title||""); }; }
+          }
+          var sel=$("dashnav");
+          sel.innerHTML=list.map(function(d){return '<option value="_starter.html?f='+encodeURIComponent(d.file)+'"'+(d.file===FILE?' selected':'')+'>'+esc(d.title||d.file)+'</option>';}).join("");
+          sel.onchange=function(){ if(sel.value) location.href=sel.value; };
+        });
       });
     }).catch(function(e){ $("block").style.display="grid"; });
   });

@@ -76,22 +76,30 @@
       var w = f.parentNode.clientWidth; if (w) f.style.transform = 'scale(' + (w / 1280) + ')';
     });
   }
+  // 파일이 실제로 GitHub Pages에 올라와 있는지 확인 (built 플래그 대신 자동 감지)
+  function fileExists(file) {
+    return fetch('dashboards/' + encodeURIComponent(file), { method: 'HEAD', cache: 'no-store' })
+      .then(function (r) { return r.ok; }).catch(function () { return false; });
+  }
   function refreshCards() {
     var el = $('cards');
     return window.MUSTIT.rpc('dash_list', {}).then(function (list) {
       list = list || [];
       if (!list.length) { el.className = ''; el.innerHTML = '<p class="sub">열람 가능한 대시보드가 없습니다.</p>'; return; }
-      el.className = 'gallery';
-      el.innerHTML = list.map(function (d) {
-        var href = d.built ? ('dashboards/' + encodeURIComponent(d.file)) : ('dashboards/_starter.html?f=' + encodeURIComponent(d.file));
-        var thumb = d.built
-          ? '<div class="thumb"><iframe loading="lazy" scrolling="no" tabindex="-1" src="dashboards/' + encodeURIComponent(d.file) + '"></iframe></div>'
-          : '<div class="thumb"><span class="badge-prep">준비중</span><div class="ph"><span class="pico">' + esc(d.icon || '📊') + '</span><span>준비중</span></div></div>';
-        var info = (d.owner_name ? esc(d.owner_name) : '') + (d.updated_at ? (' · ' + fmtDate(d.updated_at)) : '');
-        return '<a class="gcard" href="' + href + '">' + thumb +
-          '<div class="gmeta"><div class="gname">' + esc(d.title || d.file) + '</div><div class="ginfo">' + info + '</div></div></a>';
-      }).join('');
-      setTimeout(scaleThumbs, 30);
+      return Promise.all(list.map(function (d) { return fileExists(d.file); })).then(function (exists) {
+        el.className = 'gallery';
+        el.innerHTML = list.map(function (d, i) {
+          var built = exists[i];
+          var href = built ? ('dashboards/' + encodeURIComponent(d.file)) : ('dashboards/_starter.html?f=' + encodeURIComponent(d.file));
+          var thumb = built
+            ? '<div class="thumb"><iframe loading="lazy" scrolling="no" tabindex="-1" src="dashboards/' + encodeURIComponent(d.file) + '"></iframe></div>'
+            : '<div class="thumb"><span class="badge-prep">준비중</span><div class="ph"><span class="pico">' + esc(d.icon || '📊') + '</span><span>준비중</span></div></div>';
+          var info = (d.owner_name ? esc(d.owner_name) : '') + (d.updated_at ? (' · ' + fmtDate(d.updated_at)) : '');
+          return '<a class="gcard" href="' + href + '">' + thumb +
+            '<div class="gmeta"><div class="gname">' + esc(d.title || d.file) + '</div><div class="ginfo">' + info + '</div></div></a>';
+        }).join('');
+        setTimeout(scaleThumbs, 30);
+      });
     }).catch(function () { el.className = ''; el.innerHTML = '<p class="sub">목록을 불러오지 못했습니다.</p>'; });
   }
   window.addEventListener('resize', scaleThumbs);

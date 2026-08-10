@@ -43,9 +43,9 @@
 ## 새 대시보드 추가 순서
 대시보드 목록·이름의 source of truth는 **DB `public.dashboards`**(정적 `dashboards.json`은 레거시·미사용). 이름은 `title` 하나만 사용(짧은이름 없음).
 
-**권장 흐름**: 사용자가 **대시보드 홈의 "+ 대시보드 생성"** 으로 먼저 만든다 → 생성자가 owner, 권한 지정, `dashboards` 행 + **ASCII 파일명(`d-xxxx.html`) 자동 생성**, `built=false`. 이 상태면 카드에 **"준비중"** 표시 + 열면 `dashboards/_starter.html?f=<file>`(상단바+제작 가이드)이 뜬다. 개발자가 그 파일을 실제로 만들면 완성.
+**권장 흐름**: 사용자가 **대시보드 홈의 "+ 대시보드 생성"** 으로 먼저 만든다 → 생성자가 owner, 권한 지정, `dashboards` 행 + **ASCII 파일명(`d-xxxx.html`) 자동 생성**. 실제 `dashboards/<file>` 가 아직 없으면 카드에 **"준비중"** 표시 + 열면 `dashboards/_starter.html?f=<file>`(상단바+제작 가이드)이 뜬다. 개발자가 그 파일을 실제로 만들면 완성.
 
-**제작 완료 시 반드시 `built=true`**: 실제 `dashboards/<file>` 를 만들고 push한 뒤, `update public.dashboards set built=true where file='<file>';` (또는 admin-users `dash_meta_set {file, built:true}`) 실행 → 그때부터 카드가 실제 파일로 연결됨.
+**제작 완료 = 파일 push만 하면 끝**: 실제 `dashboards/<file>` 를 만들어 push하면, 홈·네비·_starter가 **파일 존재를 자동 감지(HEAD)** 해서 실제 대시보드로 연결한다. `built` 플래그를 손댈 필요 없음(레거시 컬럼, 미사용). 배포(GitHub Pages) 반영에 1~2분 걸릴 수 있음.
 
 1. 홈에서 생성된 대시보드의 **파일명** 확인(생성 시 안내됨). 없으면 SQL로 등록: `insert into public.dashboards(file,title,icon,owner_email) values ('내대시보드.html','이름','📊','소유자이메일');`
 2. `dashboards/<파일명>` 생성 (기존 `all-orders-master.html` 구조 참고: auth 스크립트 + `MUSTIT.ready` + `dash_access(파일명)` 열람체크 + 헤더/네비는 `dash_list()`, ECharts).

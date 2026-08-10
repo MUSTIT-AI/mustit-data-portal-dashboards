@@ -114,7 +114,7 @@
     <button class="btn reset" id="reset">초기화</button>
   </div>
 </div>
-<p class="note">선택한 기간의 거래액(GMV) 기준 상품 Top 100이에요. 판매자를 가리지 않고 상품 단위로 합산해요. 브랜드·카테고리·연령대·성별·판매자ID로 필터링할 수 있어요(연령대·성별은 구매자 기준이며, 개인정보는 조회되지 않고 필터로만 쓰여요).<br>
+<p class="note">선택한 기간의 거래액(GMV) 기준 상품 Top 100이에요. 판매자를 가리지 않고 상품 단위로 합산해요. 브랜드·카테고리·연령대·성별·판매자ID로 필터링할 수 있어요. 카테고리는 대분류 → 중분류 → 소분류 순으로 좁혀지고, 상위를 고르면 하위 목록이 그에 맞게 줄어들어요(연령대·성별은 구매자 기준이며, 개인정보는 조회되지 않고 필터로만 쓰여요).<br>
 "이전기간 대비"는 선택한 기간과 동일한 길이의 바로 직전 기간과 비교한 순위 변동이에요.<br>
 ※ 표본이 아니라 <b>기간 내 전체 주문</b>을 집계해요. 서버가 한 번에 2,000행까지만 주기 때문에 기간을 2일씩 잘라 나눠 받은 뒤 합산하며, 그래서 기간이 길수록 조회에 시간이 걸려요(약 7개월 기준 15초 내외). 조회 기간은 최대 <b id="maxdaystxt">366</b>일(약 12개월)이에요. 상품 이미지는 이 대시보드에서는 제공하지 않아요(정적 사이트라 스크래핑 서버가 없어요).<br>
 <span id="statline"></span></p>
@@ -175,21 +175,77 @@ function daysBetweenInclusive(fromStr, toStr){
 }
 
 // ── 필터(브랜드/카테고리 다중선택 + 판매자ID) ──
+// 카테고리 3단 트리(대>중>소). dash_filters 는 대분류만 주고 중·소분류 목록이 없어
+// orders_v 의 최근 24개월 실적 조합에서 뽑아 내장했다. 분류 체계가 바뀌면 갱신 필요.
+var CAT_TREE = {
+"가방":{"기타":["기타 가방","노트북/태블릿","스트랩","힙색"],"백팩":[],"더플백":[],"숄더백":[],"토트백":[],"러기지백":[],"크로스백":[],"브리프케이스":[],"클러치/파우치":["클러치","파우치"]},
+"골프":{"골프화":["남성 골프화","여성 골프화"],"골프 가방":["보스턴백","스탠드백","캐디백","파우치","하프백"],"골프 용품":["골프 공","기타 용품","필드 용품","헤드 커버"],"골프 잡화":["골프 모자","골프 벨트","골프 장갑","기타 잡화","선글라스","쿨링/방한"],"남성 골프웨어":["긴팔 티셔츠","반팔 티셔츠","베스트","숏팬츠","스웨터","자켓/점퍼","패딩","팬츠"],"여성 골프웨어":["긴팔 티셔츠","반팔 티셔츠","베스트","스웨터","스커트/숏팬츠","원피스","자켓/점퍼","패딩","팬츠"]},
+"기타":{"기타":["라이터","마스크","반려동물 용품","슈즈 케어","우산/양산","펜/노트"]},
+"리빙":{"가구":["수납/정리"],"패브릭":["기타 패브릭","베개/쿠션","침구","카페트/러그"],"클린/배쓰":["욕실 용품","휴지통"],"키친 웨어":["냄비/후라이팬","조리도구","주방 정리","칼/도마"],"테이블 웨어":["와인 용품","접시/그릇","커트러리","컵/글라스","트레이/매트"],"인테리어/소품":["거울","모빌/오브제","시계","월 데코","조명","캔들/디퓨저"]},
+"뷰티":{"향수":["100ml 이상 향수","30ml 이하 향수","50ml 향수","75ml 향수"],"메이크업":["립 메이크업","베이스/컨실러","블러셔/하이라이터","아이 메이크업","쿠션/팩트","파운데이션"],"바디케어":["데오드란트","바디 미스트","바디로션/크림","바디워시"],"헤어케어":["샴푸","컨디셔너","헤어 미스트","헤어 에센스/오일/팩","헤어스타일링"],"남성 뷰티":["쉐이빙","스킨케어","클렌징","향수"],"미용기기/용품":["메이크업 소품","뷰티 디바이스","뷰티 파우치"],"스킨케어/선케어":["로션/에멀전","마스크팩","선케어 제품","스킨/미스트","에센스/앰플","크림/오일","클렌저"]},
+"슈즈":{"힐":["메리제인 힐","웨지힐","펌프스/슬링백 힐"],"로퍼":["드라이빙 슈즈","로퍼","모카신","보트 슈즈","슬립온","에스파드류","태슬/프린지 로퍼","페니 로퍼"],"부츠":[],"플랫":["메리제인 슈즈","발레리나 슈즈","포인트토 슈즈","플랫 슈즈"],"스니커즈":["로우탑스니커즈","슬립온 스니커즈","하이탑 스니커즈","하이탑스니커즈"],"젤리슈즈":[],"구두/플랫":[],"부츠/워커":["니하이 부츠","레인부츠","롱부츠","미들부츠","바이커/컴뱃부츠","부티","싸이하이 부츠","앵클부츠","워커","윈터부츠","집업/버클부츠","첼시부츠"],"드레스슈즈":["더비 슈즈","몽크스트랩 슈즈","옥스퍼드 슈즈","윙팁 슈즈"],"샌들/슬리퍼":["샌들","슬리퍼","플립플랍"]},
+"의류":{"탑":["긴팔티셔츠","반팔티셔츠","뷔스티에","셔츠","스웨터","스웨트셔츠","아노락","티셔츠","폴로 셔츠","헨리넥 셔츠","후드 티셔츠"],"니트":["가디건","니트 베스트","라운드넥 니트","브이넥 니트","집업","터틀넥 니트"],"세트":[],"셔츠":["긴팔 셔츠","반팔 셔츠"],"수트":["수트 세트","수트 자켓","수트 팬츠"],"팬츠":["데님 팬츠","레깅스","숏팬츠","스웨트팬츠","스웨트팬츠/조거팬츠","오버롤","점프수트","카고팬츠","크롭팬츠","클래식팬츠"],"수영복":["래쉬가드","스윔 팬츠","원피스 수영복"],"스커트":["롱스커트","미디스커트","숏스커트"],"원피스":["롱원피스","미디원피스","숏원피스","점프수트","투피스/세트"],"바디수트":[],"언더웨어":["내의"],"코트/자켓":["가죽/무스탕/퍼 자켓","다운 자켓","다운/패딩","데님 코트/자켓","베스트","봄버 자켓","자켓","코트","트렌치코트"],"블라우스/셔츠":["민소매 셔츠","블라우스","셔츠"],"스포츠/아웃도어":["기타 스포츠웨어/아웃도어","수영복","스키/보드복","아우터","탑","팬츠"],"언더웨어/홈웨어":["라운지웨어","슬립웨어","언더웨어"],"스포츠웨어/아웃도어":["기타 스포츠웨어/아웃도어","수영복","스키/보드복","아우터","탑","팬츠"],"언더웨어/라운지웨어":["라운지웨어","슬립웨어","언더웨어"]},
+"테크":{"사운드":["스피커","이어폰","헤드폰"],"계절 가전":["공기청정기"],"생활 가전":["TV"],"테크액세서리":["기타 ACC","노트북/탭 ACC","웨어러블 ACC","핸드폰 ACC"],"디지털 디바이스":["스마트 디바이스","카메라"],"기타 테크 아이템":[]},
+"토이":{"인형":["기타 인형","봉제인형","피규어"],"교육완구":["기타 학습완구","미술놀이/클레이","보드게임","역할놀이","원목교구","퍼즐"],"로봇/작동완구":["기타 작동완구"],"블록/게임완구":["레고"]},
+"액세서리":{"가방":[],"모자":["기타 모자","버켓햇","베레모/헌팅캡","보터모자","비니","스냅백","캡","트래퍼햇","페도라"],"벨트":[],"시계":["가죽","러버","메탈/세라믹","패브릭/기타"],"양말":[],"장갑":["가죽 장갑","기타 장갑","니트 장갑","다운 장갑","무스탕 장갑"],"지갑":["동전지갑","머니클립","명함지갑","반지갑","여권지갑","장지갑","중지갑","카드지갑","키지갑"],"키링":[],"넥타이":["넥타이","보타이"],"목도리":[],"손수건":[],"주얼리":["귀걸이/피어싱","기타 주얼리","목걸이/팬던트","반지","브로치","주얼리 세트","커프링크스/넥타이핀/세트","팔찌"],"헤어ACC":["헤어끈","헤어밴드","헤어핀"],"아이웨어":["선글라스","안경"],"패션소품":[],"양말/벨트":["벨트","양말"],"양말/스타킹":["스타킹","양말"],"헤어액세서리":["기타 헤어액세서리","헤드밴드","헤어밴드","헤어핀"],"기타 액세서리":[],"목도리/스카프":["목도리","스카프"],"벨트/서스펜더":["벨트","서스펜더"]},
+"스포츠용품":{"썸머":["물놀이 용품","물안경/수영모","비치타월"],"어반":["기타 스포츠용품","스케이트보드","자전거","홈 트레이닝"],"윈터":["방한 용품","스노우보드/스키"],"아웃도어용품":["나이프/공구","라이트/랜턴","수납/쿨러백","식기/쿠커","컵/보틀","테이블/체어","텐트/침낭","패션 용품"]},
+"유아동용품":{"실내용품":["보행기"],"외출용품":["아기띠"],"출산/육아용품":["건강/위생용품","수유/이유용품","출산/신생아용품"],"기타 유아동용품":[]}
+};
+var NO_SUB = "(소분류 없음)";   // category_s 가 빈 상품(12개월 기준 8.5%)을 고르기 위한 항목
+
+function catLOpts(){ return Object.keys(CAT_TREE).sort(); }
+function selectedLs(){
+  return (SEL.category_l && SEL.category_l.size) ? Array.from(SEL.category_l) : Object.keys(CAT_TREE);
+}
+// 중분류: 선택된 대분류에 속한 것만. 빈 중분류는 서버 필터로 표현할 수 없어 목록에서 제외한다(12개월 18건).
+function catMOpts(){
+  var out={};
+  selectedLs().forEach(function(l){ Object.keys(CAT_TREE[l]||{}).forEach(function(m){ out[m]=1; }); });
+  return Object.keys(out).sort();
+}
+// 소분류: 선택된 대·중분류에 속한 것만. 서버(_dash_where)가 category_s 를 지원하지 않아 클라이언트에서 거른다.
+function catSOpts(){
+  var msel = (SEL.category_m && SEL.category_m.size) ? SEL.category_m : null;
+  var out={}, hasEmpty=false;
+  selectedLs().forEach(function(l){
+    Object.keys(CAT_TREE[l]||{}).forEach(function(m){
+      if(msel && !msel.has(m)) return;
+      var arr = CAT_TREE[l][m]||[];
+      if(!arr.length) hasEmpty=true; else arr.forEach(function(s){ out[s]=1; });
+    });
+  });
+  var list = Object.keys(out).sort();
+  if(hasEmpty) list.unshift(NO_SUB);
+  return list;
+}
+
 // 연령대·성별은 구매자 속성이지만 dash_raw 는 해당 컬럼을 반환하지 않는다.
 // 서버측 WHERE(_dash_where)로만 적용되므로 개인정보가 브라우저로 내려오지 않는다.
 var FDEFS = [
   {key:"brand",        label:"브랜드"},
-  {key:"category_l",   label:"카테고리"},
+  {key:"category_l",   label:"대분류", opts:catLOpts, cascade:["category_m","category_s"]},
+  {key:"category_m",   label:"중분류", opts:catMOpts, cascade:["category_s"]},
+  {key:"category_s",   label:"소분류", opts:catSOpts, clientOnly:true},
   {key:"age_band",     label:"연령대"},
   {key:"buyer_gender", label:"성별"}
 ];
+function defOf(key){ for(var i=0;i<FDEFS.length;i++){ if(FDEFS[i].key===key) return FDEFS[i]; } return null; }
+function optionsFor(def){ return def.opts ? def.opts() : (OPTS[def.key]||[]); }
+// 상위 선택이 바뀌면 더 이상 유효하지 않은 하위 선택을 버린다
+function pruneCascade(def){
+  (def.cascade||[]).forEach(function(k){
+    var child = defOf(k); if(!child || !SEL[k]) return;
+    var valid = {}; optionsFor(child).forEach(function(v){ valid[v]=1; });
+    Array.from(SEL[k]).forEach(function(v){ if(!valid[v]) SEL[k]["delete"](v); });
+    if(child._updateBtn) child._updateBtn();
+  });
+}
 var OPTS = {};   // key -> [values] (dash_filters 결과)
 var SEL  = {};   // key -> Set(선택값)
 function buildDropdowns(){
   var host = $("dropdowns"); host.innerHTML="";
   FDEFS.forEach(function(def){
     SEL[def.key] = SEL[def.key] || new Set();
-    var vals = OPTS[def.key] || [];
     var fld = document.createElement("div"); fld.className="fld";
     fld.innerHTML = '<label>'+def.label+'</label>';
     var ms = document.createElement("div"); ms.className="ms";
@@ -203,12 +259,18 @@ function buildDropdowns(){
     panel.appendChild(list);
     function renderList(q){
       list.innerHTML="";
+      // 상위 선택에 따라 목록이 달라지므로 열 때마다 새로 계산한다
+      var vals = optionsFor(def);
+      if(!vals.length){ list.innerHTML='<div style="padding:6px;color:#999;font-size:11.5px">상위 분류를 먼저 선택하세요</div>'; return; }
       vals.filter(function(v){ return !q || String(v).toLowerCase().indexOf(q.toLowerCase())>=0; })
           .slice(0,500)
           .forEach(function(v){
         var row = document.createElement("label"); row.className="opt";
         var cb = document.createElement("input"); cb.type="checkbox"; cb.checked=SEL[def.key].has(v);
-        cb.onchange=function(){ if(cb.checked)SEL[def.key].add(v); else SEL[def.key].delete(v); updateBtn(); };
+        cb.onchange=function(){
+          if(cb.checked)SEL[def.key].add(v); else SEL[def.key]["delete"](v);
+          updateBtn(); pruneCascade(def);
+        };
         row.appendChild(cb); row.appendChild(document.createTextNode(" "+v));
         list.appendChild(row);
       });
@@ -228,9 +290,14 @@ function buildDropdowns(){
   });
 }
 document.addEventListener("click", function(){ document.querySelectorAll(".ms.open").forEach(function(o){o.classList.remove("open");}); });
+// 서버(_dash_where)로 보낼 필터. clientOnly(소분류)는 서버가 지원하지 않아 제외하고
+// 여기서 보내면 조용히 무시되므로, foldRows 에서 직접 거른다.
 function currentFilters(){
   var f={};
-  FDEFS.forEach(function(def){ if(SEL[def.key] && SEL[def.key].size) f[def.key]=Array.from(SEL[def.key]); });
+  FDEFS.forEach(function(def){
+    if(def.clientOnly) return;
+    if(SEL[def.key] && SEL[def.key].size) f[def.key]=Array.from(SEL[def.key]);
+  });
   var sid = $("seller_id").value.trim();
   if(sid) f.seller_id = sid.split(",").map(function(s){return s.trim();}).filter(Boolean);
   return f;
@@ -245,7 +312,10 @@ var CHUNK_DAYS = 2;    // 1구간 길이. 실측 일 최대 약 690행이라 2�
 var CONCURRENCY = 6;   // 동시 호출 수
 
 function foldRows(map, rows){
+  // 소분류는 서버 필터가 없어 여기서 거른다. 값이 비면 NO_SUB 로 취급.
+  var sSel = (SEL.category_s && SEL.category_s.size) ? SEL.category_s : null;
   rows.forEach(function(r){
+    if(sSel && !sSel.has(r.category_s || NO_SUB)) return;
     var key = r.product_id;
     var a = map[key];
     if(!a){

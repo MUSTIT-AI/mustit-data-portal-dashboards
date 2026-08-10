@@ -3,17 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>MUST IT 데이터 대시보드</title>
+<title>MUST IT Data Portal 통합 대시보드</title>
 <style>
   body{font-family:'Pretendard','Malgun Gothic',system-ui,sans-serif;margin:0;background:#eef0f2;color:#1c1b19}
-  .wrap{max-width:860px;margin:0 auto;padding:40px 24px}
-  h1{font-size:23px;margin:0 0 4px}
+  .wrap{max-width:1320px;margin:0 auto;padding:40px 32px}
+  h1{font-size:24px;margin:0 0 4px;letter-spacing:-.01em}
   .sub{color:#6b6a66;font-size:14px;margin:0 0 22px}
-  a.card{display:flex;align-items:center;gap:12px;background:#fff;border:1px solid #e2e0da;border-radius:12px;
-    padding:18px 20px;margin:10px 0;text-decoration:none;color:inherit;font-weight:700;font-size:15px;transition:border-color .15s}
-  a.card:hover{border-color:#c8102e}
-  a.card .ico{font-size:22px}
-  a.card small{display:block;color:#8a8880;font-weight:500;font-size:12px;margin-top:2px}
+  .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px;margin-top:8px}
+  .gcard{display:block;background:#fff;border:1px solid #e2e0da;border-radius:14px;overflow:hidden;text-decoration:none;color:inherit;transition:border-color .15s,box-shadow .15s}
+  .gcard:hover{border-color:#c8102e;box-shadow:0 8px 22px rgba(0,0,0,.09)}
+  .thumb{position:relative;width:100%;aspect-ratio:1/1;overflow:hidden;background:#f4f4f5;border-bottom:1px solid #eee}
+  .thumb iframe{position:absolute;top:0;left:0;width:1280px;height:1280px;border:0;transform-origin:top left;pointer-events:none;background:#fff}
+  .thumb .ph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#9a927f}
+  .thumb .ph .pico{font-size:44px}
+  .badge-prep{position:absolute;top:8px;left:8px;font-size:11px;font-weight:700;color:#b26a00;background:#fff3e0;border-radius:20px;padding:2px 9px;z-index:2}
+  .gmeta{padding:12px 14px}
+  .gname{font-weight:700;font-size:14.5px;line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;min-height:2.7em}
+  .ginfo{color:#8a8880;font-size:12px;margin-top:5px}
   .foot{color:#a7a49c;font-size:12px;margin-top:26px;line-height:1.7}
   .mkbtn{background:#c8102e;color:#fff;border:0;border-radius:9px;padding:10px 18px;font-size:14px;font-weight:700;cursor:pointer}
   .mkbtn:disabled{opacity:.5;cursor:default}
@@ -31,8 +37,8 @@
 </head>
 <body>
 <div class="wrap">
-  <h1>📊 MUST IT 데이터 대시보드</h1>
-  <p class="sub">브라우저에서 서울 Supabase 집계 API를 직접 조회합니다 · KST 기준 · 매일 08:00 갱신</p>
+  <h1>MUST IT Data Portal 통합 대시보드</h1>
+  <p class="sub">서울 Supabase 집계 API 직접 조회 · KST 기준 · 매일 08:00 갱신</p>
 
   <div id="createbar" style="display:none;margin:2px 0 14px"><button class="mkbtn" id="mkdash">+ 대시보드 생성</button></div>
 
@@ -62,19 +68,31 @@
 <script>
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var $ = function (id) { return document.getElementById(id); };
+  function fmtDate(s) { try { return new Date(s).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }); } catch (e) { return (s || '').slice(0, 10); } }
+  function scaleThumbs() {
+    [].forEach.call(document.querySelectorAll('.thumb iframe'), function (f) {
+      var w = f.parentNode.clientWidth; if (w) f.style.transform = 'scale(' + (w / 1280) + ')';
+    });
+  }
   function refreshCards() {
     var el = $('cards');
     return window.MUSTIT.rpc('dash_list', {}).then(function (list) {
       list = list || [];
-      el.innerHTML = list.length ? list.map(function (d) {
+      if (!list.length) { el.className = ''; el.innerHTML = '<p class="sub">열람 가능한 대시보드가 없습니다.</p>'; return; }
+      el.className = 'gallery';
+      el.innerHTML = list.map(function (d) {
         var href = d.built ? ('dashboards/' + encodeURIComponent(d.file)) : ('dashboards/_starter.html?f=' + encodeURIComponent(d.file));
-        var badge = d.built ? '' : ' <span style="font-size:11px;font-weight:700;color:#b26a00;background:#fff3e0;border-radius:20px;padding:1px 8px;margin-left:6px">준비중</span>';
-        return '<a class="card" href="' + href + '">' +
-          '<span class="ico">' + esc(d.icon || '📊') + '</span>' +
-          '<span>' + esc(d.title || d.file) + badge + '<small>' + esc(d.file) + '</small></span></a>';
-      }).join('') : '<p class="sub">열람 가능한 대시보드가 없습니다.</p>';
-    }).catch(function () { el.innerHTML = '<p class="sub">목록을 불러오지 못했습니다.</p>'; });
+        var thumb = d.built
+          ? '<div class="thumb"><iframe loading="lazy" scrolling="no" tabindex="-1" src="dashboards/' + encodeURIComponent(d.file) + '"></iframe></div>'
+          : '<div class="thumb"><span class="badge-prep">준비중</span><div class="ph"><span class="pico">' + esc(d.icon || '📊') + '</span><span>준비중</span></div></div>';
+        var info = (d.owner_name ? esc(d.owner_name) : '') + (d.updated_at ? (' · ' + fmtDate(d.updated_at)) : '');
+        return '<a class="gcard" href="' + href + '">' + thumb +
+          '<div class="gmeta"><div class="gname">' + esc(d.title || d.file) + '</div><div class="ginfo">' + info + '</div></div></a>';
+      }).join('');
+      setTimeout(scaleThumbs, 30);
+    }).catch(function () { el.className = ''; el.innerHTML = '<p class="sub">목록을 불러오지 못했습니다.</p>'; });
   }
+  window.addEventListener('resize', scaleThumbs);
   function openCreate() {
     $('nd_title').value = ''; $('nd_msg').textContent = '';
     $('createmodal').style.display = 'flex';

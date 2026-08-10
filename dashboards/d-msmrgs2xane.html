@@ -116,7 +116,8 @@
 </div>
 <p class="note">선택한 기간의 거래액(GMV) 기준 상품 Top 100이에요. 판매자를 가리지 않고 상품 단위로 합산해요. 브랜드·카테고리·판매자ID로 필터링할 수 있어요.<br>
 "이전기간 대비"는 선택한 기간과 동일한 길이의 바로 직전 기간과 비교한 순위 변동이에요.<br>
-※ 표본 행수 제한은 없고, 조회 기간을 <b id="maxdaystxt">366</b>일(약 12개월) 이내로 제한해요(브라우저가 RAW 데이터를 직접 집계하므로 기간이 너무 길면 느려지거나 멈출 수 있어요 — 긴 기간은 조회에 시간이 좀 걸릴 수 있어요). 상품 이미지는 이 대시보드에서는 제공하지 않아요(정적 사이트라 스크래핑 서버가 없어요).</p>
+※ 표본이 아니라 <b>기간 내 전체 주문</b>을 집계해요. 서버가 한 번에 2,000행까지만 주기 때문에 기간을 2일씩 잘라 나눠 받은 뒤 합산하며, 그래서 기간이 길수록 조회에 시간이 걸려요(약 7개월 기준 15초 내외). 조회 기간은 최대 <b id="maxdaystxt">366</b>일(약 12개월)이에요. 상품 이미지는 이 대시보드에서는 제공하지 않아요(정적 사이트라 스크래핑 서버가 없어요).<br>
+<span id="statline"></span></p>
 
 <main>
   <div id="tablewrap">
@@ -231,36 +232,82 @@ function currentFilters(){
   return f;
 }
 
-// ── 랭킹 집계 (RAW 행을 상품 단위로 합산, GMV 기준 순위) ──
-function aggregateProducts(rows, fromStr, toStr){
-  var byKey = {};
+// ── 랭킹 집계 ──
+// dash_raw 는 p_limit 과 무관하게 서버에서 최신순 2,000행으로 잘린다(기간 필터는 정상 동작).
+// 그래서 기간을 짧게 쪼개 여러 번 호출하고, 받는 즉시 상품 단위로 접어(fold) 원본 행은 버린다.
+// → 행수 상한 없이 정확한 전체 집계가 되고, 메모리는 '상품 수'에만 비례한다.
+var RAW_CAP   = 2000;  // dash_raw 의 서버측 하드캡 (초과분은 조용히 잘림 → 캡 도달 시 구간을 더 쪼갠다)
+var CHUNK_DAYS = 2;    // 1구간 길이. 실측 일 최대 약 690행이라 2일이면 캡 대비 여유가 충분하다.
+var CONCURRENCY = 6;   // 동시 호출 수
+
+function foldRows(map, rows){
   rows.forEach(function(r){
-    var d = dateOf(r.order_datetime);
-    if(d<fromStr || d>toStr) return;
     var key = r.product_id;
-    var a = byKey[key];
+    var a = map[key];
     if(!a){
-      a = byKey[key] = {
+      a = map[key] = {
         product_id:r.product_id, product_name:r.product_name, brand:r.brand,
         category_l:r.category_l, category_m:r.category_m, category_s:r.category_s,
         seller_id:r.seller_id, catalog_rank:r.catalog_rank, catalog_item_count:r.catalog_item_count,
         quantity:0, total_purchase:0, gmv:0, own_discount:0, seller_discount:0
       };
     }
-    a.quantity += Number(r.quantity)||0;
+    a.quantity       += Number(r.quantity)||0;
     a.total_purchase += Number(r.total_purchase)||0;
-    a.gmv += Number(r.paid_amount)||0;
-    a.own_discount += Number(r.own_discount_ttl)||0;
-    a.seller_discount += Number(r.seller_discount_ttl)||0;
+    a.gmv            += Number(r.paid_amount)||0;
+    a.own_discount   += Number(r.own_discount_ttl)||0;
+    a.seller_discount+= Number(r.seller_discount_ttl)||0;
   });
-  var list = Object.keys(byKey).map(function(k){return byKey[k];});
-  list.sort(function(a,b){return b.gmv-a.gmv;});
+}
+function rankMap(map){
+  var list = Object.keys(map).map(function(k){ return map[k]; });
+  list.sort(function(a,b){ return b.gmv-a.gmv; });
   var rnk=0, prevGmv=null;
   list.forEach(function(a,i){
     if(a.gmv!==prevGmv){ rnk=i+1; prevGmv=a.gmv; }
     a.rank=rnk;
   });
   return list;
+}
+function splitRange(fromStr, toStr, stepDays){
+  var out=[], s=fromStr;
+  while(s<=toStr){
+    var e=addDays(s, stepDays-1); if(e>toStr) e=toStr;
+    out.push([s,e]); s=addDays(e,1);
+  }
+  return out;
+}
+// 한 구간 수집. 캡에 도달하면 잘린 것이므로 절반으로 쪼개 재귀 수집한다(데이터 증가에 대한 안전장치).
+function fetchChunk(filters, from, to, map, stat){
+  return rpc("dash_raw", {p:{from:from, to:to, filters:filters}, p_limit:RAW_CAP})
+    .then(function(rows){
+      rows = rows||[];
+      if(rows.length >= RAW_CAP && from < to){
+        var mid = addDays(from, Math.floor(daysBetweenInclusive(from,to)/2)-1);
+        stat.split++;
+        return fetchChunk(filters, from, mid, map, stat)
+          .then(function(){ return fetchChunk(filters, addDays(mid,1), to, map, stat); });
+      }
+      if(rows.length >= RAW_CAP){ stat.truncated++; }   // 하루짜리 구간이 캡을 넘김 = 더는 못 쪼갬
+      stat.rows += rows.length;
+      foldRows(map, rows);
+    });
+}
+// 기간 전체를 구간별로 병렬 수집 → 상품별 집계 맵 반환
+function fetchAggregated(filters, from, to, stat, onProgress){
+  var queue = splitRange(from, to, CHUNK_DAYS);
+  var map = {}, done = 0, i = 0;
+  stat.chunks += queue.length;
+  function worker(){
+    if(i >= queue.length) return Promise.resolve();
+    var my = queue[i++];
+    return fetchChunk(filters, my[0], my[1], map, stat).then(function(){
+      done++; if(onProgress) onProgress(done, queue.length);
+      return worker();
+    });
+  }
+  var n = Math.min(CONCURRENCY, queue.length);
+  return Promise.all(Array.from({length:n}, worker)).then(function(){ return map; });
 }
 
 function renderRankChange(ch){
@@ -300,10 +347,13 @@ function renderTable(list){
 function setLoading(on){
   $("loading").classList.toggle("on", on);
   $("go").disabled = on;
+  if(!on) $("loading").textContent = "불러오는 중…";
+}
+function setProgress(done, total){
+  $("loading").textContent = "불러오는 중… "+done+" / "+total+" 구간 ("+Math.round(done/total*100)+"%)";
 }
 
-var MAX_DAYS = 366;      // 조회 기간 상한(약 12개월) — 브라우저 집계 성능 보호용, 행수 제한 대신 기간으로 제한
-var RAW_LIMIT = 500000;  // dash_raw 요청 행수 상한. 12개월 조회 시 이전기간까지 최대 24개월치(실측 약 28만행)를 가져오므로 여유를 둠.
+var MAX_DAYS = 366;   // 조회 기간 상한(약 12개월). 기간에 비례해 호출 수·시간이 늘어나므로 상한을 둔다.
 
 function loadRanking(){
   var from = $("from").value, to = $("to").value;
@@ -313,21 +363,31 @@ function loadRanking(){
   if(span > MAX_DAYS){ $("err").textContent = "조회 기간은 최대 "+MAX_DAYS+"일까지예요. 기간을 좁혀주세요."; return; }
   var prevTo = addDays(from, -1);
   var prevFrom = addDays(prevTo, -(span-1));
-  var p = { from: prevFrom, to: to, filters: currentFilters() };
+  var filters = currentFilters();
+  var stat = { rows:0, chunks:0, split:0, truncated:0 };
+
   setLoading(true); $("err").textContent="";
-  return rpc("dash_raw",{p:p, p_limit:RAW_LIMIT}).then(function(rows){
-    rows = rows||[];
-    var curList = aggregateProducts(rows, from, to);
-    var prevList = aggregateProducts(rows, prevFrom, prevTo);
-    var prevRankOf = {}; prevList.forEach(function(a){ prevRankOf[a.product_id]=a.rank; });
-    curList.forEach(function(a){
-      var pr = prevRankOf[a.product_id];
-      a.rank_change = (pr!=null) ? (pr-a.rank) : null;
+  // 현재기간·이전기간을 각각 구간 분할해 수집한다(이전기간은 순위 변동 계산에만 사용).
+  var totalDone = 0, totalAll = splitRange(from,to,CHUNK_DAYS).length + splitRange(prevFrom,prevTo,CHUNK_DAYS).length;
+  function bump(){ totalDone++; setProgress(totalDone, totalAll); }
+  setProgress(0, totalAll);
+
+  return fetchAggregated(filters, from, to, stat, bump).then(function(curMap){
+    return fetchAggregated(filters, prevFrom, prevTo, stat, bump).then(function(prevMap){
+      var curList = rankMap(curMap), prevList = rankMap(prevMap);
+      var prevRankOf = {}; prevList.forEach(function(a){ prevRankOf[a.product_id]=a.rank; });
+      curList.forEach(function(a){
+        var pr = prevRankOf[a.product_id];
+        a.rank_change = (pr!=null) ? (pr-a.rank) : null;
+      });
+      renderTable(curList);
+      $("statline").textContent = "수집 "+won(stat.rows)+"행 · "+won(stat.chunks+stat.split)+"개 구간"+
+        (stat.split? " (자동 분할 "+stat.split+"회)":"");
+      if(stat.truncated){
+        $("err").textContent = "⚠ 하루치가 서버 상한("+won(RAW_CAP)+"행)을 넘는 구간이 "+stat.truncated+
+          "개 있어 일부 주문이 누락됐어요. 필터로 범위를 좁혀주세요.";
+      }
     });
-    renderTable(curList);
-    if(rows.length>=RAW_LIMIT){
-      $("err").textContent = "⚠ RAW 데이터가 "+won(RAW_LIMIT)+"행 한도에 도달했어요 — 매우 이례적인 상황이에요. 기간을 좁혀주세요.";
-    }
   }).catch(function(e){ $("err").textContent = "오류: "+e.message; })
   .finally(function(){ setLoading(false); });
 }

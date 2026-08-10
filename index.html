@@ -67,9 +67,11 @@
     return window.MUSTIT.rpc('dash_list', {}).then(function (list) {
       list = list || [];
       el.innerHTML = list.length ? list.map(function (d) {
-        return '<a class="card" href="dashboards/' + encodeURIComponent(d.file) + '">' +
+        var href = d.built ? ('dashboards/' + encodeURIComponent(d.file)) : ('dashboards/_starter.html?f=' + encodeURIComponent(d.file));
+        var badge = d.built ? '' : ' <span style="font-size:11px;font-weight:700;color:#b26a00;background:#fff3e0;border-radius:20px;padding:1px 8px;margin-left:6px">준비중</span>';
+        return '<a class="card" href="' + href + '">' +
           '<span class="ico">' + esc(d.icon || '📊') + '</span>' +
-          '<span>' + esc(d.title || d.file) + '<small>' + esc(d.file) + '</small></span></a>';
+          '<span>' + esc(d.title || d.file) + badge + '<small>' + esc(d.file) + '</small></span></a>';
       }).join('') : '<p class="sub">열람 가능한 대시보드가 없습니다.</p>';
     }).catch(function () { el.innerHTML = '<p class="sub">목록을 불러오지 못했습니다.</p>'; });
   }

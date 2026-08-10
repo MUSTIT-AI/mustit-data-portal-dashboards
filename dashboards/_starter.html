@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>새 대시보드 · MUST IT</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../auth.js"></script>
+<style>
+  :root{--bg:#eef0f2;--ink:#1c1b19;--sub:#6b6a66;--border:#e2e0da;--red:#c8102e;--code:#1e1e2e;--codeink:#e8e8f0}
+  @media(prefers-color-scheme:dark){:root{--bg:#17171a;--ink:#ececf0;--sub:#9a99a3;--border:#2e2e35}}
+  *{box-sizing:border-box}
+  body{font-family:'Pretendard','Malgun Gothic',system-ui,sans-serif;margin:0;background:var(--bg);color:var(--ink)}
+  .topbar{display:flex;align-items:center;gap:14px;background:#fbfbfc;border-bottom:1px solid var(--border);padding:8px 16px;position:sticky;top:0;z-index:40}
+  @media(prefers-color-scheme:dark){.topbar{background:#1f1f23}}
+  .topbar .logo{font-weight:800;color:#232a33;text-decoration:none;cursor:pointer}
+  @media(prefers-color-scheme:dark){.topbar .logo{color:#ececf0}}
+  .topbar .logo:hover{color:var(--red)}
+  .topbar .right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .topbar .owner{font-size:12.5px;font-weight:700;white-space:nowrap}
+  .topbar #dashnav{border:1px solid #d6d4ce;border-radius:7px;padding:5px 9px;font-size:12.5px;background:#fff;max-width:230px}
+  .topbar .editbtn{border:1px solid var(--red);background:#fff;color:var(--red);border-radius:7px;padding:4px 11px;font-size:12px;font-weight:700;cursor:pointer}
+  .wrap{max-width:820px;margin:0 auto;padding:40px 24px}
+  .card{background:#fff;border:1px solid var(--border);border-radius:14px;padding:26px 28px}
+  @media(prefers-color-scheme:dark){.card{background:#1f1f23}}
+  h1{font-size:22px;margin:0 0 6px}
+  .lead{color:var(--sub);font-size:14px;margin:0 0 18px}
+  .step{display:flex;gap:12px;margin:12px 0}
+  .num{flex:none;width:24px;height:24px;border-radius:50%;background:var(--ink);color:var(--bg);font-size:12px;font-weight:700;display:grid;place-items:center;margin-top:2px}
+  .step p{margin:0;font-size:14px;line-height:1.6}
+  code{background:rgba(128,128,128,.15);border-radius:5px;padding:1px 6px;font-size:12.5px;font-family:"SF Mono",Consolas,monospace}
+  pre{position:relative;background:var(--code);color:var(--codeink);border-radius:10px;padding:14px 44px 14px 14px;overflow-x:auto;font-size:12.5px;white-space:pre-wrap;line-height:1.55;font-family:"SF Mono",Consolas,monospace}
+  .copy{position:absolute;top:8px;right:8px;background:#3a3a4d;color:#fff;border:0;border-radius:6px;font-size:11px;font-weight:700;padding:5px 10px;cursor:pointer}
+  .block{display:none;position:fixed;inset:0;background:var(--bg);z-index:80;place-items:center;text-align:center;color:var(--sub);font-family:system-ui}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a class="logo" href="../index.html">🛍️ Data Portal</a>
+  <div class="right">
+    <span class="owner" id="dashowner"></span>
+    <button class="editbtn" id="editname" style="display:none">이름 변경</button>
+    <select id="dashnav" title="대시보드 이동"></select>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="card">
+    <h1>🚧 아직 비어 있는 대시보드입니다</h1>
+    <p class="lead">이 대시보드에 차트를 채우려면 <b>Claude Code</b>에게 아래처럼 요청하세요. (개발 환경 준비는 포털 <b>①연결설치 → 대시보드 개발</b> 참고)</p>
+
+    <div class="step"><div class="num">1</div><p>레포를 열고(또는 클론) <b>Claude Code</b> 실행</p></div>
+    <div class="step"><div class="num">2</div><p>아래 프롬프트를 복사해 붙여넣고, 원하는 차트/표를 적어 요청</p></div>
+    <pre id="prompt"><button class="copy" id="copybtn">복사</button>이 대시보드를 만들어줘.
+- 파일: dashboards/<span id="pfile">...</span>
+- 기존 dashboards/전체주문_주문일_Master.html 구조(로그인 게이트 auth.js + MUSTIT.ready + dash_access 열람체크 + 헤더/네비 dash_list + ECharts)를 그대로 따라줘.
+- 데이터는 mustit_orders.orders_v 기준, 일시는 KST 그대로(AT TIME ZONE 금지).
+- [여기에 원하는 차트/표를 적으세요. 예: 브랜드별 월 거래액 막대, 카테고리 비중 도넛]
+완성되면 push하고 dashboards 테이블의 built을 true로 바꿔줘.</pre>
+    <div class="step"><div class="num">3</div><p><code>git push</code> → 몇 분 뒤 <b>이 URL</b>에서 대시보드가 보입니다. (캐시면 Ctrl+F5)</p></div>
+    <p class="lead" style="margin:16px 0 0">CLAUDE.md에 제작 규칙이 있어 Claude가 자동으로 따릅니다. 소유자·권한은 홈의 대시보드 카드/‘수정’에서 관리합니다.</p>
+  </div>
+</div>
+
+<div class="block" id="block">이 대시보드를 볼 권한이 없습니다. <a href="../index.html" style="color:var(--red);margin-left:6px">← 목록</a></div>
+
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id);};
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  var qs=new URLSearchParams(location.search); var FILE=qs.get('f')||'';
+  $("pfile").textContent = FILE || '(파일명)';
+  $("copybtn").onclick=function(){ var t=$("prompt").innerText.replace(/^복사\s*/,''); navigator.clipboard.writeText(t).then(function(){$("copybtn").textContent='복사됨 ✓';setTimeout(function(){$("copybtn").textContent='복사';},1500);}); };
+
+  window.MUSTIT.ready(function(){
+    if(!FILE){ return; }
+    window.MUSTIT.rpc("dash_access",{p_dashboard:FILE}).then(function(a){
+      if(!a || a.view===false){ $("block").style.display="grid"; return; }
+      // 상단바 채우기
+      window.MUSTIT.rpc("dash_list",{}).then(function(list){
+        list=list||[];
+        var cur=list.filter(function(d){return d.file===FILE;})[0];
+        if(cur){
+          $("dashowner").textContent=(cur.title||FILE)+(cur.owner_name?(" · "+cur.owner_name):"");
+          // 이미 built면 실제 대시보드로 이동
+          if(cur.built){ location.replace(encodeURIComponent(FILE)); return; }
+          if(cur.manage){ $("editname").style.display=""; $("editname").onclick=function(){ renameDash(cur.title||""); }; }
+        }
+        var sel=$("dashnav");
+        sel.innerHTML=list.map(function(d){var f=d.built?encodeURIComponent(d.file):('_starter.html?f='+encodeURIComponent(d.file));return '<option value="'+f+'"'+(d.file===FILE?' selected':'')+'>'+esc(d.title||d.file)+'</option>';}).join("");
+        sel.onchange=function(){ if(sel.value) location.href=sel.value; };
+      });
+    }).catch(function(e){ $("block").style.display="grid"; });
+  });
+
+  function renameDash(cur){
+    var t=prompt("대시보드 이름:", cur); if(t===null)return; t=t.trim(); if(!t)return;
+    window.MUSTIT.fn("admin-users",{action:"dash_meta_set",file:FILE,title:t})
+      .then(function(r){ if(!r.ok) throw new Error(r.error||'실패'); $("dashowner").textContent=t; alert("이름을 변경했습니다."); })
+      .catch(function(e){ alert("변경 실패: "+e.message); });
+  }
+})();
+</script>
+</body>
+</html>

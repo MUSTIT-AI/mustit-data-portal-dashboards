@@ -510,10 +510,9 @@ function refresh(){
 
 // ── init ──
 function setDefaultDates(){
-  var now=new Date();
-  var to=new Date(now.getTime()); // today
-  var from=new Date(now.getFullYear(), now.getMonth()-1, 1); // 지난달 1일
-  $("from").value=ymd(from); $("to").value=ymd(to);
+  var y=new Date(); y.setDate(y.getDate()-1);              // 종료일 = 어제
+  var f=new Date(y.getTime()); f.setDate(f.getDate()-30);  // 시작일 = 어제로부터 30일 전
+  $("from").value=ymd(f); $("to").value=ymd(y);
 }
 $("go").onclick=refresh;
 $("csv").onclick=downloadCSV;

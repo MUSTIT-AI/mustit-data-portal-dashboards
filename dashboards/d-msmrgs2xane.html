@@ -90,7 +90,10 @@
 
   .loading{position:fixed;inset:0;background:rgba(255,255,255,.55);display:none;align-items:center;justify-content:center;z-index:80;font-weight:700;color:var(--red)}
   .loading.on{display:flex}
-  .err{color:var(--red);padding:10px 16px;font-size:12.5px;white-space:pre-wrap}
+  /* 필터 바로 아래(스크롤 없이 보이는 위치)에 박스로 띄워 눈에 띄게 한다. 비어있으면 자동으로 숨김. */
+  .err{color:#8a1626;background:#fdecee;border:1px solid #f3c2c9;border-radius:8px;
+    padding:9px 14px;margin:0 16px 10px;font-size:12.5px;font-weight:600;white-space:pre-wrap}
+  .err:empty{display:none;margin:0;padding:0;border:0}
   .empty{padding:40px;text-align:center;color:var(--sub);font-size:13px}
   .block{display:none;position:fixed;inset:0;background:var(--bg);z-index:80;place-items:center;text-align:center;color:var(--sub);font-family:system-ui}
 </style>
@@ -118,6 +121,7 @@
 "이전기간 대비"는 선택한 기간과 동일한 길이의 바로 직전 기간과 비교한 순위 변동이에요.<br>
 ※ 표본이 아니라 <b>기간 내 전체 주문</b>을 DB에서 집계해요(`dash_product_rank`). 12개월 조회도 1초 내외예요. 조회 기간은 최대 <b id="maxdaystxt">366</b>일(약 12개월)이에요. 상품 이미지는 이 대시보드에서는 제공하지 않아요(정적 사이트라 스크래핑 서버가 없어요).<br>
 <span id="statline"></span></p>
+<div class="err" id="err"></div>
 
 <main>
   <div id="tablewrap">
@@ -149,7 +153,6 @@
 </div>
 
 <div class="loading" id="loading">불러오는 중…</div>
-<div class="err" id="err"></div>
 <div class="block" id="block">이 대시보드를 볼 권한이 없습니다. <a href="../index.html" style="color:var(--red);margin-left:6px">← 목록</a></div>
 
 <script>
@@ -354,10 +357,14 @@ function loadRanking(){
   var THUMB = location.hash.indexOf("thumb")>=0;   // 홈 썸네일: 이전기간 비교 생략
   var from = $("from").value, to = $("to").value;
   if(THUMB && to){ from = addDays(to, -4); }        // 최근 5일만
-  if(!from || !to){ $("err").textContent = "시작일과 종료일을 입력하세요."; return; }
-  if(from>to){ $("err").textContent = "시작일은 종료일보다 늦을 수 없어요."; return; }
+  if(!from || !to){ $("err").textContent = "시작일과 종료일을 입력하세요."; $("statline").textContent=""; return; }
+  if(from>to){ $("err").textContent = "시작일은 종료일보다 늦을 수 없어요."; $("statline").textContent=""; return; }
   var span = daysBetweenInclusive(from, to);
-  if(span > MAX_DAYS){ $("err").textContent = "조회 기간은 최대 "+MAX_DAYS+"일까지예요. 기간을 좁혀주세요."; return; }
+  if(span > MAX_DAYS){
+    $("err").textContent = "조회 기간은 최대 "+MAX_DAYS+"일이에요(지금 "+won(span)+"일). 기간을 좁혀주세요. 아래 표는 이전 조회 결과예요.";
+    $("statline").textContent = "";
+    return;
+  }
   var prevTo = addDays(from, -1);
   var prevFrom = addDays(prevTo, -(span-1));
   var filters = currentFilters();

@@ -21,7 +21,8 @@
   .topbar .owner{color:var(--ink);font-size:12.5px;font-weight:700;white-space:nowrap}
   .topbar #dashnav{border:1px solid #d6d4ce;border-radius:7px;padding:5px 9px;font-size:12.5px;background:#fff;max-width:230px}
 
-  .filters{background:#fff;border-bottom:1px solid var(--border);padding:10px 16px;display:flex;flex-wrap:wrap;gap:8px 10px;align-items:flex-end}
+  .filters{background:#fff;border-bottom:1px solid var(--border);padding:10px 16px;display:flex;flex-direction:column;gap:8px}
+  .fldrow{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:flex-end}
   .fld{display:flex;flex-direction:column;gap:3px}
   .fld label{font-size:10.5px;color:var(--sub);font-weight:600}
   .fld input[type=date],.fld input[type=text],.fld select{border:1px solid #d6d4ce;border-radius:6px;padding:5px 7px;font-size:12px;background:#fff;height:29px}
@@ -30,7 +31,7 @@
   .btn.go{background:var(--red);color:#fff}
   .btn.go:disabled{background:#e3a6b1;cursor:default}
   .btn.reset{background:#e9e7e1;color:#333}
-  .btns{display:flex;gap:6px;margin-left:auto}
+  .btns{display:flex;gap:6px}
   .note{color:var(--sub);font-size:11.5px;margin:8px 16px}
 
   /* 다중선택 드롭다운(브랜드/카테고리) */
@@ -108,10 +109,12 @@
 </div>
 
 <div class="filters" id="filters">
-  <div class="fld"><label>시작일</label><input type="date" id="from"></div>
-  <div class="fld"><label>종료일</label><input type="date" id="to"></div>
-  <div id="dropdowns" style="display:contents"></div>
-  <div class="fld"><label>판매자ID</label><input type="text" id="seller_id" placeholder="쉼표로 구분"></div>
+  <div class="fldrow">
+    <div class="fld"><label>시작일</label><input type="date" id="from"></div>
+    <div class="fld"><label>종료일</label><input type="date" id="to"></div>
+    <div id="dropdowns" style="display:contents"></div>
+    <div class="fld"><label>판매자ID</label><input type="text" id="seller_id" placeholder="쉼표로 구분"></div>
+  </div>
   <div class="btns">
     <button class="btn go" id="go">조회</button>
     <button class="btn reset" id="reset">초기화</button>

@@ -484,6 +484,36 @@ function productFilters(a){
 }
 var POP_LIMIT = 20000;   // 상위100 상품의 속성필터 결과는 12개월 최대 2,860행(실측)
 
+// dash_raw 는 결과 행수와 무관하게 스캔 범위(기간)가 넓으면 8초 타임아웃이 날 수 있다
+// (실측: 속성필터 적용 8개월이 7.5초로 턱밑). 타임아웃이면 기간을 반으로 쪼개 재시도한다.
+// stat.truncated 는 쪼갤 수 없는 leaf(하루)에서까지 상한에 걸린 경우만 표시한다.
+function isTimeout(e){ return /57014|statement timeout/i.test(String(e && e.message)); }
+function fetchRawSafe(fn, filters, from, to, limit, stat){
+  return rpc(fn, {p:{from:from, to:to, filters:filters}, p_limit:limit}).then(function(rows){
+    rows = rows||[];
+    if(rows.length >= limit){
+      if(from < to){
+        var mid = addDays(from, Math.floor(daysBetweenInclusive(from,to)/2)-1);
+        return Promise.all([
+          fetchRawSafe(fn, filters, from, mid, limit, stat),
+          fetchRawSafe(fn, filters, addDays(mid,1), to, limit, stat)
+        ]).then(function(r){ return r[0].concat(r[1]); });
+      }
+      stat.truncated = true;
+    }
+    return rows;
+  }, function(e){
+    if(isTimeout(e) && from < to){
+      var mid2 = addDays(from, Math.floor(daysBetweenInclusive(from,to)/2)-1);
+      return Promise.all([
+        fetchRawSafe(fn, filters, from, mid2, limit, stat),
+        fetchRawSafe(fn, filters, addDays(mid2,1), to, limit, stat)
+      ]).then(function(r){ return r[0].concat(r[1]); });
+    }
+    throw e;
+  });
+}
+
 function openPopup(a){
   var productId = a.product_id;
   $("popsub").textContent = (a.product_name||"") + " (" + productId + ")";
@@ -494,12 +524,13 @@ function openPopup(a){
   var from = $("from").value, to = $("to").value;
   var b = makeBuckets(from, to);
   $("poptitle").textContent = "기간 내 판매 추이 (" + b.unit + "별)";
-  var p = { from: from, to: to, filters: productFilters(a) };
+  var filters = productFilters(a);
+  var stat = { truncated:false };
 
   var wantPii = !!(ACCESS && ACCESS.pii);
   Promise.all([
-    rpc("dash_raw",{p:p, p_limit:POP_LIMIT}),
-    wantPii ? rpc("dash_raw_all",{p:p, p_limit:POP_LIMIT}).catch(function(){ return null; }) : Promise.resolve(null)
+    fetchRawSafe("dash_raw", filters, from, to, POP_LIMIT, stat),
+    wantPii ? fetchRawSafe("dash_raw_all", filters, from, to, POP_LIMIT, stat).catch(function(){ return null; }) : Promise.resolve(null)
   ]).then(function(res){
     var raw = res[0]||[];
     var rows = raw.filter(function(r){ return String(r.product_id)===String(productId); });
@@ -528,8 +559,8 @@ function openPopup(a){
     var totGmv = rows.reduce(function(x,r){ return x+(Number(r.total_purchase)||0); },0);
 
     $("popbody").innerHTML =
-      (raw.length >= POP_LIMIT
-        ? '<div style="color:#c8102e;font-size:11.5px;margin-bottom:8px">⚠ 조회 상한('+won(POP_LIMIT)+'행)에 도달해 일부가 빠졌을 수 있어요.</div>' : '')+
+      (stat.truncated
+        ? '<div style="color:#c8102e;font-size:11.5px;margin-bottom:8px">⚠ 하루 판매량이 서버 상한('+won(POP_LIMIT)+'행)을 넘는 날이 있어 일부가 빠졌을 수 있어요.</div>' : '')+
       '<div class="chartbox" id="pop_chart"></div>'+
       '<table class="pop"><thead><tr><th>'+b.unit+'</th><th>판매수량</th><th>거래금액</th></tr></thead><tbody>'+
         b.list.map(function(x){

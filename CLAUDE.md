@@ -42,6 +42,22 @@
   ```
 - PostgREST 기본 응답 상한(~1000행)·집계 한계가 있으니, **대용량·복잡 집계는 여전히 전용 RPC**(SECURITY DEFINER + `_dash_guard()`)가 낫다. 단순 조회·필터·중간규모는 이 뷰가 편하다.
 
+## 앰플리튜드(Amplitude) 데이터
+앰플리튜드 지표는 Edge Function 프록시로 가져온다. 키는 Supabase 시크릿(`AMPLITUDE_API_KEY`/`AMPLITUDE_SECRET_KEY`)에만 있고 프런트엔 절대 넣지 말 것. 프로젝트=`Live_real_MUSTIT`(540504).
+- 호출: `window.MUSTIT.fn("amplitude-proxy", { endpoint, params })` → `res.data` = Amplitude Dashboard REST 응답. 로그인 게이트 적용, 429 자동 재시도 내장.
+  ```js
+  window.MUSTIT.fn("amplitude-proxy",{ endpoint:"events/segmentation", params:{
+    e:[JSON.stringify({event_type:"complete_order",filters:[{subprop_type:"user",subprop_key:"country",subprop_op:"is",subprop_value:["South Korea"]}]})],
+    m:"uniques", i:7, start:"20260701", end:"20260731",
+    s:[JSON.stringify([{prop:"os",op:"does not contain",values:["yeti","bot","headless"]}])]  // 세그먼트(선택)
+  }}).then(function(r){ var d=r.data.data; /* d.series, d.xValues, d.seriesLabels */ });
+  ```
+  - `params`는 Amplitude REST 파라미터 그대로: `e`(이벤트 JSON 문자열 배열), `m`(uniques/totals/…), `i`(1일/7주/30월), `start`/`end`(YYYYMMDD), `s`(세그먼트 JSON 문자열 배열, 여러 개=여러 시리즈), `g`/event.group_by(그룹바이). 배열은 프록시가 반복 파라미터로 전개.
+  - 허용 endpoint: `events/segmentation` `funnels` `retention` `users` `composition` `sessions/*` `events/list` `annotations`.
+- **429(호출량 제한)**: 차트 여러 개는 **순차 호출**(Promise.all 금지). 매일 보는 무거운 지표는 **하루 1회 캐시**로: Amplitude→Supabase 테이블 적재(예: `amp_daily`, Edge `amp-sync`)→RPC로 조회. 캐시가 429·속도 모두 해결.
+- **주문 데이터와 조인**: **날짜/카테고리/플랫폼 차원 조인 권장**(집계끼리 공통 축 결합). 예: RPC `dash_daily_conversion`(`amp_daily` ⨝ `orders_v` by date → 방문자·주문·전환율·RPU). 주문단위(order_no)도 되지만 **유입경로(referrer)·광고 attribution은 주문 이벤트에 안 실림**(세션 단위)이라 행 레벨 유입 귀속은 불가.
+- 참고 구현: `dashboards/amplitude-au-core.html`(순수 앰플), `dashboards/daily-conversion.html`(날짜 조인).
+
 ## 절대 규칙
 1. **일시는 이미 KST** → `AT TIME ZONE` 금지. `order_datetime` 그대로. 기간 필터는 인덱스를 타서 빠름 — 항상 기간을 좁힐 것.
 2. **재무 정의**: 매출=`gross_revenue`(총매출), 거래액/GMV=`total_purchase`, 순매출=총매출−자사할인, 순이익=순매출−결제수수료. 마스터뷰 기본은 **전체 주문상태**(정산완료만 보려면 `filters.order_status:["정산완료"]`).

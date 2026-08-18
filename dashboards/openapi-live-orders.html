@@ -25,13 +25,14 @@
   .proj{margin-left:auto;text-align:right}
   .proj .l{font-size:11px;color:var(--sub)}.proj .v{font-size:20px;font-weight:800;color:var(--red)}
   .wrap{max-width:1400px;margin:0 auto;padding:14px 16px}
-  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px;max-width:560px}
-  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:11px 14px}
-  .kpi .l{font-size:11px;color:var(--sub)}
-  .kpi .row{display:flex;align-items:baseline;gap:8px;margin-top:4px}
-  .kpi .v{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
-  .kpi .cmp2{font-size:11px;color:var(--sub)}
-  .kpi .chg{font-size:12px;font-weight:700}.chg.up{color:#e8384f}.chg.down{color:#2f6fe8}
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px}
+  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px}
+  .kpi .l{font-size:12px;color:var(--sub);font-weight:600;margin-bottom:8px}
+  .kpi .g{display:flex;align-items:flex-end;gap:16px;flex-wrap:wrap}
+  .kpi .col .t{font-size:10.5px;color:#a7a49c;margin-bottom:2px}
+  .kpi .v{font-size:23px;font-weight:800;font-variant-numeric:tabular-nums;color:#e8384f;line-height:1.1}
+  .kpi .v2{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums;color:#7a8bbf;line-height:1.1}
+  .kpi .chg{font-size:14px;font-weight:800;margin-left:auto}.chg.up{color:#e8384f}.chg.down{color:#2f6fe8}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px}
   .card h3{margin:0 0 8px;font-size:14px}
   .chart{width:100%;height:260px}
@@ -92,39 +93,39 @@
   function renderKPI(d){
     var c=d.cur, m=d.cmp;
     var items=[
-      {l:'거래액',v:won(c.gmv)+' 원',cv:won(m.gmv),ch:chg(c.gmv,m.gmv)},
-      {l:'거래건수',v:won(c.cnt)+' 건',cv:won(m.cnt),ch:chg(c.cnt,m.cnt)},
-      {l:'주문단가',v:won(c.aov)+' 원',cv:won(m.aov),ch:chg(c.aov,m.aov)}
+      {l:'거래액 (원)',v:won(c.gmv),cv:won(m.gmv),ch:chg(c.gmv,m.gmv)},
+      {l:'거래건수 (건)',v:won(c.cnt),cv:won(m.cnt),ch:chg(c.cnt,m.cnt)},
+      {l:'주문단가 (원)',v:won(c.aov),cv:won(m.aov),ch:chg(c.aov,m.aov)}
     ];
     $("kpis").innerHTML=items.map(function(t){return '<div class="kpi"><div class="l">'+t.l+'</div>'+
-      '<div class="row"><div class="v">'+t.v+'</div><div class="chg '+t.ch.c+'">'+t.ch.t+'</div></div>'+
-      '<div class="cmp2">비교: '+t.cv+'</div></div>';}).join("");
+      '<div class="g"><div class="col"><div class="t">조회</div><div class="v">'+t.v+'</div></div>'+
+      '<div class="col"><div class="t">비교 (n일 전)</div><div class="v2">'+t.cv+'</div></div>'+
+      '<div class="chg '+t.ch.c+'">'+t.ch.t+'</div></div></div>';}).join("");
   }
-  function barCmp(id,cats,cur,cmp){
+  function fmtAxis(v){return v>=1e6?(Math.round(v/1e5)/10)+"M":v>=1e3?Math.round(v/1e3)+"k":v;}
+  // 세로 그룹막대 (조회=빨강 + 비교=파랑)
+  function vbar(id,cats,cur,cmp,rotate){
     var el=echarts.init($(id));
-    el.setOption({grid:{left:52,right:12,top:24,bottom:30},tooltip:{trigger:"axis",valueFormatter:function(v){return won(v);}},
+    el.setOption({grid:{left:48,right:10,top:28,bottom:rotate?78:28},
+      tooltip:{trigger:"axis",valueFormatter:function(v){return won(v);}},
       legend:{top:0,right:0,itemWidth:10,itemHeight:8,textStyle:{fontSize:10}},
-      xAxis:{type:"category",data:cats,axisLabel:{fontSize:10,color:"#999"},axisLine:{lineStyle:{color:"#ddd"}}},
-      yAxis:{type:"value",axisLabel:{fontSize:10,color:"#999",formatter:function(v){return v>=1e6?(v/1e6)+"M":v>=1e3?(v/1e3)+"k":v;}},splitLine:{lineStyle:{color:"#eee"}}},
-      series:[{name:"조회",type:"bar",data:cur,itemStyle:{color:RED},barMaxWidth:16},{name:"비교",type:"bar",data:cmp,itemStyle:{color:BLUE},barMaxWidth:16}]});
+      xAxis:{type:"category",data:cats,axisTick:{show:false},axisLine:{lineStyle:{color:"#ddd"}},
+        axisLabel:{fontSize:9,color:"#777",interval:0,rotate:rotate?55:0}},
+      yAxis:{type:"value",axisLabel:{fontSize:9,color:"#999",formatter:fmtAxis},splitLine:{lineStyle:{color:"#eee"}}},
+      series:[{name:"조회",type:"bar",data:cur,itemStyle:{color:RED},barMaxWidth:14},
+              {name:"비교",type:"bar",data:cmp,itemStyle:{color:BLUE},barMaxWidth:14}]});
     window.addEventListener("resize",function(){el.resize();});
   }
-  function barMap(id,obj,labelmap){
-    var ent=Object.entries(obj||{}).filter(function(e){return e[1]>0;}).sort(function(a,b){return b[1]-a[1];});
-    var el=echarts.init($(id));
-    el.setOption({grid:{left:80,right:16,top:10,bottom:24},tooltip:{trigger:"axis",valueFormatter:function(v){return won(v);}},
-      xAxis:{type:"value",axisLabel:{fontSize:9,color:"#999",formatter:function(v){return v>=1e6?(v/1e6)+"M":v>=1e3?(v/1e3)+"k":v;}},splitLine:{lineStyle:{color:"#eee"}}},
-      yAxis:{type:"category",inverse:true,data:ent.map(function(e){return labelmap?lbl(labelmap,e[0]):e[0];}),axisLabel:{fontSize:10,color:"#555"}},
-      series:[{type:"bar",data:ent.map(function(e){return e[1];}),itemStyle:{color:RED},barMaxWidth:16}]});
-    window.addEventListener("resize",function(){el.resize();});
+  // 맵(결제/쿠폰 등) → 조회 기준 정렬한 cats/cur/cmp
+  function pairMap(curMap,cmpMap,labelmap){
+    var keys=Object.keys(curMap||{}).filter(function(k){return curMap[k]>0;}).sort(function(a,b){return curMap[b]-curMap[a];});
+    return {cats:keys.map(function(k){return labelmap?lbl(labelmap,k):k;}),
+            cur:keys.map(function(k){return curMap[k];}), cmp:keys.map(function(k){return (cmpMap&&cmpMap[k])||0;})};
   }
-  function barTop(id,rows,useName){
-    var el=echarts.init($(id));
-    el.setOption({grid:{left:110,right:16,top:8,bottom:24},tooltip:{trigger:"axis",valueFormatter:function(v){return won(v);}},
-      xAxis:{type:"value",axisLabel:{fontSize:9,color:"#999",formatter:function(v){return v>=1e6?(v/1e6)+"M":v>=1e3?(v/1e3)+"k":v;}},splitLine:{lineStyle:{color:"#eee"}}},
-      yAxis:{type:"category",inverse:true,data:rows.map(function(r){var t=useName?(r.name||r.k):r.k;return t.length>14?t.slice(0,14)+'…':t;}),axisLabel:{fontSize:10,color:"#555"}},
-      series:[{type:"bar",data:rows.map(function(r){return r.v;}),itemStyle:{color:RED},barMaxWidth:14}]});
-    window.addEventListener("resize",function(){el.resize();});
+  // Top 배열([{k,v,cmp,name}]) → cats/cur/cmp
+  function pairTop(rows,useName){
+    return {cats:rows.map(function(r){var t=String(useName?(r.name||r.k):r.k);return t.length>12?t.slice(0,12)+'…':t;}),
+            cur:rows.map(function(r){return r.v;}), cmp:rows.map(function(r){return r.cmp||0;})};
   }
 
   function refresh(){
@@ -136,14 +137,14 @@
       $("proj_v").textContent=won(d.projected)+' 원';
       $("proj_l").textContent=d.isToday?'예상 마감 거래액':'거래액(마감)';
       var hours=[];for(var h=0;h<24;h++)hours.push(String(h).padStart(2,'0'));
-      barCmp("c_hourly",hours,d.cur.hourly,d.cmp.hourly);
-      barMap("c_pay",d.cur.payment,PAYLBL);
-      barMap("c_coupon",d.cur.coupons,null);
-      barMap("c_txn",d.cur.txn,TXNLBL);
-      barMap("c_ship",d.cur.shipping,null);
-      barTop("c_seller",d.cur.sellerTop,false);
-      barTop("c_brand",d.brandTop,false);
-      barTop("c_item",d.cur.itemTop,true);
+      vbar("c_hourly",hours,d.cur.hourly,d.cmp.hourly,false);
+      var p=pairMap(d.cur.payment,d.cmp.payment,PAYLBL); vbar("c_pay",p.cats,p.cur,p.cmp,true);
+      var cp=pairMap(d.cur.coupons,d.cmp.coupons,null); vbar("c_coupon",cp.cats,cp.cur,cp.cmp,true);
+      var tx=pairMap(d.cur.txn,d.cmp.txn,TXNLBL); vbar("c_txn",tx.cats,tx.cur,tx.cmp,false);
+      var sh=pairMap(d.cur.shipping,d.cmp.shipping,null); vbar("c_ship",sh.cats,sh.cur,sh.cmp,true);
+      var se=pairTop(d.cur.sellerTop,false); vbar("c_seller",se.cats,se.cur,se.cmp,true);
+      var br=pairTop(d.brandTop,false); vbar("c_brand",br.cats,br.cur,br.cmp,true);
+      var it=pairTop(d.cur.itemTop,true); vbar("c_item",it.cats,it.cur,it.cmp,true);
       $("brandcov").textContent=d.brandCoverage!=null?('· 매칭 '+Math.round(d.brandCoverage*100)+'%'):'';
     }).catch(function(e){ $("kpis").innerHTML='<div class="kpi"><div class="l">오류</div><div class="v" style="font-size:12px;color:#e8384f">'+esc(e.message)+'</div></div>'; })
       .finally(function(){ $("loading").classList.remove("on"); });

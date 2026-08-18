@@ -20,7 +20,7 @@
   .fld{display:flex;flex-direction:column;gap:3px}
   .fld label{font-size:11px;color:var(--sub);font-weight:600}
   .fld input[type=date]{border:1px solid #d6d4ce;border-radius:6px;padding:5px 8px;font-size:13px;height:30px}
-  .cmp{display:flex;gap:12px;align-items:center;font-size:12.5px}
+  .cmp{display:flex;gap:12px;align-items:center;font-size:12.5px;height:30px;border:1px solid #d6d4ce;border-radius:6px;padding:0 10px;background:#fff}
   .cmp label{display:flex;gap:4px;align-items:center;cursor:pointer}
   .fltrs{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
   .ms{position:relative}
@@ -31,6 +31,7 @@
   .ms.open .panel{display:block}
   .ms .opt{display:flex;align-items:center;gap:7px;padding:5px 7px;border-radius:5px;cursor:pointer;font-size:12.5px;white-space:nowrap}
   .ms .opt:hover{background:#f3f2ee}.ms .opt input{margin:0}
+  .ms .opt.all{font-weight:700}.ms .msdiv{border-top:1px solid #eee;margin:3px 0}
   .proj{margin-left:auto;text-align:right}
   .proj .l{font-size:11px;color:var(--sub)}.proj .v{font-size:20px;font-weight:800;color:var(--red)}
   .wrap{max-width:1400px;margin:0 auto;padding:14px 16px}
@@ -103,11 +104,14 @@
   // ── 필터 (복수 선택 · 체크박스 드롭다운) ──
   var FDEF=[{k:"paymentMethod",l:"결제수단",m:PAYLBL},{k:"shippingType",l:"배송유형",m:SHIPLBL},{k:"transactionType",l:"신규/재구매",m:TXNLBL},{k:"businessType",l:"유형",m:BIZLBL}];
   var FBUILT=false;
+  function msBoxes(ms){ return [].slice.call(ms.querySelectorAll('input[type=checkbox]:not(.ms-all)')); }
   function updateMsLabel(ms,f){
-    var checked=[].slice.call(ms.querySelectorAll("input:checked"));
-    var vspan=ms.querySelector(".v"), btn=ms.querySelector("button");
-    if(!checked.length){ vspan.textContent=f.l+' 전체'; btn.classList.remove("on"); }
-    else{ vspan.textContent=(checked.length===1?lbl(f.m,checked[0].value):f.l+' '+checked.length+'개'); btn.classList.add("on"); }
+    var boxes=msBoxes(ms), checked=boxes.filter(function(b){return b.checked;});
+    var vspan=ms.querySelector(".v"), btn=ms.querySelector("button"), all=ms.querySelector(".ms-all");
+    if(all) all.checked=(boxes.length>0 && checked.length===boxes.length);
+    if(checked.length===0 || checked.length===boxes.length){ vspan.textContent="전체"; btn.classList.remove("on"); }
+    else if(checked.length===1){ vspan.textContent=lbl(f.m,checked[0].value); btn.classList.add("on"); }
+    else { vspan.textContent=checked.length+"개 선택"; btn.classList.add("on"); }
   }
   function closeAllMs(){ [].forEach.call(document.querySelectorAll(".ms.open"),function(m){m.classList.remove("open");}); }
   function buildFilters(options){
@@ -115,17 +119,23 @@
     var host=$("filters"); host.innerHTML="";
     FDEF.forEach(function(f){
       var vals=(options&&options[f.k])||[];
+      var fld=document.createElement("div"); fld.className="fld";
+      fld.innerHTML='<label>'+esc(f.l)+'</label>';
       var ms=document.createElement("div"); ms.className="ms"; ms.setAttribute("data-key",f.k);
-      ms.innerHTML='<button type="button"><span class="v">'+f.l+' 전체</span><span>▾</span></button>'+
-        '<div class="panel">'+vals.map(function(v){return '<label class="opt"><input type="checkbox" value="'+esc(v)+'"><span>'+esc(lbl(f.m,v))+'</span></label>';}).join("")+'</div>';
-      host.appendChild(ms);
+      ms.innerHTML='<button type="button"><span class="v">전체</span><span>▾</span></button>'+
+        '<div class="panel"><label class="opt all"><input type="checkbox" class="ms-all"><span>모두선택</span></label><div class="msdiv"></div>'+
+        vals.map(function(v){return '<label class="opt"><input type="checkbox" value="'+esc(v)+'"><span>'+esc(lbl(f.m,v))+'</span></label>';}).join("")+'</div>';
+      fld.appendChild(ms); host.appendChild(fld);
       ms.querySelector("button").onclick=function(e){ e.stopPropagation(); var open=ms.classList.contains("open"); closeAllMs(); if(!open) ms.classList.add("open"); };
       ms.querySelector(".panel").onclick=function(e){ e.stopPropagation(); };
-      [].forEach.call(ms.querySelectorAll("input"),function(cb){ cb.onchange=function(){ updateMsLabel(ms,f); refresh(); }; });
+      var boxes=msBoxes(ms), all=ms.querySelector(".ms-all");
+      all.onchange=function(){ boxes.forEach(function(b){b.checked=all.checked;}); updateMsLabel(ms,f); refresh(); };
+      boxes.forEach(function(cb){ cb.onchange=function(){ updateMsLabel(ms,f); refresh(); }; });
     });
   }
   document.addEventListener("click",closeAllMs);
-  function getFilters(){ var o={}; [].forEach.call(document.querySelectorAll(".ms"),function(ms){ var k=ms.getAttribute("data-key"); var vals=[].slice.call(ms.querySelectorAll("input:checked")).map(function(c){return c.value;}); if(vals.length) o[k]=vals; }); return o; }
+  // 미선택 또는 모두선택 = 필터없음(전체). 부분선택만 서버로 전달.
+  function getFilters(){ var o={}; [].forEach.call(document.querySelectorAll(".ms"),function(ms){ var k=ms.getAttribute("data-key"); var boxes=msBoxes(ms); var vals=boxes.filter(function(b){return b.checked;}).map(function(b){return b.value;}); if(vals.length && vals.length<boxes.length) o[k]=vals; }); return o; }
 
   function chg(cur,cmp){ if(!cmp) return {t:'–',c:''}; var r=(cur-cmp)/cmp*100; return {t:(r>=0?'▲ ':'▼ ')+Math.abs(r).toFixed(1)+'%', c:r>=0?'up':'down'}; }
   function renderKPI(d){

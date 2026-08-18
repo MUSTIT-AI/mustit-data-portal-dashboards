@@ -153,7 +153,8 @@
       if(!a || a.view===false){ $("block").style.display="grid"; return; }
       setupTopbar();
       $("loading").classList.add("on");
-      Promise.all([loadAU(),loadFunnel(),loadGP()]).finally(function(){ $("loading").classList.remove("on"); });
+      // 순차 호출(동시 호출 시 Amplitude 429 방지). 프록시가 429 자동 재시도.
+      loadAU().then(loadFunnel).then(loadGP).finally(function(){ $("loading").classList.remove("on"); });
     }).catch(function(){ $("block").style.display="grid"; });
   });
 })();

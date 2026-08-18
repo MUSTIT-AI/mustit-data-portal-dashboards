@@ -22,6 +22,8 @@
   .fld input[type=date]{border:1px solid #d6d4ce;border-radius:6px;padding:5px 8px;font-size:13px;height:30px}
   .cmp{display:flex;gap:12px;align-items:center;font-size:12.5px}
   .cmp label{display:flex;gap:4px;align-items:center;cursor:pointer}
+  .fltrs{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+  .fltrs .fld select{border:1px solid #d6d4ce;border-radius:6px;padding:5px 8px;font-size:12.5px;height:30px;background:#fff;max-width:150px}
   .proj{margin-left:auto;text-align:right}
   .proj .l{font-size:11px;color:var(--sub)}.proj .v{font-size:20px;font-weight:800;color:var(--red)}
   .wrap{max-width:1400px;margin:0 auto;padding:14px 16px}
@@ -56,6 +58,7 @@
   <div class="fld"><label>비교기간 (n일 전)</label>
     <div class="cmp"><label><input type="radio" name="cmp" value="1">1일</label><label><input type="radio" name="cmp" value="7" checked>7일</label></div>
   </div>
+  <div class="fltrs" id="filters"></div>
   <div class="proj"><div class="l" id="proj_l">예상 마감 거래액</div><div class="v" id="proj_v">–</div></div>
 </div>
 <div class="wrap">
@@ -86,8 +89,22 @@
   // KST(UTC+9) 기준 오늘 날짜 — 뷰어 브라우저 타임존과 무관하게 정확
   function kstToday(){var d=new Date(Date.now()+9*3600000);return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');}
   var PAYLBL={CARD:"카드",EXTERNAL:"외부결제",NAVER_PAY:"네이버페이",KAKAO_PAY:"카카오페이",TOSS_PAY:"토스",SAMSUNG_PAY:"삼성페이",EASY_BANK:"간편계좌",VBANK:"무통장",PAYCO:"페이코"};
-  var TXNLBL={NEW:"신규구매",FIRST:"첫구매",REPURCHASE:"재구매"};
+  var TXNLBL={NEW:"신규구매",FIRST:"첫구매",NEW_PURCHASE:"신규구매",REPURCHASE:"재구매"};
+  var SHIPLBL={DOMESTIC:"국내배송",OVERSEAS:"해외배송",OVERSEAS_DIRECT:"해외직배송",SURPRISE:"깜짝배송"};
+  var BIZLBL={normal:"일반",DIRECT:"직매입",direct:"직매입"};
   function lbl(map,k){return (map[k]||k);}
+  // ── 필터 ──
+  var FDEF=[{k:"paymentMethod",l:"결제수단",m:PAYLBL},{k:"shippingType",l:"배송유형",m:SHIPLBL},{k:"transactionType",l:"신규/재구매",m:TXNLBL},{k:"businessType",l:"유형",m:BIZLBL}];
+  function buildFilters(options){
+    FDEF.forEach(function(f){
+      var sel=document.getElementById("flt_"+f.k), prev=sel?sel.value:"";
+      var vals=(options&&options[f.k])||[];
+      var html='<option value="">'+f.l+' 전체</option>'+vals.map(function(v){return '<option value="'+esc(v)+'"'+(v===prev?' selected':'')+'>'+esc(lbl(f.m,v))+'</option>';}).join("");
+      if(!sel){ var wrap=document.createElement("div"); wrap.className="fld"; wrap.innerHTML='<label>'+f.l+'</label><select id="flt_'+f.k+'"></select>'; document.getElementById("filters").appendChild(wrap); sel=document.getElementById("flt_"+f.k); sel.onchange=refresh; }
+      sel.innerHTML=html;
+    });
+  }
+  function getFilters(){ var o={}; FDEF.forEach(function(f){ var sel=document.getElementById("flt_"+f.k); if(sel&&sel.value) o[f.k]=[sel.value]; }); return o; }
 
   function chg(cur,cmp){ if(!cmp) return {t:'–',c:''}; var r=(cur-cmp)/cmp*100; return {t:(r>=0?'▲ ':'▼ ')+Math.abs(r).toFixed(1)+'%', c:r>=0?'up':'down'}; }
   function renderKPI(d){
@@ -131,8 +148,9 @@
   function refresh(){
     $("loading").classList.add("on");
     var cmp=document.querySelector('input[name=cmp]:checked').value;
-    window.MUSTIT.fn("openapi-orders",{date:$("date").value,compareDays:Number(cmp)}).then(function(d){
+    window.MUSTIT.fn("openapi-orders",{date:$("date").value,compareDays:Number(cmp),filters:getFilters()}).then(function(d){
       if(!d.ok) throw new Error(d.error||'실패');
+      if(d.options) buildFilters(d.options);
       renderKPI(d);
       $("proj_v").textContent=won(d.projected)+' 원';
       $("proj_l").textContent=d.isToday?'예상 마감 거래액':'거래액(마감)';

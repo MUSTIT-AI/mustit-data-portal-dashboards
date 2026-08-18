@@ -6,6 +6,7 @@
 - 정적 사이트(GitHub Pages). 빌드 없음. `main`에 push → 자동 배포.
 - 브라우저가 **서울 Supabase**(ref `hhvmhtejmhhxksnldfmi`)의 집계 RPC를 직접 호출.
 - **대시보드 1개 = `dashboards/` 폴더의 HTML 파일 1개** (자기완결형). `dashboards.json`에 목록 등록.
+- **데이터 소스 3종**(아래 각 절 참고 · 서로 조인 가능): ① **주문**(퀵사이트 지표 · `orders_secure`/RPC) · ② **Open API 상품·카탈로그**(`mustit_*` 뷰/RPC) · ③ **앰플리튜드**(행동·유입 · `amplitude-proxy`).
 
 ## 로그인·데이터 접근 (중요)
 - 사이트 전체가 **로그인 게이트**(Supabase Auth). 페이지에 아래를 넣고, 데이터는 로그인 후에만 로드:
@@ -57,6 +58,29 @@
 - **429(호출량 제한)**: 차트 여러 개는 **순차 호출**(Promise.all 금지). 매일 보는 무거운 지표는 **하루 1회 캐시**로: Amplitude→Supabase 테이블 적재(예: `amp_daily`, Edge `amp-sync`)→RPC로 조회. 캐시가 429·속도 모두 해결.
 - **주문 데이터와 조인**: **날짜/카테고리/플랫폼 차원 조인 권장**(집계끼리 공통 축 결합). 예: RPC `dash_daily_conversion`(`amp_daily` ⨝ `orders_v` by date → 방문자·주문·전환율·RPU). 주문단위(order_no)도 되지만 **유입경로(referrer)·광고 attribution은 주문 이벤트에 안 실림**(세션 단위)이라 행 레벨 유입 귀속은 불가.
 - 참고 구현: `dashboards/amplitude-au-core.html`(순수 앰플), `dashboards/daily-conversion.html`(날짜 조인).
+
+## 머스트잇 Open API — 상품·카탈로그 마스터 (`mustit_api`)
+머스트잇 파트너 OpenAPI로 **매일 08:00 KST 자동 적재**되는 상품·카탈로그 마스터(Edge `openapi-daily-sync` + pg_cron). **비(非)개인정보**라 로그인 계정 누구나 조회 가능. 자격증명은 서버(Vault)에만 있고, 대시보드는 아래 뷰/RPC만 쓰면 됨(키 불필요).
+
+- **public 뷰 (로그인=`authenticated` 조회 가능)**:
+  - `mustit_products` (상품 마스터, ~340만) — `item_no, catalog_id, item_name, seller_id, stock, selling_price, product_status`(IN_STOCK/OUT_OF_STOCK/SUSPENDED)`, brand_code, category, created_at, updated_at`
+  - `mustit_catalogs` — `catalog_id, brand_name, brand_code, catalog_name, category, category_code, main_image_url, refine_image_url, serial_no, model_no, color_no, created_at`
+  - `mustit_brands` (2,279) — `brand_code, brand_kor, brand_eng`
+  - `mustit_categories` (492) — `category_code, category_name, level, parent_code, header_category_type`
+  - 조회(로그인 JWT 자동, `orders_secure`와 동일 방식):
+    ```js
+    window.MUSTIT.ready(function(){
+      window.MUSTIT.client.from('mustit_brands').select('brand_code,brand_kor').limit(50)
+        .then(function(r){ var rows=r.data||[]; /* 차트 */ });
+    });
+    ```
+- **⚠️ 상품은 ~340만 행 → 브라우저로 당겨 집계 절대 금지.** 브랜드별·카테고리별 집계 등은 **DB 집계 RPC**를 쓸 것. 준비된 예: `mustit_products_by_brand(p_limit)` → 브랜드별 상품수·평균가(순위).
+  ```js
+  window.MUSTIT.rpc('mustit_products_by_brand', {p_limit:20}).then(function(r){ /* r = [{brand_code,brand_kor,brand_eng,product_count,avg_price}] */ });
+  ```
+  새 집계가 필요하면 같은 패턴으로 RPC 추가: `language sql/plpgsql security definer set search_path=''`, `mustit_api.*` 조회, `authenticated`(+`anon`)에 execute grant.
+- **주문 데이터와 조인**: 공통 키 `brand_code`(→`mustit_brands`), `category`(카테고리 코드), `catalog_id`로 `orders_secure`/`orders_v`와 결합. 예: 주문 판매 상위 상품 × `mustit_products`로 상품명·카탈로그·가격 붙이기.
+- **날짜는 KST**(`created_at` 등 그대로, `AT TIME ZONE` 금지). **적재 주기**: 매일 08:00 — 브랜드·카테고리 전체 갱신 + 신규 상품/카탈로그 증분. **가격·재고 실시간 변경은 미반영**(신규 등록 기준)이라 최신 가격이 꼭 필요하면 별도 확인.
 
 ## 절대 규칙
 1. **일시는 이미 KST** → `AT TIME ZONE` 금지. `order_datetime` 그대로. 기간 필터는 인덱스를 타서 빠름 — 항상 기간을 좁힐 것.

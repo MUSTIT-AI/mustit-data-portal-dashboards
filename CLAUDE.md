@@ -83,6 +83,12 @@
 - **날짜는 KST**(`created_at` 등 그대로, `AT TIME ZONE` 금지). **적재 주기**: 매일 08:00 — 브랜드·카테고리 전체 갱신 + 신규 상품/카탈로그 증분. **가격·재고 실시간 변경은 미반영**(신규 등록 기준)이라 최신 가격이 꼭 필요하면 별도 확인.
 
 ## 절대 규칙
+> **공통 분석 지침의 단일 출처(SSOT) = DB.** 대시보드를 만들거나 데이터를 분석하기 전에 먼저 아래를 실행해 최신 공통 지침을 읽고 그 규칙을 반드시 따르라:
+> ```sql
+> select content from public.portal_guidelines order by updated_at desc;
+> ```
+> 아래 재무 정의·시간대 규칙은 **편의용 사본**이며, **충돌하면 `portal_guidelines`가 우선**한다. 공통 규칙 변경은 포털 "③ 공통 지침"(=이 테이블)에서만 하고 여기(CLAUDE.md)엔 개발 전용 규칙만 둔다.
+
 1. **일시는 이미 KST** → `AT TIME ZONE` 금지. `order_datetime` 그대로. 기간 필터는 인덱스를 타서 빠름 — 항상 기간을 좁힐 것.
 2. **재무 정의**: 매출=`gross_revenue`(총매출), 거래액/GMV=`total_purchase`, 순매출=총매출−자사할인, 순이익=순매출−결제수수료. 마스터뷰 기본은 **전체 주문상태**(정산완료만 보려면 `filters.order_status:["정산완료"]`).
 3. **보안**: `service_role` 키를 프런트에 절대 넣지 말 것(계정관리 같은 관리자 기능은 Edge Function `admin-users` 서버측에서만). 개인정보 컬럼은 로그인+허용목록(`dash_allowed`)으로만 접근. 새 RPC를 만들면 `anon`에는 주지 말고 `authenticated`+`_dash_guard()` 검사를 넣을 것.

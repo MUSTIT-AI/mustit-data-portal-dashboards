@@ -22,8 +22,15 @@
   .fld input[type=date]{border:1px solid #d6d4ce;border-radius:6px;padding:5px 8px;font-size:13px;height:30px}
   .cmp{display:flex;gap:12px;align-items:center;font-size:12.5px}
   .cmp label{display:flex;gap:4px;align-items:center;cursor:pointer}
-  .fltrs{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
-  .fltrs .fld select{border:1px solid #d6d4ce;border-radius:6px;padding:5px 8px;font-size:12.5px;height:30px;background:#fff;max-width:150px}
+  .fltrs{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
+  .ms{position:relative}
+  .ms>button{display:flex;align-items:center;gap:8px;border:1px solid #d6d4ce;border-radius:6px;background:#fff;height:30px;padding:0 9px;font-size:12.5px;cursor:pointer;max-width:180px;color:#333}
+  .ms>button .v{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ms>button.on{border-color:var(--red);color:var(--red);font-weight:700}
+  .ms .panel{position:absolute;top:34px;left:0;z-index:60;background:#fff;border:1px solid #cfcdc7;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.14);min-width:150px;max-height:280px;overflow:auto;padding:6px;display:none}
+  .ms.open .panel{display:block}
+  .ms .opt{display:flex;align-items:center;gap:7px;padding:5px 7px;border-radius:5px;cursor:pointer;font-size:12.5px;white-space:nowrap}
+  .ms .opt:hover{background:#f3f2ee}.ms .opt input{margin:0}
   .proj{margin-left:auto;text-align:right}
   .proj .l{font-size:11px;color:var(--sub)}.proj .v{font-size:20px;font-weight:800;color:var(--red)}
   .wrap{max-width:1400px;margin:0 auto;padding:14px 16px}
@@ -93,18 +100,32 @@
   var SHIPLBL={DOMESTIC:"국내배송",OVERSEAS:"해외배송",OVERSEAS_DIRECT:"해외직배송",SURPRISE:"깜짝배송"};
   var BIZLBL={normal:"일반",DIRECT:"직매입",direct:"직매입"};
   function lbl(map,k){return (map[k]||k);}
-  // ── 필터 ──
+  // ── 필터 (복수 선택 · 체크박스 드롭다운) ──
   var FDEF=[{k:"paymentMethod",l:"결제수단",m:PAYLBL},{k:"shippingType",l:"배송유형",m:SHIPLBL},{k:"transactionType",l:"신규/재구매",m:TXNLBL},{k:"businessType",l:"유형",m:BIZLBL}];
+  var FBUILT=false;
+  function updateMsLabel(ms,f){
+    var checked=[].slice.call(ms.querySelectorAll("input:checked"));
+    var vspan=ms.querySelector(".v"), btn=ms.querySelector("button");
+    if(!checked.length){ vspan.textContent=f.l+' 전체'; btn.classList.remove("on"); }
+    else{ vspan.textContent=(checked.length===1?lbl(f.m,checked[0].value):f.l+' '+checked.length+'개'); btn.classList.add("on"); }
+  }
+  function closeAllMs(){ [].forEach.call(document.querySelectorAll(".ms.open"),function(m){m.classList.remove("open");}); }
   function buildFilters(options){
+    if(FBUILT) return; FBUILT=true;
+    var host=$("filters"); host.innerHTML="";
     FDEF.forEach(function(f){
-      var sel=document.getElementById("flt_"+f.k), prev=sel?sel.value:"";
       var vals=(options&&options[f.k])||[];
-      var html='<option value="">'+f.l+' 전체</option>'+vals.map(function(v){return '<option value="'+esc(v)+'"'+(v===prev?' selected':'')+'>'+esc(lbl(f.m,v))+'</option>';}).join("");
-      if(!sel){ var wrap=document.createElement("div"); wrap.className="fld"; wrap.innerHTML='<label>'+f.l+'</label><select id="flt_'+f.k+'"></select>'; document.getElementById("filters").appendChild(wrap); sel=document.getElementById("flt_"+f.k); sel.onchange=refresh; }
-      sel.innerHTML=html;
+      var ms=document.createElement("div"); ms.className="ms"; ms.setAttribute("data-key",f.k);
+      ms.innerHTML='<button type="button"><span class="v">'+f.l+' 전체</span><span>▾</span></button>'+
+        '<div class="panel">'+vals.map(function(v){return '<label class="opt"><input type="checkbox" value="'+esc(v)+'"><span>'+esc(lbl(f.m,v))+'</span></label>';}).join("")+'</div>';
+      host.appendChild(ms);
+      ms.querySelector("button").onclick=function(e){ e.stopPropagation(); var open=ms.classList.contains("open"); closeAllMs(); if(!open) ms.classList.add("open"); };
+      ms.querySelector(".panel").onclick=function(e){ e.stopPropagation(); };
+      [].forEach.call(ms.querySelectorAll("input"),function(cb){ cb.onchange=function(){ updateMsLabel(ms,f); refresh(); }; });
     });
   }
-  function getFilters(){ var o={}; FDEF.forEach(function(f){ var sel=document.getElementById("flt_"+f.k); if(sel&&sel.value) o[f.k]=[sel.value]; }); return o; }
+  document.addEventListener("click",closeAllMs);
+  function getFilters(){ var o={}; [].forEach.call(document.querySelectorAll(".ms"),function(ms){ var k=ms.getAttribute("data-key"); var vals=[].slice.call(ms.querySelectorAll("input:checked")).map(function(c){return c.value;}); if(vals.length) o[k]=vals; }); return o; }
 
   function chg(cur,cmp){ if(!cmp) return {t:'–',c:''}; var r=(cur-cmp)/cmp*100; return {t:(r>=0?'▲ ':'▼ ')+Math.abs(r).toFixed(1)+'%', c:r>=0?'up':'down'}; }
   function renderKPI(d){

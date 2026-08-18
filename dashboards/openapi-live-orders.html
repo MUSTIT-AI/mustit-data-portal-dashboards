@@ -1,0 +1,175 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>실시간 주문 현황 (OpenAPI) · MUST IT</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../auth.js"></script>
+<style>
+  :root{--red:#e8384f;--blue:#a9b8e8;--ink:#1c1b19;--sub:#6b6a66;--bg:#eef0f2;--panel:#fff;--border:#e2e0da}
+  *{box-sizing:border-box}
+  body{font-family:'Pretendard','Malgun Gothic',system-ui,sans-serif;margin:0;background:var(--bg);color:var(--ink);font-size:13px}
+  .topbar{display:flex;align-items:center;gap:14px;background:#fbfbfc;border-bottom:1px solid var(--border);padding:8px 16px;position:sticky;top:0;z-index:40}
+  .topbar .logo{font-weight:800;color:#232a33;text-decoration:none}.topbar .logo:hover{color:var(--red)}
+  .topbar .right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .topbar .owner{font-size:12.5px;font-weight:700;white-space:nowrap}
+  .topbar #dashnav{border:1px solid #d6d4ce;border-radius:7px;padding:5px 9px;font-size:12.5px;background:#fff;max-width:230px}
+  .ctrlbar{display:flex;align-items:flex-end;gap:16px;background:#fff;border-bottom:1px solid var(--border);padding:10px 18px;flex-wrap:wrap}
+  .fld{display:flex;flex-direction:column;gap:3px}
+  .fld label{font-size:11px;color:var(--sub);font-weight:600}
+  .fld input[type=date]{border:1px solid #d6d4ce;border-radius:6px;padding:5px 8px;font-size:13px;height:30px}
+  .cmp{display:flex;gap:12px;align-items:center;font-size:12.5px}
+  .cmp label{display:flex;gap:4px;align-items:center;cursor:pointer}
+  .proj{margin-left:auto;text-align:right}
+  .proj .l{font-size:11px;color:var(--sub)}.proj .v{font-size:20px;font-weight:800;color:var(--red)}
+  .wrap{max-width:1400px;margin:0 auto;padding:14px 16px}
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px;max-width:560px}
+  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:11px 14px}
+  .kpi .l{font-size:11px;color:var(--sub)}
+  .kpi .row{display:flex;align-items:baseline;gap:8px;margin-top:4px}
+  .kpi .v{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+  .kpi .cmp2{font-size:11px;color:var(--sub)}
+  .kpi .chg{font-size:12px;font-weight:700}.chg.up{color:#e8384f}.chg.down{color:#2f6fe8}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px}
+  .card h3{margin:0 0 8px;font-size:14px}
+  .chart{width:100%;height:260px}
+  .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
+  .grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px}
+  @media(max-width:1100px){.grid3,.grid4{grid-template-columns:1fr 1fr}}
+  @media(max-width:640px){.grid3,.grid4,.kpis{grid-template-columns:1fr}}
+  .muted{font-size:11px;color:#a7a49c}
+  .loading{position:fixed;inset:0;background:rgba(255,255,255,.55);display:none;align-items:center;justify-content:center;z-index:80;font-weight:700;color:var(--red)}
+  .loading.on{display:flex}
+  .block{display:none;position:fixed;inset:0;background:var(--bg);z-index:80;place-items:center;text-align:center;color:var(--sub);font-family:system-ui}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a class="logo" href="../index.html">🛍️ Data Portal</a>
+  <div class="right"><span class="owner" id="dashowner"></span><select id="dashnav" title="대시보드 이동"></select></div>
+</div>
+<div class="ctrlbar">
+  <div class="fld"><label>조회일자</label><input type="date" id="date"></div>
+  <div class="fld"><label>비교기간 (n일 전)</label>
+    <div class="cmp"><label><input type="radio" name="cmp" value="1">1일</label><label><input type="radio" name="cmp" value="7" checked>7일</label></div>
+  </div>
+  <div class="proj"><div class="l" id="proj_l">예상 마감 거래액</div><div class="v" id="proj_v">–</div></div>
+</div>
+<div class="wrap">
+  <div class="kpis" id="kpis"></div>
+  <div class="card"><h3>시간대별 거래액 추이</h3><div class="chart" id="c_hourly" style="height:280px"></div></div>
+  <div class="grid4">
+    <div class="card"><h3>결제수단별</h3><div class="chart" id="c_pay"></div></div>
+    <div class="card"><h3>쿠폰·할인별</h3><div class="chart" id="c_coupon"></div></div>
+    <div class="card"><h3>신규 / 재구매</h3><div class="chart" id="c_txn"></div></div>
+    <div class="card"><h3>배송유형별</h3><div class="chart" id="c_ship"></div></div>
+  </div>
+  <div class="grid3">
+    <div class="card"><h3>판매자별 Top 20</h3><div class="chart" id="c_seller" style="height:360px"></div></div>
+    <div class="card"><h3>브랜드별 Top 20 <span class="muted" id="brandcov"></span></h3><div class="chart" id="c_brand" style="height:360px"></div></div>
+    <div class="card"><h3>상품별 Top 20</h3><div class="chart" id="c_item" style="height:360px"></div></div>
+  </div>
+  <p class="muted">머스트잇 OpenAPI 실시간 주문 조회 · 거래액=GMV · 브랜드는 상품마스터(<code>mustit_products</code>) 조인(매칭분만). 디바이스 구분은 주문 API에 없어 제외. 자동 새로고침 3분.</p>
+</div>
+<div class="loading" id="loading">불러오는 중…</div>
+<div class="block" id="block">이 대시보드를 볼 권한이 없습니다. <a href="../index.html" style="color:var(--red);margin-left:6px">← 목록</a></div>
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id);};
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  var FILE="openapi-live-orders.html", RED="#e8384f", BLUE="#a9b8e8";
+  function won(v){return (Math.round(Number(v)||0)).toLocaleString('en-US');}
+  function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+  function nowKst(){return new Date(Date.now()+9*3600000);}
+  var PAYLBL={CARD:"카드",EXTERNAL:"외부결제",NAVER_PAY:"네이버페이",KAKAO_PAY:"카카오페이",TOSS_PAY:"토스",SAMSUNG_PAY:"삼성페이",EASY_BANK:"간편계좌",VBANK:"무통장",PAYCO:"페이코"};
+  var TXNLBL={NEW:"신규구매",FIRST:"첫구매",REPURCHASE:"재구매"};
+  function lbl(map,k){return (map[k]||k);}
+
+  function chg(cur,cmp){ if(!cmp) return {t:'–',c:''}; var r=(cur-cmp)/cmp*100; return {t:(r>=0?'▲ ':'▼ ')+Math.abs(r).toFixed(1)+'%', c:r>=0?'up':'down'}; }
+  function renderKPI(d){
+    var c=d.cur, m=d.cmp;
+    var items=[
+      {l:'거래액',v:won(c.gmv)+' 원',cv:won(m.gmv),ch:chg(c.gmv,m.gmv)},
+      {l:'거래건수',v:won(c.cnt)+' 건',cv:won(m.cnt),ch:chg(c.cnt,m.cnt)},
+      {l:'주문단가',v:won(c.aov)+' 원',cv:won(m.aov),ch:chg(c.aov,m.aov)}
+    ];
+    $("kpis").innerHTML=items.map(function(t){return '<div class="kpi"><div class="l">'+t.l+'</div>'+
+      '<div class="row"><div class="v">'+t.v+'</div><div class="chg '+t.ch.c+'">'+t.ch.t+'</div></div>'+
+      '<div class="cmp2">비교: '+t.cv+'</div></div>';}).join("");
+  }
+  function barCmp(id,cats,cur,cmp){
+    var el=echarts.init($(id));
+    el.setOption({grid:{left:52,right:12,top:24,bottom:30},tooltip:{trigger:"axis",valueFormatter:function(v){return won(v);}},
+      legend:{top:0,right:0,itemWidth:10,itemHeight:8,textStyle:{fontSize:10}},
+      xAxis:{type:"category",data:cats,axisLabel:{fontSize:10,color:"#999"},axisLine:{lineStyle:{color:"#ddd"}}},
+      yAxis:{type:"value",axisLabel:{fontSize:10,color:"#999",formatter:function(v){return v>=1e6?(v/1e6)+"M":v>=1e3?(v/1e3)+"k":v;}},splitLine:{lineStyle:{color:"#eee"}}},
+      series:[{name:"조회",type:"bar",data:cur,itemStyle:{color:RED},barMaxWidth:16},{name:"비교",type:"bar",data:cmp,itemStyle:{color:BLUE},barMaxWidth:16}]});
+    window.addEventListener("resize",function(){el.resize();});
+  }
+  function barMap(id,obj,labelmap){
+    var ent=Object.entries(obj||{}).filter(function(e){return e[1]>0;}).sort(function(a,b){return b[1]-a[1];});
+    var el=echarts.init($(id));
+    el.setOption({grid:{left:80,right:16,top:10,bottom:24},tooltip:{trigger:"axis",valueFormatter:function(v){return won(v);}},
+      xAxis:{type:"value",axisLabel:{fontSize:9,color:"#999",formatter:function(v){return v>=1e6?(v/1e6)+"M":v>=1e3?(v/1e3)+"k":v;}},splitLine:{lineStyle:{color:"#eee"}}},
+      yAxis:{type:"category",inverse:true,data:ent.map(function(e){return labelmap?lbl(labelmap,e[0]):e[0];}),axisLabel:{fontSize:10,color:"#555"}},
+      series:[{type:"bar",data:ent.map(function(e){return e[1];}),itemStyle:{color:RED},barMaxWidth:16}]});
+    window.addEventListener("resize",function(){el.resize();});
+  }
+  function barTop(id,rows,useName){
+    var el=echarts.init($(id));
+    el.setOption({grid:{left:110,right:16,top:8,bottom:24},tooltip:{trigger:"axis",valueFormatter:function(v){return won(v);}},
+      xAxis:{type:"value",axisLabel:{fontSize:9,color:"#999",formatter:function(v){return v>=1e6?(v/1e6)+"M":v>=1e3?(v/1e3)+"k":v;}},splitLine:{lineStyle:{color:"#eee"}}},
+      yAxis:{type:"category",inverse:true,data:rows.map(function(r){var t=useName?(r.name||r.k):r.k;return t.length>14?t.slice(0,14)+'…':t;}),axisLabel:{fontSize:10,color:"#555"}},
+      series:[{type:"bar",data:rows.map(function(r){return r.v;}),itemStyle:{color:RED},barMaxWidth:14}]});
+    window.addEventListener("resize",function(){el.resize();});
+  }
+
+  function refresh(){
+    $("loading").classList.add("on");
+    var cmp=document.querySelector('input[name=cmp]:checked').value;
+    window.MUSTIT.fn("openapi-orders",{date:$("date").value,compareDays:Number(cmp)}).then(function(d){
+      if(!d.ok) throw new Error(d.error||'실패');
+      renderKPI(d);
+      $("proj_v").textContent=won(d.projected)+' 원';
+      $("proj_l").textContent=d.isToday?'예상 마감 거래액':'거래액(마감)';
+      var hours=[];for(var h=0;h<24;h++)hours.push(String(h).padStart(2,'0'));
+      barCmp("c_hourly",hours,d.cur.hourly,d.cmp.hourly);
+      barMap("c_pay",d.cur.payment,PAYLBL);
+      barMap("c_coupon",d.cur.coupons,null);
+      barMap("c_txn",d.cur.txn,TXNLBL);
+      barMap("c_ship",d.cur.shipping,null);
+      barTop("c_seller",d.cur.sellerTop,false);
+      barTop("c_brand",d.brandTop,false);
+      barTop("c_item",d.cur.itemTop,true);
+      $("brandcov").textContent=d.brandCoverage!=null?('· 매칭 '+Math.round(d.brandCoverage*100)+'%'):'';
+    }).catch(function(e){ $("kpis").innerHTML='<div class="kpi"><div class="l">오류</div><div class="v" style="font-size:12px;color:#e8384f">'+esc(e.message)+'</div></div>'; })
+      .finally(function(){ $("loading").classList.remove("on"); });
+  }
+  function setupTopbar(){
+    window.MUSTIT.rpc("dash_list",{}).then(function(list){
+      list=list||[]; var cur=list.filter(function(d){return d.file===FILE;})[0];
+      if(cur) $("dashowner").textContent=(cur.title||"")+(cur.owner_name?(" · "+cur.owner_name):"");
+      var sel=$("dashnav");
+      sel.innerHTML=list.map(function(d){return '<option value="_starter.html?f='+encodeURIComponent(d.file)+'" data-file="'+esc(d.file)+'"'+(d.file===FILE?' selected':'')+'>'+esc(d.title||d.file)+'</option>';}).join("");
+      sel.onchange=function(){var o=sel.options[sel.selectedIndex];if(o&&o.getAttribute('data-file')!==FILE)location.href=o.value;};
+    }).catch(function(){});
+  }
+  var timer=null;
+  window.MUSTIT.ready(function(){
+    window.MUSTIT.rpc("dash_access",{p_dashboard:FILE}).then(function(a){
+      if(!a || a.view===false){ $("block").style.display="grid"; return; }
+      setupTopbar();
+      $("date").value=ymd(nowKst());
+      $("date").onchange=refresh;
+      [].forEach.call(document.querySelectorAll('input[name=cmp]'),function(r){r.onchange=refresh;});
+      refresh();
+      timer=setInterval(function(){ if($("date").value===ymd(nowKst())) refresh(); }, 180000);
+    }).catch(function(){ $("block").style.display="grid"; });
+  });
+})();
+</script>
+</body>
+</html>

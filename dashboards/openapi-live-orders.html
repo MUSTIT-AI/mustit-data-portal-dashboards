@@ -83,8 +83,8 @@
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   var FILE="openapi-live-orders.html", RED="#e8384f", BLUE="#a9b8e8";
   function won(v){return (Math.round(Number(v)||0)).toLocaleString('en-US');}
-  function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
-  function nowKst(){return new Date(Date.now()+9*3600000);}
+  // KST(UTC+9) 기준 오늘 날짜 — 뷰어 브라우저 타임존과 무관하게 정확
+  function kstToday(){var d=new Date(Date.now()+9*3600000);return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');}
   var PAYLBL={CARD:"카드",EXTERNAL:"외부결제",NAVER_PAY:"네이버페이",KAKAO_PAY:"카카오페이",TOSS_PAY:"토스",SAMSUNG_PAY:"삼성페이",EASY_BANK:"간편계좌",VBANK:"무통장",PAYCO:"페이코"};
   var TXNLBL={NEW:"신규구매",FIRST:"첫구매",REPURCHASE:"재구매"};
   function lbl(map,k){return (map[k]||k);}
@@ -163,11 +163,11 @@
     window.MUSTIT.rpc("dash_access",{p_dashboard:FILE}).then(function(a){
       if(!a || a.view===false){ $("block").style.display="grid"; return; }
       setupTopbar();
-      $("date").value=ymd(nowKst());
+      $("date").value=kstToday();
       $("date").onchange=refresh;
       [].forEach.call(document.querySelectorAll('input[name=cmp]'),function(r){r.onchange=refresh;});
       refresh();
-      timer=setInterval(function(){ if($("date").value===ymd(nowKst())) refresh(); }, 180000);
+      timer=setInterval(function(){ if($("date").value===kstToday()) refresh(); }, 180000);
     }).catch(function(){ $("block").style.display="grid"; });
   });
 })();

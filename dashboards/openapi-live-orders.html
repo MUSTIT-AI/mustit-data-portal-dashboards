@@ -40,6 +40,8 @@
   .ms .opt.all{font-weight:700}.ms .msdiv{border-top:1px solid #eee;margin:3px 0}
   .proj{margin-left:auto;text-align:right}
   .proj .l{font-size:11px;color:var(--sub)}.proj .v{font-size:20px;font-weight:800;color:var(--red)}
+  .gobtn{background:var(--red);color:#fff;border:0;border-radius:8px;padding:0 22px;height:38px;font-size:14px;font-weight:800;cursor:pointer;white-space:nowrap;align-self:flex-end}
+  .gobtn:hover{filter:brightness(.94)}
   .wrap{max-width:100%;margin:0;padding:14px 20px}
   .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px}
   .kpi{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px}
@@ -79,6 +81,7 @@
     <div class="cmp"><label><input type="radio" name="cmp" value="1">1일 전</label><label><input type="radio" name="cmp" value="7" checked>7일 전</label></div>
   </div>
   <div class="fltrs" id="filters"></div>
+  <button class="gobtn" id="go">조회</button>
   <div class="proj"><div class="l" id="proj_l">예상 마감 거래액</div><div class="v" id="proj_v">–</div><div id="proj_f" style="font-size:10px;color:#a7a49c;margin-top:2px"></div></div>
 </div>
 <div class="wrap">
@@ -100,7 +103,7 @@
   <p class="muted">머스트잇 OpenAPI 실시간 주문 조회 · 거래액=GMV · 브랜드는 상품마스터(<code>mustit_products</code>) 조인(매칭분만). 디바이스 구분은 주문 API에 없어 제외. 날짜·필터 변경 시 갱신(자동 새로고침 없음).</p>
 
   <h2 class="sechd">📈 앰플리튜드 AU (방문자) · <span id="au_range">조회기간</span></h2>
-  <p class="muted" style="margin:0 0 8px">Live_real_MUSTIT 실데이터 · South Korea · 크롤러 제외 · 기간 전체 <b>순유저(uniques)</b> · <b style="color:#e8384f">조회</b> vs <b style="color:#7a8bbf">비교</b> 그룹막대(상단 조회·비교기간 참조). ※ 상단 필터(결제수단·배송·신규재구매·유형)는 주문 API 전용이라 AU엔 미적용.</p>
+  <p class="muted" style="margin:0 0 8px">Live_real_MUSTIT 실데이터 · South Korea · 크롤러 제외 · <b style="color:#e8384f">조회</b> vs <b style="color:#7a8bbf">비교</b> 그룹막대(상단 조회·비교기간 참조) · <b>세그먼트 차트=순유저(uniques)</b>, <b>이벤트 차트=발생수(totals)</b>. ※ 상단 필터(결제수단·배송·신규재구매·유형)는 주문 API 전용이라 AU엔 미적용.</p>
   <div class="aunote">
     ⚠️ <b>비교 기준 안내</b> — 앰플리튜드 AU의 <b>비교기간은 "기간 전체(종일)"</b> 실적입니다. 주문 데이터처럼 <u>현재 시각까지 잘라서</u> 비교하지 <b>않습니다</b>.
     (앰플리튜드 세그먼트 API는 <b>일(day) 단위</b>이고, <b>순유저</b>는 시간대별 합산·시각 컷이 불가능) →
@@ -112,9 +115,9 @@
     <div class="card"><h3>로그인 여부별 AU</h3><div class="chart" id="c_au_login" style="height:280px"></div></div>
   </div>
   <div class="card"><h3>디바이스 · 플랫폼별 AU</h3><div class="chart" id="c_au_device" style="height:300px"></div></div>
-  <div class="card"><h3>식별 (로그인 · 가입 · 찜)</h3><div class="chart" id="c_au_id" style="height:300px"></div></div>
-  <div class="card"><h3>탐색 지면 (기획전 · 카테고리 · 브랜드 · 랭킹)</h3><div class="chart" id="c_au_nav" style="height:300px"></div></div>
-  <div class="card"><h3>상품 관심 (PDP · 검색 · 상품클릭)</h3><div class="chart" id="c_au_prod" style="height:300px"></div></div>
+  <div class="card"><h3>식별 (로그인 · 가입 · 찜) <span class="muted">· 발생수</span></h3><div class="chart" id="c_au_id" style="height:300px"></div></div>
+  <div class="card"><h3>탐색 지면 (기획전 · 카테고리 · 브랜드 · 랭킹) <span class="muted">· 발생수</span></h3><div class="chart" id="c_au_nav" style="height:300px"></div></div>
+  <div class="card"><h3>상품 관심 (PDP · 검색 · 상품클릭) <span class="muted">· 발생수</span></h3><div class="chart" id="c_au_prod" style="height:300px"></div></div>
   <p class="muted" style="margin-top:8px">원본: Amplitude 「AU - 핵심 지표 모니터링 (GP)」 · 완료된 주는 원본과 동일, 진행 중인 최신 주는 집계 갱신 중이라 변동될 수 있습니다.</p>
 </div>
 <div class="loading" id="loading">불러오는 중…</div>
@@ -134,10 +137,12 @@
   function clearN(){[].forEach.call(document.querySelectorAll('input[name=cmp]'),function(r){r.checked=false;});}
   function setDefaults(){var t=kstToday();$("date_from").value=t;$("date_to").value=t;applyNday(7);}
   function wireControls(){
-    ["date_from","date_to"].forEach(function(id){$(id).onchange=function(){var n=checkedN(); if(n) applyNday(n); refresh();};});
-    ["cmp_from","cmp_to"].forEach(function(id){$(id).onchange=function(){clearN(); refresh();};});
-    [].forEach.call(document.querySelectorAll('input[name=cmp]'),function(r){r.onchange=function(){applyNday(Number(r.value)); refresh();};});
-    $("swap").onclick=function(){var a=$("date_from").value,b=$("date_to").value; $("date_from").value=$("cmp_from").value; $("date_to").value=$("cmp_to").value; $("cmp_from").value=a; $("cmp_to").value=b; clearN(); refresh();};
+    // 값만 갱신하고 자동 조회하지 않음(트래픽 절감). 실제 조회는 '조회' 버튼으로만.
+    ["date_from","date_to"].forEach(function(id){$(id).onchange=function(){var n=checkedN(); if(n) applyNday(n);};});
+    ["cmp_from","cmp_to"].forEach(function(id){$(id).onchange=function(){clearN();};});
+    [].forEach.call(document.querySelectorAll('input[name=cmp]'),function(r){r.onchange=function(){applyNday(Number(r.value));};});
+    $("swap").onclick=function(){var a=$("date_from").value,b=$("date_to").value; $("date_from").value=$("cmp_from").value; $("date_to").value=$("cmp_to").value; $("cmp_from").value=a; $("cmp_to").value=b; clearN();};
+    $("go").onclick=function(){ refresh(); };
   }
   var PAYLBL={CARD:"카드",EXTERNAL:"외부결제",NAVER_PAY:"네이버페이",KAKAO_PAY:"카카오페이",TOSS_PAY:"토스",SAMSUNG_PAY:"삼성페이",EASY_BANK:"간편계좌",VBANK:"무통장",PAYCO:"페이코"};
   var TXNLBL={NEW:"신규구매",FIRST:"첫구매",NEW_PURCHASE:"신규구매",REPURCHASE:"재구매"};
@@ -172,8 +177,8 @@
       ms.querySelector("button").onclick=function(e){ e.stopPropagation(); var open=ms.classList.contains("open"); closeAllMs(); if(!open) ms.classList.add("open"); };
       ms.querySelector(".panel").onclick=function(e){ e.stopPropagation(); };
       var boxes=msBoxes(ms), all=ms.querySelector(".ms-all");
-      all.onchange=function(){ boxes.forEach(function(b){b.checked=all.checked;}); updateMsLabel(ms,f); refresh(); };
-      boxes.forEach(function(cb){ cb.onchange=function(){ updateMsLabel(ms,f); refresh(); }; });
+      all.onchange=function(){ boxes.forEach(function(b){b.checked=all.checked;}); updateMsLabel(ms,f); };
+      boxes.forEach(function(cb){ cb.onchange=function(){ updateMsLabel(ms,f); }; });
     });
   }
   document.addEventListener("click",closeAllMs);
@@ -311,21 +316,33 @@
   function gap(){ return new Promise(function(r){ setTimeout(r,150); }); }
   // 세그먼트 통합(1 이벤트 × N 세그먼트 = N 시리즈) — 세그먼트는 원본 AU에서 10개 통합 검증됨
   function segCall(event,segs,R){ return amp("events/segmentation",{e:[JSON.stringify(ev(event))],m:"uniques",i:R.i,start:R.s,end:R.e,s:segs.map(function(g){return JSON.stringify(g.c);})}); }
-  // 이벤트는 차트별(≤7개)로 안전하게 호출(N 이벤트 × 1 세그먼트 = N 시리즈)
-  function evCall(evs,R){ return amp("events/segmentation",{e:evs.map(function(x){return JSON.stringify(ev(x[0]));}),m:"uniques",i:R.i,start:R.s,end:R.e,s:[JSON.stringify(CRAWLER)]}); }
-  var ALLSEG=GENDER_SEG.concat(DEVICE_SEG).concat(LOGIN_SEG);   // 3+6+2=11 → 1쌍 호출로 3개 차트
+  var ALLSEG=GENDER_SEG.concat(DEVICE_SEG).concat(LOGIN_SEG);   // 3+6+2=11 → 1쌍 호출로 3개 세그먼트 차트
   function drawSeg(cur,cmp){
     function nm(a){return a.map(function(x){return x.n;});}
     vbar("c_au_gender",nm(GENDER_SEG),cur.slice(0,3),cmp.slice(0,3),true);
     vbar("c_au_device",nm(DEVICE_SEG),cur.slice(3,9),cmp.slice(3,9),true);
     vbar("c_au_login", nm(LOGIN_SEG), cur.slice(9,11),cmp.slice(9,11),true);
   }
-  function loadEvPair(id,evs,C,M){
-    return evCall(evs,C).then(function(dc){ return gap().then(function(){return evCall(evs,M);}).then(function(dm){
-      vbar(id,evs.map(function(x){return x[1];}),collapsedAll(dc,evs.length),collapsedAll(dm,evs.length),true);
-    }); }).catch(function(e){ auErr(id,e); });
+  // ── 이벤트: 공개 segmentation은 1콜=1이벤트만 처리 → 이벤트별 1콜.
+  //    totals(합산 가능)로 합집합 기간을 한 번 조회해 조회·비교 기간을 각각 합산(콜 수 최소화).
+  function ymd(s){return s.replace(/-/g,'');}
+  function evTotalsCall(eventType,us,ue){ return amp("events/segmentation",{e:JSON.stringify(ev(eventType)),m:"totals",i:1,start:us,end:ue,s:JSON.stringify(CRAWLER)}); }
+  function sumRange(d,from,to){
+    var xs=(d.data&&d.data.xValues)||[], ser=((d.data&&d.data.series)||[])[0]||[], s=0;
+    for(var i=0;i<xs.length;i++){ var day=String(xs[i]).slice(0,10); if(day>=from&&day<=to) s+=(ser[i]||0); }
+    return s;
   }
-  // 총 8회(세그 2 + 이벤트 3차트×2), 150ms 간격 순차 → Amplitude 429 방지
+  function loadEvChart(id,evs,cF,cT,mF,mT){
+    var us=ymd(cF<mF?cF:mF), ue=ymd(cT>mT?cT:mT);   // 합집합 기간
+    var cur=[], cmp=[], labels=evs.map(function(x){return x[1];});
+    var chain=Promise.resolve();
+    evs.forEach(function(x,idx){
+      chain=chain.then(function(){ return idx?gap():null; }).then(function(){ return evTotalsCall(x[0],us,ue); })
+        .then(function(d){ cur[idx]=sumRange(d,cF,cT); cmp[idx]=sumRange(d,mF,mT); });
+    });
+    return chain.then(function(){ vbar(id,labels,cur,cmp,true); }).catch(function(e){ auErr(id,e); });
+  }
+  // 세그먼트 2콜(순유저) + 이벤트 19콜(발생수, 이벤트당 1콜) · 150ms 간격 · '조회' 시에만
   function loadAmpAU(){
     var f=$("date_from").value,t=$("date_to").value, cf=$("cmp_from").value,ct=$("cmp_to").value;
     var r=$("au_range"); if(r) r.textContent=(f===t?f:(f+"~"+t))+' vs 비교 '+(cf===ct?cf:(cf+"~"+ct));
@@ -335,9 +352,9 @@
           drawSeg(collapsedAll(dc,ALLSEG.length),collapsedAll(dm,ALLSEG.length));
         });
       }).catch(function(e){ auErr(["c_au_gender","c_au_device","c_au_login"],e); })
-      .then(gap).then(function(){ return loadEvPair("c_au_id",ID_EV,C,M); })
-      .then(gap).then(function(){ return loadEvPair("c_au_nav",NAV_EV,C,M); })
-      .then(gap).then(function(){ return loadEvPair("c_au_prod",PROD_EV,C,M); });
+      .then(gap).then(function(){ return loadEvChart("c_au_id",ID_EV,f,t,cf,ct); })
+      .then(gap).then(function(){ return loadEvChart("c_au_nav",NAV_EV,f,t,cf,ct); })
+      .then(gap).then(function(){ return loadEvChart("c_au_prod",PROD_EV,f,t,cf,ct); });
   }
 
   function setupTopbar(){

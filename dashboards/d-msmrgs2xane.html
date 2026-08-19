@@ -137,12 +137,12 @@
     <table class="rank">
       <colgroup>
         <col style="width:44px"><col style="width:70px"><col style="width:56px"><col style="width:90px"><col style="width:300px">
-        <col style="width:120px"><col style="width:90px"><col style="width:100px"><col style="width:100px">
+        <col style="width:120px"><col style="width:90px"><col style="width:100px"><col style="width:100px"><col style="width:100px">
         <col style="width:100px"><col style="width:100px"><col style="width:90px"><col style="width:110px"><col style="width:90px">
       </colgroup>
       <thead><tr>
         <th>순위</th><th>이전기간<br>대비</th><th>이미지</th><th>상품번호</th><th class="l">상품명</th>
-        <th class="l">판매자</th><th>카탈로그<br>순위</th><th>카탈로그<br>상품수</th><th>판매가</th>
+        <th class="l">판매자</th><th>카탈로그<br>순위</th><th>카탈로그<br>상품수</th><th>판매가</th><th>최대<br>혜택가</th>
         <th>머스트잇<br>할인</th><th>판매자<br>할인</th><th>판매수량</th><th>거래금액</th><th>최근 7일</th>
       </tr></thead>
       <tbody id="tbody"></tbody>
@@ -346,6 +346,7 @@ function renderTable(list){
       '<td>'+won(a.catalog_rank)+'</td>'+
       '<td>'+won(a.catalog_item_count)+'</td>'+
       '<td>₩'+won(unit)+'</td>'+
+      '<td class="price-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
       '<td>₩'+won(a.own_discount)+'</td>'+
       '<td>₩'+won(a.seller_discount)+'</td>'+
       '<td class="qty">'+won(a.quantity)+'</td>'+
@@ -403,6 +404,36 @@ function paintImages(list){
     el.replaceWith(img);
   });
 }
+// ── 최대혜택가 (Open API price-detail, Edge Function 프록시) ──
+// 실시간 값이라 mustit_products/mustit_catalogs(일 1회 동기화)에는 없다 — 별도 함수 필요.
+// itemNo -> price(number) | null(조회 실패/판매종료 등). 날짜를 바꿔도 같은 상품은 재요청하지 않는다.
+var PRICE_CACHE = {};
+function loadPrices(list){
+  var need = [];
+  list.forEach(function(a){ if(!(a.product_id in PRICE_CACHE)) need.push(a.product_id); });
+  if(!need.length){ paintPrices(list); return; }
+  var chunks = [];
+  for(var i=0;i<need.length;i+=500) chunks.push(need.slice(i,i+500));
+  Promise.all(chunks.map(function(c){
+    return window.MUSTIT.fn("product-price", {itemNos:c.join(",")}).catch(function(){ return {}; });
+  })).then(function(results){
+    results.forEach(function(m){
+      Object.keys(m||{}).forEach(function(k){ PRICE_CACHE[k] = m[k]; });
+    });
+    need.forEach(function(pid){ if(!(pid in PRICE_CACHE)) PRICE_CACHE[pid]=null; });
+    paintPrices(list);
+  });
+}
+function paintPrices(list){
+  list.forEach(function(a){
+    var el = document.querySelector('.price-ph[data-pid="'+CSS.escape(String(a.product_id))+'"]');
+    if(!el) return;
+    var v = PRICE_CACHE[a.product_id];
+    el.textContent = (v==null) ? "-" : ("₩"+won(v));
+    el.classList.remove("price-ph");
+  });
+}
+
 var imgPreview = document.getElementById("imgpreview");
 function positionPreview(x,y){
   var margin=14, w=260, h=260;
@@ -475,6 +506,7 @@ function loadRanking(){
         });
         renderTable(cur);
         loadImages(cur);
+        loadPrices(cur);
 
         var sec = ((new Date().getTime()-t0)/1000).toFixed(1);
         var msg = "상위 "+won(cur.length)+"개 · 서버 집계 "+sec+"초";

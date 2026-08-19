@@ -160,7 +160,7 @@
   var PAYLBL={CARD:"카드",EXTERNAL:"외부결제",NAVER_PAY:"네이버페이",KAKAO_PAY:"카카오페이",TOSS_PAY:"토스",SAMSUNG_PAY:"삼성페이",EASY_BANK:"간편계좌",VBANK:"무통장",PAYCO:"페이코"};
   var TXNLBL={NEW:"신규구매",FIRST:"첫구매",NEW_PURCHASE:"신규구매",REPURCHASE:"재구매"};
   var SHIPLBL={DOMESTIC:"국내배송",OVERSEAS:"해외배송",OVERSEAS_DIRECT:"해외직배송",SURPRISE:"깜짝배송"};
-  var BIZLBL={normal:"일반",DIRECT:"직매입",direct:"직매입"};
+  var BIZLBL={normal:"일반",DIRECT:"직매입",direct:"직매입",OUTLET:"아울렛"};
   function lbl(map,k){return (map[k]||k);}
   // ── 필터 (복수 선택 · 체크박스 드롭다운) ──
   var FDEF=[{k:"paymentMethod",l:"결제수단",m:PAYLBL},{k:"shippingType",l:"배송유형",m:SHIPLBL},{k:"transactionType",l:"신규/재구매",m:TXNLBL},{k:"businessType",l:"유형",m:BIZLBL}];

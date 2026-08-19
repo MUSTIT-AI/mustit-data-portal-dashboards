@@ -23,6 +23,11 @@
   .fld input[type=date]{border:1px solid #d6d4ce;border-radius:6px;padding:5px 8px;font-size:13px;height:30px}
   .cmp{display:flex;gap:12px;align-items:center;font-size:12.5px;height:30px;border:1px solid #d6d4ce;border-radius:6px;padding:0 10px;background:#fff}
   .cmp label{display:flex;gap:4px;align-items:center;cursor:pointer}
+  .rng{display:flex;gap:4px;align-items:center}
+  .rng input[type=date]{border:1px solid #d6d4ce;border-radius:6px;padding:5px 7px;font-size:12.5px;height:30px}
+  .rng span{color:#aaa}
+  .swapbtn{align-self:flex-end;height:30px;border:1px solid #d6d4ce;border-radius:6px;background:#fff;cursor:pointer;padding:0 11px;font-size:15px;color:#555}
+  .swapbtn:hover{border-color:var(--red);color:var(--red)}
   .fltrs{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
   .ms{position:relative}
   .ms>button{display:flex;align-items:center;justify-content:space-between;gap:8px;border:1px solid #d6d4ce;border-radius:6px;background:#fff;height:30px;padding:0 10px;font-size:12.5px;cursor:pointer;min-width:140px;max-width:200px;color:#333}
@@ -63,9 +68,11 @@
   <div class="right"><span class="owner" id="dashowner"></span><select id="dashnav" title="대시보드 이동"></select></div>
 </div>
 <div class="ctrlbar">
-  <div class="fld"><label>조회일자</label><input type="date" id="date"></div>
-  <div class="fld"><label>비교기간 (n일 전)</label>
-    <div class="cmp"><label><input type="radio" name="cmp" value="1">1일</label><label><input type="radio" name="cmp" value="7" checked>7일</label></div>
+  <div class="fld"><label>조회기간</label><div class="rng"><input type="date" id="date_from"><span>~</span><input type="date" id="date_to"></div></div>
+  <button class="swapbtn" id="swap" title="조회 ↔ 비교 반전">⇄</button>
+  <div class="fld"><label>비교기간</label><div class="rng"><input type="date" id="cmp_from"><span>~</span><input type="date" id="cmp_to"></div></div>
+  <div class="fld"><label>빠른비교</label>
+    <div class="cmp"><label><input type="radio" name="cmp" value="1">1일 전</label><label><input type="radio" name="cmp" value="7" checked>7일 전</label></div>
   </div>
   <div class="fltrs" id="filters"></div>
   <div class="proj"><div class="l" id="proj_l">예상 마감 거래액</div><div class="v" id="proj_v">–</div><div id="proj_f" style="font-size:10px;color:#a7a49c;margin-top:2px"></div></div>
@@ -99,6 +106,17 @@
   function won(v){return (Math.round(Number(v)||0)).toLocaleString('en-US');}
   // KST(UTC+9) 기준 오늘 날짜 — 뷰어 브라우저 타임존과 무관하게 정확
   function kstToday(){var d=new Date(Date.now()+9*3600000);return d.getUTCFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0')+'-'+String(d.getUTCDate()).padStart(2,'0');}
+  function shift(d,n){return new Date(new Date(d+"T00:00:00Z").getTime()+n*86400000).toISOString().slice(0,10);}
+  function checkedN(){var r=document.querySelector('input[name=cmp]:checked');return r?Number(r.value):null;}
+  function applyNday(N){$("cmp_from").value=shift($("date_from").value,-N);$("cmp_to").value=shift($("date_to").value,-N);}
+  function clearN(){[].forEach.call(document.querySelectorAll('input[name=cmp]'),function(r){r.checked=false;});}
+  function setDefaults(){var t=kstToday();$("date_from").value=t;$("date_to").value=t;applyNday(7);}
+  function wireControls(){
+    ["date_from","date_to"].forEach(function(id){$(id).onchange=function(){var n=checkedN(); if(n) applyNday(n); refresh();};});
+    ["cmp_from","cmp_to"].forEach(function(id){$(id).onchange=function(){clearN(); refresh();};});
+    [].forEach.call(document.querySelectorAll('input[name=cmp]'),function(r){r.onchange=function(){applyNday(Number(r.value)); refresh();};});
+    $("swap").onclick=function(){var a=$("date_from").value,b=$("date_to").value; $("date_from").value=$("cmp_from").value; $("date_to").value=$("cmp_to").value; $("cmp_from").value=a; $("cmp_to").value=b; clearN(); refresh();};
+  }
   var PAYLBL={CARD:"카드",EXTERNAL:"외부결제",NAVER_PAY:"네이버페이",KAKAO_PAY:"카카오페이",TOSS_PAY:"토스",SAMSUNG_PAY:"삼성페이",EASY_BANK:"간편계좌",VBANK:"무통장",PAYCO:"페이코"};
   var TXNLBL={NEW:"신규구매",FIRST:"첫구매",NEW_PURCHASE:"신규구매",REPURCHASE:"재구매"};
   var SHIPLBL={DOMESTIC:"국내배송",OVERSEAS:"해외배송",OVERSEAS_DIRECT:"해외직배송",SURPRISE:"깜짝배송"};
@@ -200,15 +218,15 @@
 
   function refresh(){
     $("loading").classList.add("on");
-    var cmp=document.querySelector('input[name=cmp]:checked').value;
-    window.MUSTIT.fn("openapi-orders",{date:$("date").value,compareDays:Number(cmp),filters:getFilters()}).then(function(d){
+    window.MUSTIT.fn("openapi-orders",{curFrom:$("date_from").value,curTo:$("date_to").value,cmpFrom:$("cmp_from").value,cmpTo:$("cmp_to").value,filters:getFilters()}).then(function(d){
       if(!d.ok) throw new Error(d.error||'실패');
       if(d.options) buildFilters(d.options);
       renderKPI(d);
       $("proj_v").textContent=won(d.projected)+' 원';
-      $("proj_l").textContent=d.isToday?'예상 마감 거래액':'거래액(마감)';
-      $("proj_f").textContent=d.isToday?'비교일 전체 × (현재 ÷ 비교일 동시각)':'';
-      $("cmpfull").textContent='비교일('+d.cmpDate+') 전체 거래액: '+won(d.cmpFullGmv)+' 원';
+      $("proj_l").textContent=d.singleTodayCur?'예상 마감 거래액':(d.isToday?'거래액(진행중)':'거래액');
+      $("proj_f").textContent=d.singleTodayCur?'비교일 전체 × (현재 ÷ 비교일 동시각)':'';
+      var cr=(d.cmpFrom===d.cmpTo)?d.cmpFrom:(d.cmpFrom+' ~ '+d.cmpTo);
+      $("cmpfull").textContent='비교기간('+cr+') 전체 거래액: '+won(d.cmpFullGmv)+' 원';
       var hours=[];for(var h=0;h<24;h++)hours.push(String(h).padStart(2,'0'));
       vbar("c_hourly",hours,d.cur.hourly,d.cmp.hourly,false);
       CAT={catL:d.catL||[],catChildren:d.catChildren||{}}; drawCatL();
@@ -237,9 +255,8 @@
     window.MUSTIT.rpc("dash_access",{p_dashboard:FILE}).then(function(a){
       if(!a || a.view===false){ $("block").style.display="grid"; return; }
       setupTopbar();
-      $("date").value=kstToday();
-      $("date").onchange=refresh;
-      [].forEach.call(document.querySelectorAll('input[name=cmp]'),function(r){r.onchange=refresh;});
+      setDefaults();
+      wireControls();
       refresh();
     }).catch(function(){ $("block").style.display="grid"; });
   });

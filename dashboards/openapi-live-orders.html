@@ -67,9 +67,10 @@
     <div class="cmp"><label><input type="radio" name="cmp" value="1">1일</label><label><input type="radio" name="cmp" value="7" checked>7일</label></div>
   </div>
   <div class="fltrs" id="filters"></div>
-  <div class="proj"><div class="l" id="proj_l">예상 마감 거래액</div><div class="v" id="proj_v">–</div><div id="proj_f" style="font-size:10px;color:#a7a49c;margin-top:2px"></div><div id="cmpfull" style="font-size:11px;color:#6b6a66;margin-top:4px"></div></div>
+  <div class="proj"><div class="l" id="proj_l">예상 마감 거래액</div><div class="v" id="proj_v">–</div><div id="proj_f" style="font-size:10px;color:#a7a49c;margin-top:2px"></div></div>
 </div>
 <div class="wrap">
+  <div id="cmpfull" style="font-size:12px;color:#6b6a66;margin:0 0 8px"></div>
   <div class="kpis" id="kpis"></div>
   <div class="card"><h3>시간대별 거래액 추이</h3><div class="chart" id="c_hourly" style="height:280px"></div></div>
   <div class="grid4">
@@ -206,7 +207,7 @@
   function setupTopbar(){
     window.MUSTIT.rpc("dash_list",{}).then(function(list){
       list=list||[]; var cur=list.filter(function(d){return d.file===FILE;})[0];
-      if(cur) $("dashowner").textContent=(cur.title||"")+(cur.owner_name?(" · "+cur.owner_name):"");
+      if(cur){ $("dashowner").textContent=(cur.title||"")+(cur.owner_name?(" · "+cur.owner_name):""); document.title="Data Portal - "+(cur.title||FILE); }
       var sel=$("dashnav");
       sel.innerHTML=list.map(function(d){return '<option value="_starter.html?f='+encodeURIComponent(d.file)+'" data-file="'+esc(d.file)+'"'+(d.file===FILE?' selected':'')+'>'+esc(d.title||d.file)+'</option>';}).join("");
       sel.onchange=function(){var o=sel.options[sel.selectedIndex];if(o&&o.getAttribute('data-file')!==FILE)location.href=o.value;};

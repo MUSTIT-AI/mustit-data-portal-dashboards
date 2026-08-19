@@ -147,7 +147,7 @@
     ];
     $("kpis").innerHTML=items.map(function(t){return '<div class="kpi"><div class="l">'+t.l+'</div>'+
       '<div class="g"><div class="col"><div class="t">조회</div><div class="v">'+t.v+'</div></div>'+
-      '<div class="col"><div class="t">비교 (n일 전)</div><div class="v2">'+t.cv+'</div></div>'+
+      '<div class="col"><div class="t">비교 (같은 시각까지)</div><div class="v2">'+t.cv+'</div></div>'+
       '<div class="chg '+t.ch.c+'">'+t.ch.t+'</div></div></div>';}).join("");
   }
   function fmtAxis(v){return v>=1e6?(Math.round(v/1e5)/10)+"M":v>=1e3?Math.round(v/1e3)+"k":v;}

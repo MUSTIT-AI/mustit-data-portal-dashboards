@@ -83,6 +83,7 @@
   <div class="fltrs" id="filters"></div>
   <button class="gobtn" id="go">조회</button>
   <button class="gobtn" id="ai" style="background:#111;color:#fff" title="현재 화면 데이터로 AI 인사이트">🤖 AI 인사이트</button>
+  <button class="gobtn" id="aihist" style="background:#555;color:#fff" title="과거 AI 인사이트 이력">📜 이력</button>
   <div class="proj"><div class="l" id="proj_l">예상 마감 거래액</div><div class="v" id="proj_v">–</div><div id="proj_f" style="font-size:10px;color:#a7a49c;margin-top:2px"></div></div>
 </div>
 <div id="ai-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;padding:40px 16px;overflow:auto" onclick="if(event.target===this)this.style.display='none'">
@@ -154,6 +155,7 @@
     $("swap").onclick=function(){var a=$("date_from").value,b=$("date_to").value; $("date_from").value=$("cmp_from").value; $("date_to").value=$("cmp_to").value; $("cmp_from").value=a; $("cmp_to").value=b; clearN();};
     $("go").onclick=function(){ refresh(); };
     $("ai").onclick=aiInsight;
+    $("aihist").onclick=aiHistory;
   }
   var PAYLBL={CARD:"카드",EXTERNAL:"외부결제",NAVER_PAY:"네이버페이",KAKAO_PAY:"카카오페이",TOSS_PAY:"토스",SAMSUNG_PAY:"삼성페이",EASY_BANK:"간편계좌",VBANK:"무통장",PAYCO:"페이코"};
   var TXNLBL={NEW:"신규구매",FIRST:"첫구매",NEW_PURCHASE:"신규구매",REPURCHASE:"재구매"};
@@ -300,10 +302,28 @@
     window.MUSTIT.fn('ai-insight',{
       context:'머스트잇 실시간 주문 현황 대시보드(거래액=GMV). 조회기간 '+$("date_from").value+'~'+$("date_to").value+' vs 비교기간 '+$("cmp_from").value+'~'+$("cmp_to").value,
       data:aiData(LAST),
-      question:'조회 vs 비교기간 핵심 변화, 이상징후, 실행 제안을 뽑아줘.'
-    }).then(function(r){ if(r.error) throw new Error(r.error); showAi(mdLite(r.insight||'(빈 응답)')+'<div style="margin-top:14px;font-size:11px;color:#a7a49c">모델 '+esc(r.model||'')+' · '+Math.round((r.ms||0)/1000)+'초</div>'); })
+      question:'조회 vs 비교기간 핵심 변화, 이상징후, 실행 제안을 뽑아줘.',
+      dashboard:'openapi-live-orders',
+      params:{조회:$("date_from").value+'~'+$("date_to").value, 비교:$("cmp_from").value+'~'+$("cmp_to").value, filters:getFilters()}
+    }).then(function(r){ if(r.error) throw new Error(r.error); showAi(mdLite(r.insight||'(빈 응답)')+'<div style="margin-top:14px;font-size:11px;color:#a7a49c">모델 '+esc(r.model||'')+' · '+Math.round((r.ms||0)/1000)+'초 · '+(r.saved?'이력 저장됨':'저장 안됨')+'</div>'); })
      .catch(function(e){ showAi('<div style="color:#e8384f">오류: '+esc(e.message)+'</div>'); })
      .finally(function(){ btn.disabled=false; btn.textContent=ot; });
+  }
+  function aiHistory(){
+    showAi('<div style="color:#6b6a66">이력 불러오는 중…</div>');
+    window.MUSTIT.fn('ai-insight',{history:true,dashboard:'openapi-live-orders',limit:20}).then(function(r){
+      var list=r.history||[];
+      if(!list.length){ showAi('<div style="color:#6b6a66">저장된 인사이트가 없습니다. [🤖 AI 인사이트]로 먼저 생성하세요.</div>'); return; }
+      var html=list.map(function(x){
+        var dt=(x.created_at||'').replace('T',' ').slice(0,16);
+        var pr=x.params?(' · '+esc((x.params['조회']||'')+' vs '+(x.params['비교']||''))):'';
+        return '<details style="border:1px solid #eee;border-radius:8px;padding:10px 12px;margin-bottom:8px">'+
+          '<summary style="cursor:pointer;font-size:13px"><b>'+dt+'</b> · '+esc(x.author||'-')+pr+'</summary>'+
+          '<div style="margin-top:8px;font-size:13.5px;line-height:1.7">'+mdLite(x.insight||'')+'</div>'+
+          '<div style="margin-top:6px;font-size:11px;color:#a7a49c">모델 '+esc(x.model||'')+'</div></details>';
+      }).join('');
+      showAi('<div style="font-size:13px;color:#6b6a66;margin-bottom:8px">최근 인사이트 '+list.length+'건</div>'+html);
+    }).catch(function(e){ showAi('<div style="color:#e8384f">오류: '+esc(e.message)+'</div>'); });
   }
   // ───────────── 앰플리튜드 AU (방문자) · 상단 조회/비교기간 참조 ─────────────
   // 조회·비교 실적을 그룹막대(조회=빨강 · 비교=파랑)로 비교. 앰플리튜드 호출은 서버(amp-au)가 병렬 처리.

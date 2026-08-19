@@ -306,18 +306,9 @@
      .finally(function(){ btn.disabled=false; btn.textContent=ot; });
   }
   // ───────────── 앰플리튜드 AU (방문자) · 상단 조회/비교기간 참조 ─────────────
-  // 조회·비교기간의 기간 전체 순유저(uniques)를 그룹막대(조회=빨강 · 비교=파랑)로 비교
-  function toRange(f,t){
-    var span=Math.round((new Date(t+"T00:00:00Z")-new Date(f+"T00:00:00Z"))/86400000)+1;
-    return {s:f.replace(/-/g,''), e:t.replace(/-/g,''), i:(span>=28?7:1)};
-  }
-  function ampRange(){ return toRange($("date_from").value,$("date_to").value); }
-  function cmpRange(){ return toRange($("cmp_from").value,$("cmp_to").value); }
-  var CF=[{subprop_type:"user",subprop_key:"country",subprop_op:"is",subprop_value:["South Korea"]}];
-  function ev(t){return {event_type:t,filters:CF};}
+  // 조회·비교 실적을 그룹막대(조회=빨강 · 비교=파랑)로 비교. 앰플리튜드 호출은 서버(amp-au)가 병렬 처리.
   var CRAWLER=[{prop:"os",op:"does not contain",values:["yeti","bot","headless","bingbot","bingbot2","crawler"]}];
-  function amp(endpoint,params){ return window.MUSTIT.fn("amplitude-proxy",{endpoint:endpoint,params:params}).then(function(r){ return r.data; }); }
-  // 세그먼트 정의 — 성별 / 디바이스·플랫폼 / 로그인여부 로 분리
+  // 세그먼트 정의(라벨용) — 성별 / 디바이스·플랫폼 / 로그인여부 로 분리
   var _MOWEB={prop:"device",op:"contains",values:["Android","iOS","Apple iPhone","Samsung Phone"]};
   var GENDER_SEG=[
     {n:"전체",c:CRAWLER},
@@ -340,57 +331,22 @@
   var NAV_EV=[["view_exhibition_home","기획전 홈"],["view_exhibition_detail","기획전 상세"],["view_category_home","카테고리 홈"],["view_category_detail","카테고리 상세"],["view_brand_home","브랜드 홈"],["view_brand_detail","브랜드 상세"],["view_ranking_tab","랭킹"]];
   var PROD_EV=[["view_product_detail","상품상세(PDP)"],["view_search_result","검색결과"],["click_product_in_search_result","검색→상품클릭"],["click_product_in_category_detail","카테고리→상품클릭"],["click_product_in_brand_detail","브랜드→상품클릭"]];
   function auErr(ids,e){ (Array.isArray(ids)?ids:[ids]).forEach(function(id){ if($(id)) $(id).innerHTML='<p style="color:#e8384f;font-size:12px">로드 실패: '+esc(e.message||e)+'</p>'; }); }
-  // 기간 전체 순유저 합계: seriesCollapsed 우선, 없으면 series 합산(폴백)
-  function collapsedAll(d,total){
-    var sc=d&&d.data&&d.data.seriesCollapsed, out=[];
-    for(var i=0;i<total;i++){
-      if(sc&&sc[i]&&sc[i][0]&&sc[i][0].value!=null) out.push(sc[i][0].value);
-      else { var s=((d.data||{}).series||[])[i]||[]; out.push(s.reduce(function(a,b){return a+(b||0);},0)); }
-    }
-    return out;
-  }
-  function gap(){ return new Promise(function(r){ setTimeout(r,150); }); }
-  // 세그먼트 통합(1 이벤트 × N 세그먼트 = N 시리즈) — 세그먼트는 원본 AU에서 10개 통합 검증됨
-  function segCall(event,segs,R){ return amp("events/segmentation",{e:[JSON.stringify(ev(event))],m:"uniques",i:R.i,start:R.s,end:R.e,s:segs.map(function(g){return JSON.stringify(g.c);})}); }
-  var ALLSEG=GENDER_SEG.concat(DEVICE_SEG).concat(LOGIN_SEG);   // 3+6+2=11 → 1쌍 호출로 3개 세그먼트 차트
-  function drawSeg(cur,cmp){
-    function nm(a){return a.map(function(x){return x.n;});}
-    vbar("c_au_gender",nm(GENDER_SEG),cur.slice(0,3),cmp.slice(0,3),true);
-    vbar("c_au_device",nm(DEVICE_SEG),cur.slice(3,9),cmp.slice(3,9),true);
-    vbar("c_au_login", nm(LOGIN_SEG), cur.slice(9,11),cmp.slice(9,11),true);
-  }
-  // ── 이벤트: 공개 segmentation은 1콜=1이벤트만 처리 → 이벤트별 1콜.
-  //    totals(합산 가능)로 합집합 기간을 한 번 조회해 조회·비교 기간을 각각 합산(콜 수 최소화).
-  function ymd(s){return s.replace(/-/g,'');}
-  function evTotalsCall(eventType,us,ue){ return amp("events/segmentation",{e:JSON.stringify(ev(eventType)),m:"totals",i:1,start:us,end:ue,s:JSON.stringify(CRAWLER)}); }
-  function sumRange(d,from,to){
-    var xs=(d.data&&d.data.xValues)||[], ser=((d.data&&d.data.series)||[])[0]||[], s=0;
-    for(var i=0;i<xs.length;i++){ var day=String(xs[i]).slice(0,10); if(day>=from&&day<=to) s+=(ser[i]||0); }
-    return s;
-  }
-  function loadEvChart(id,evs,cF,cT,mF,mT){
-    var us=ymd(cF<mF?cF:mF), ue=ymd(cT>mT?cT:mT);   // 합집합 기간
-    var cur=[], cmp=[], labels=evs.map(function(x){return x[1];});
-    var chain=Promise.resolve();
-    evs.forEach(function(x,idx){
-      chain=chain.then(function(){ return idx?gap():null; }).then(function(){ return evTotalsCall(x[0],us,ue); })
-        .then(function(d){ cur[idx]=sumRange(d,cF,cT); cmp[idx]=sumRange(d,mF,mT); });
-    });
-    return chain.then(function(){ vbar(id,labels,cur,cmp,true); }).catch(function(e){ auErr(id,e); });
-  }
-  // 세그먼트 2콜(순유저) + 이벤트 19콜(발생수, 이벤트당 1콜) · 150ms 간격 · '조회' 시에만
+  // 앰플리튜드 AU: 서버(amp-au)가 모든 호출을 병렬 처리 → 브라우저는 1콜만(빠름)
+  function nm(a){return a.map(function(x){return x.n;});}
+  function el(a){return a.map(function(x){return x[1];});}
   function loadAmpAU(){
     var f=$("date_from").value,t=$("date_to").value, cf=$("cmp_from").value,ct=$("cmp_to").value;
     var r=$("au_range"); if(r) r.textContent=(f===t?f:(f+"~"+t))+' vs 비교 '+(cf===ct?cf:(cf+"~"+ct));
-    var C=ampRange(), M=cmpRange();
-    return segCall("_active",ALLSEG,C).then(function(dc){
-        return gap().then(function(){return segCall("_active",ALLSEG,M);}).then(function(dm){
-          drawSeg(collapsedAll(dc,ALLSEG.length),collapsedAll(dm,ALLSEG.length));
-        });
-      }).catch(function(e){ auErr(["c_au_gender","c_au_device","c_au_login"],e); })
-      .then(gap).then(function(){ return loadEvChart("c_au_id",ID_EV,f,t,cf,ct); })
-      .then(gap).then(function(){ return loadEvChart("c_au_nav",NAV_EV,f,t,cf,ct); })
-      .then(gap).then(function(){ return loadEvChart("c_au_prod",PROD_EV,f,t,cf,ct); });
+    var ids=["c_au_gender","c_au_device","c_au_login","c_au_id","c_au_nav","c_au_prod"];
+    return window.MUSTIT.fn("amp-au",{curFrom:f,curTo:t,cmpFrom:cf,cmpTo:ct}).then(function(d){
+      if(!d||!d.ok) throw new Error((d&&d.error)||'실패');
+      vbar("c_au_gender",nm(GENDER_SEG),d.gender.cur,d.gender.cmp,true);
+      vbar("c_au_device",nm(DEVICE_SEG),d.device.cur,d.device.cmp,true);
+      vbar("c_au_login", nm(LOGIN_SEG), d.login.cur, d.login.cmp, true);
+      vbar("c_au_id",  el(ID_EV),  d.id.cur,  d.id.cmp,  true);
+      vbar("c_au_nav", el(NAV_EV), d.nav.cur, d.nav.cmp, true);
+      vbar("c_au_prod",el(PROD_EV),d.prod.cur,d.prod.cmp,true);
+    }).catch(function(e){ auErr(ids,e); });
   }
 
   function setupTopbar(){

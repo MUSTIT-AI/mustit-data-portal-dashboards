@@ -68,6 +68,11 @@
   a.plain:hover{text-decoration:underline}
   .recent-btn{font-family:inherit;font-size:11.5px;font-weight:700;padding:4px 9px;border:1px solid #d6d4ce;border-radius:6px;background:#fff;color:var(--sub);cursor:pointer;white-space:nowrap}
   .recent-btn:hover{border-color:var(--red);color:var(--red)}
+  td.img{padding:5px 8px !important}
+  .img-ph,.prod-img{display:inline-block;width:44px;height:44px;border-radius:6px;background:#eee;border:1px solid #e2e0da;vertical-align:middle}
+  .prod-img{object-fit:cover;cursor:pointer}
+  .imgpreview{position:fixed;display:none;width:260px;height:260px;border:1px solid #d6d4ce;border-radius:8px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,.22);background:#fff;z-index:1000;pointer-events:none}
+  .imgpreview img{width:100%;height:100%;object-fit:cover;display:block}
 
   .modal{display:none;position:fixed;inset:0;z-index:200;background:rgba(20,18,15,.4);align-items:center;justify-content:center;padding:24px}
   .modal.open{display:flex}
@@ -122,7 +127,7 @@
 </div>
 <p class="note">선택한 기간의 거래액(GMV) 기준 상품 Top 100이에요. 판매자를 가리지 않고 상품 단위로 합산해요. 브랜드·카테고리·연령대·성별·판매자ID로 필터링할 수 있어요. 카테고리는 대분류 → 중분류 → 소분류 순으로 좁혀지고, 상위를 고르면 하위 목록이 그에 맞게 줄어들어요(연령대·성별은 구매자 기준이며, 개인정보는 조회되지 않고 필터로만 쓰여요).<br>
 "이전기간 대비"는 선택한 기간과 동일한 길이의 바로 직전 기간과 비교한 순위 변동이에요.<br>
-※ 표본이 아니라 <b>기간 내 전체 주문</b>을 DB에서 집계해요(`dash_product_rank`). 12개월 조회도 1초 내외예요. 조회 기간은 최대 <b id="maxdaystxt">366</b>일(약 12개월)이에요. 상품 이미지는 이 대시보드에서는 제공하지 않아요(정적 사이트라 스크래핑 서버가 없어요).<br>
+※ 표본이 아니라 <b>기간 내 전체 주문</b>을 DB에서 집계해요(`dash_product_rank`). 12개월 조회도 1초 내외예요. 조회 기간은 최대 <b id="maxdaystxt">366</b>일(약 12개월)이에요. 상품 이미지는 머스트잇 Open API로 조회해요(실시간 값이라 지금 판매중이 아니면 없을 수 있어요).<br>
 <span id="statline"></span></p>
 <div class="err" id="err"></div>
 
@@ -130,12 +135,12 @@
   <div id="tablewrap">
     <table class="rank">
       <colgroup>
-        <col style="width:44px"><col style="width:70px"><col style="width:90px"><col style="width:300px">
+        <col style="width:44px"><col style="width:70px"><col style="width:56px"><col style="width:90px"><col style="width:300px">
         <col style="width:120px"><col style="width:90px"><col style="width:100px"><col style="width:100px">
         <col style="width:100px"><col style="width:100px"><col style="width:90px"><col style="width:110px"><col style="width:90px">
       </colgroup>
       <thead><tr>
-        <th>순위</th><th>이전기간<br>대비</th><th>상품번호</th><th class="l">상품명</th>
+        <th>순위</th><th>이전기간<br>대비</th><th>이미지</th><th>상품번호</th><th class="l">상품명</th>
         <th class="l">판매자</th><th>카탈로그<br>순위</th><th>카탈로그<br>상품수</th><th>판매가</th>
         <th>머스트잇<br>할인</th><th>판매자<br>할인</th><th>판매수량</th><th>거래금액</th><th>최근 7일</th>
       </tr></thead>
@@ -155,6 +160,7 @@
   </div>
 </div>
 
+<div class="imgpreview" id="imgpreview"></div>
 <div class="loading" id="loading">불러오는 중…</div>
 <div class="block" id="block">이 대시보드를 볼 권한이 없습니다. <a href="../index.html" style="color:var(--red);margin-left:6px">← 목록</a></div>
 
@@ -332,6 +338,7 @@ function renderTable(list){
     return '<tr>'+
       '<td>'+won(a.rank)+'</td>'+
       '<td>'+renderRankChange(a.rank_change)+'</td>'+
+      '<td class="img"><a href="'+url+'" target="_blank" rel="noopener"><span class="img-ph" data-pid="'+esc(a.product_id)+'"></span></a></td>'+
       '<td><a class="plain" href="'+url+'" target="_blank" rel="noopener">'+esc(a.product_id)+'</a></td>'+
       '<td class="l"><div class="name-meta">'+esc(renderMeta(a))+'</div><div class="name-title"><a class="plain" href="'+url+'" target="_blank" rel="noopener">'+esc(a.product_name)+'</a></div></td>'+
       '<td class="l">'+esc(a.seller_id||"")+'</td>'+
@@ -346,6 +353,60 @@ function renderTable(list){
     '</tr>';
   }).join("");
 }
+
+// ── 상품 이미지 (Open API 프록시, Edge Function) ──
+// itemNo -> imageUrl(string) | null(조회했지만 없음). 날짜를 바꿔도 같은 상품이면 재요청하지 않는다.
+var IMG_CACHE = {};
+function loadImages(list){
+  var need = [];
+  list.forEach(function(a){ if(!(a.product_id in IMG_CACHE)) need.push(a.product_id); });
+  if(!need.length){ paintImages(list); return; }
+  // 500건 제한(Open API 벌크 상한)에 맞춰 나눠 호출
+  var chunks = [];
+  for(var i=0;i<need.length;i+=500) chunks.push(need.slice(i,i+500));
+  Promise.all(chunks.map(function(c){
+    return window.MUSTIT.fn("product-images", {itemNos:c.join(",")}).catch(function(){ return {}; });
+  })).then(function(results){
+    results.forEach(function(m){
+      Object.keys(m||{}).forEach(function(k){ IMG_CACHE[k] = m[k]; });
+    });
+    need.forEach(function(pid){ if(!(pid in IMG_CACHE)) IMG_CACHE[pid]=null; }); // 실패분은 없음으로 확정(무한 재시도 방지)
+    paintImages(list);
+  });
+}
+function paintImages(list){
+  list.forEach(function(a){
+    var url = IMG_CACHE[a.product_id];
+    if(!url) return;
+    var el = document.querySelector('.img-ph[data-pid="'+CSS.escape(String(a.product_id))+'"]');
+    if(!el) return;
+    var img = document.createElement("img");
+    img.className="prod-img"; img.src=url; img.alt=""; img.loading="lazy";
+    el.replaceWith(img);
+  });
+}
+var imgPreview = document.getElementById("imgpreview");
+function positionPreview(x,y){
+  var margin=14, w=260, h=260;
+  var left=x+margin, top=y+margin;
+  if(left+w>window.innerWidth) left=x-w-margin;
+  if(top+h>window.innerHeight) top=y-h-margin;
+  imgPreview.style.left=Math.max(0,left)+"px"; imgPreview.style.top=Math.max(0,top)+"px";
+}
+$("tbody").addEventListener("mouseover", function(e){
+  var img=e.target.closest(".prod-img"); if(!img) return;
+  imgPreview.innerHTML='<img src="'+img.src+'" alt="">';
+  positionPreview(e.clientX,e.clientY); imgPreview.style.display="block";
+});
+$("tbody").addEventListener("mousemove", function(e){
+  if(imgPreview.style.display!=="block") return;
+  if(!e.target.closest(".prod-img")) return;
+  positionPreview(e.clientX,e.clientY);
+});
+$("tbody").addEventListener("mouseout", function(e){
+  if(!e.target.closest(".prod-img")) return;
+  imgPreview.style.display="none"; imgPreview.innerHTML="";
+});
 
 function setLoading(on){
   $("loading").classList.toggle("on", on);
@@ -395,6 +456,7 @@ function loadRanking(){
           a.rank_change = (pr!=null) ? (pr-a.rank) : null;
         });
         renderTable(cur);
+        loadImages(cur);
 
         var sec = ((new Date().getTime()-t0)/1000).toFixed(1);
         var msg = "상위 "+won(cur.length)+"개 · 서버 집계 "+sec+"초";

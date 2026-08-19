@@ -1,10 +1,12 @@
-// 상품 최대혜택가 조회 프록시 (Supabase Edge Function)
+// 상품 최대혜택가·재고 조회 프록시 (Supabase Edge Function)
 //
-// maxBenefitPrice(최대혜택가)는 머스트잇 Open API price-detail 엔드포인트의 실시간 값이라
-// 매일 동기화되는 mustit_products/mustit_catalogs 뷰에는 없다(그건 selling_price까지만 보관).
+// maxBenefitPrice(최대혜택가)·stock(재고)은 머스트잇 Open API price-detail 엔드포인트의
+// 실시간 값이라 매일 동기화되는 mustit_products/mustit_catalogs 뷰에는 없다(그건
+// selling_price까지만 보관, 재고는 있지만 하루 지연). 같은 응답에 stock도 들어있어서
+// 별도 호출 없이 함께 반환한다.
 // Open API는 client_secret + 비밀번호 2단계 인증이 필요한 진짜 비밀키를 써서 프런트에 직접
 // 넣을 수 없다. 이 함수가 서버측에서 대신 인증하고 값만 로그인한 사용자에게 돌려준다.
-// (인증 로직은 로컬 mustit-openapi-mcp/index.js, 이전 product-images 함수와 동일)
+// (인증 로직은 로컬 mustit-openapi-mcp/index.js, product-images 함수와 동일)
 //
 // 이미 openapi-orders 함수가 같은 Open API를 쓰고 있다면 시크릿은 이미 설정돼 있을 가능성이
 // 높다 — 없다면 아래를 한 번 설정:
@@ -14,7 +16,7 @@
 //   supabase functions deploy product-price --project-ref hhvmhtejmhhxksnldfmi
 //
 // 호출 (프론트): window.MUSTIT.fn("product-price", { itemNos: "123,456,789" })
-//   → { "123": 139000, "456": null, ... }  (null = 조회 실패/판매종료 등)
+//   → { "123": {maxBenefitPrice:139000, stock:5}, "456": null, ... }  (null = 조회 실패/판매종료 등)
 
 const BASE_URL = "https://api.mustit.co.kr";
 const CLIENT_ID = Deno.env.get("MUSTIT_CLIENT_ID") ?? "";
@@ -105,9 +107,12 @@ Deno.serve(async (req: Request) => {
       throw new Error(body.resultMessage ?? `HTTP ${res.status}`);
     }
 
-    const out: Record<string, number | null> = {};
+    const out: Record<string, { maxBenefitPrice: number | null; stock: number | null } | null> = {};
     for (const item of body.resultData ?? []) {
-      out[String(item.itemNo)] = item.maxBenefitPrice ?? null;
+      out[String(item.itemNo)] = {
+        maxBenefitPrice: item.maxBenefitPrice ?? null,
+        stock: item.stock ?? null,
+      };
     }
     return new Response(JSON.stringify(out), {
       headers: { ...CORS_HEADERS, "Content-Type": "application/json" },

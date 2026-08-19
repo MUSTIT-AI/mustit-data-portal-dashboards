@@ -74,6 +74,7 @@
   <div id="cmpfull" style="font-size:12px;color:#6b6a66;margin:0 0 8px"></div>
   <div class="kpis" id="kpis"></div>
   <div class="card"><h3>시간대별 거래액 추이</h3><div class="chart" id="c_hourly" style="height:280px"></div></div>
+  <div class="card"><h3>대분류 · 중분류별 <span class="muted" id="catback"></span></h3><div class="chart" id="c_cat" style="height:300px"></div></div>
   <div class="grid4">
     <div class="card"><h3>결제수단별</h3><div class="chart" id="c_pay"></div></div>
     <div class="card"><h3>쿠폰·할인별</h3><div class="chart" id="c_coupon"></div></div>
@@ -181,6 +182,22 @@
             cur:rows.map(function(r){return r.v;}), cmp:rows.map(function(r){return r.cmp||0;})};
   }
 
+  // 대분류·중분류 드릴다운
+  var CAT=null, catEl=null;
+  function renderCatBars(cats,cur,cmp,drilled){
+    if(!catEl){ catEl=echarts.init($("c_cat")); window.addEventListener("resize",function(){catEl.resize();}); }
+    catEl.setOption({grid:{left:48,right:10,top:32,bottom:78},tooltip:{trigger:"axis",valueFormatter:function(v){return won(v);}},
+      legend:{top:0,right:0,itemWidth:10,itemHeight:8,textStyle:{fontSize:10}},
+      xAxis:{type:"category",data:cats,axisTick:{show:false},axisLine:{lineStyle:{color:"#ddd"}},axisLabel:{fontSize:9,color:"#777",interval:0,rotate:55}},
+      yAxis:{type:"value",axisLabel:{fontSize:9,color:"#999",formatter:fmtAxis},splitLine:{lineStyle:{color:"#eee"}}},
+      series:[{name:"조회",type:"bar",data:cur,itemStyle:{color:RED},barMaxWidth:40,cursor:drilled?"default":"pointer",label:{show:true,position:"top",fontSize:9,color:"#c8102e",formatter:labFmt}},
+              {name:"비교",type:"bar",data:cmp,itemStyle:{color:BLUE},barMaxWidth:40,label:{show:true,position:"top",fontSize:9,color:"#7a8bbf",formatter:labFmt}}]}, true);
+    catEl.off("click");
+    if(!drilled) catEl.on("click", function(p){ if(p.name && CAT.catChildren[p.name]) drawCatM(p.name); });
+  }
+  function drawCatL(){ var r=(CAT.catL)||[]; renderCatBars(r.map(function(x){return x.k;}),r.map(function(x){return x.v;}),r.map(function(x){return x.cmp;}),false); $("catback").textContent="(대분류 클릭 → 중분류)"; }
+  function drawCatM(l){ var r=(CAT.catChildren[l])||[]; renderCatBars(r.map(function(x){return x.k;}),r.map(function(x){return x.v;}),r.map(function(x){return x.cmp;}),true); $("catback").innerHTML='<a href="#" id="catbacklink" style="color:#2f6fe8;text-decoration:none">← 전체</a> · '+esc(l); var b=document.getElementById("catbacklink"); if(b) b.onclick=function(e){e.preventDefault();drawCatL();}; }
+
   function refresh(){
     $("loading").classList.add("on");
     var cmp=document.querySelector('input[name=cmp]:checked').value;
@@ -194,6 +211,7 @@
       $("cmpfull").textContent='비교일('+d.cmpDate+') 전체 거래액: '+won(d.cmpFullGmv)+' 원';
       var hours=[];for(var h=0;h<24;h++)hours.push(String(h).padStart(2,'0'));
       vbar("c_hourly",hours,d.cur.hourly,d.cmp.hourly,false);
+      CAT={catL:d.catL||[],catChildren:d.catChildren||{}}; drawCatL();
       var p=pairMap(d.cur.payment,d.cmp.payment,PAYLBL); vbar("c_pay",p.cats,p.cur,p.cmp,true);
       var cp=pairMap(d.cur.coupons,d.cmp.coupons,null); vbar("c_coupon",cp.cats,cp.cur,cp.cmp,true);
       var tx=pairMap(d.cur.txn,d.cmp.txn,TXNLBL); vbar("c_txn",tx.cats,tx.cur,tx.cmp,false);

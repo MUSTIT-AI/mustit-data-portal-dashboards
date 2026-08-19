@@ -2,26 +2,18 @@
 //
 // maxBenefitPrice(최대혜택가)는 머스트잇 Open API price-detail 엔드포인트의 실시간 값이라
 // 매일 동기화되는 mustit_products/mustit_catalogs 뷰에는 없다(그건 selling_price까지만 보관).
-// Open API는 client_secret + 비밀번호 2단계 인증이 필요한 진짜 비밀키를 써서 프런트에 직접
-// 넣을 수 없다. 이 함수가 서버측에서 대신 인증하고 값만 로그인한 사용자에게 돌려준다.
-// (인증 로직은 로컬 mustit-openapi-mcp/index.js, 이전 product-images 함수와 동일)
+// 이 함수가 서버측에서 인증하고 값만 로그인한 사용자에게 돌려준다.
 //
-// 이미 openapi-orders 함수가 같은 Open API를 쓰고 있다면 시크릿은 이미 설정돼 있을 가능성이
-// 높다 — 없다면 아래를 한 번 설정:
-//   supabase secrets set --project-ref hhvmhtejmhhxksnldfmi \
-//     MUSTIT_CLIENT_ID=xxx MUSTIT_CLIENT_SECRET=xxx OPENAPI_USERNAME=mustitapi OPENAPI_PASSWORD=xxx
-// 배포:
-//   supabase functions deploy product-price --project-ref hhvmhtejmhhxksnldfmi
+// 자격증명은 openapi-orders / openapi-daily-sync 와 동일하게 Vault(get_openapi_creds RPC)에서
+// 읽는다 — Edge Function 시크릿을 별도로 등록할 필요가 없다(토큰 캐싱 포함, 2단계 인증).
 //
+// verify_jwt=true 로 배포 → 로그인한 사용자만 호출 가능.
 // 호출 (프론트): window.MUSTIT.fn("product-price", { itemNos: "123,456,789" })
 //   → { "123": 139000, "456": null, ... }  (null = 조회 실패/판매종료 등)
 
 const BASE_URL = "https://api.mustit.co.kr";
-const CLIENT_ID = Deno.env.get("MUSTIT_CLIENT_ID") ?? "";
-const CLIENT_SECRET = Deno.env.get("MUSTIT_CLIENT_SECRET") ?? "";
-const USERNAME = Deno.env.get("OPENAPI_USERNAME") ?? "mustitapi";
-const PASSWORD = Deno.env.get("OPENAPI_PASSWORD") ?? "";
-const BASIC = btoa(`${CLIENT_ID}:${CLIENT_SECRET}`);
+const SB = Deno.env.get("SUPABASE_URL") ?? "";
+const SK = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 
 const MAX_BULK_IDS = 500;
 
@@ -33,30 +25,41 @@ interface CachedToken {
 let cachedToken: CachedToken | null = null;
 let tokenInFlight: Promise<string> | null = null;
 
+// Vault에 보관된 Open API 자격증명 조회 (service_role 전용 RPC)
+async function creds(): Promise<{ basic: string; username: string; password: string }> {
+  const r = await fetch(`${SB}/rest/v1/rpc/get_openapi_creds`, {
+    method: "POST",
+    headers: { apikey: SK, Authorization: `Bearer ${SK}`, "Content-Type": "application/json" },
+    body: "{}",
+  });
+  if (!r.ok) throw new Error(`자격증명 조회 실패 (get_openapi_creds HTTP ${r.status})`);
+  return await r.json();
+}
+
 async function postToken(authHeader: string, body: unknown) {
   const res = await fetch(`${BASE_URL}/auth/v1/token`, {
     method: "POST",
     headers: { Authorization: authHeader, "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`토큰 발급 실패 (HTTP ${res.status}) — 시크릿(MUSTIT_CLIENT_ID/SECRET, OPENAPI_USERNAME/PASSWORD)을 확인하세요.`);
+  if (!res.ok) throw new Error(`토큰 발급 실패 (HTTP ${res.status})`);
   return res.json();
 }
 
 async function issueToken(): Promise<CachedToken> {
-  const guest = await postToken(`Basic ${BASIC}`, { grant_type: "client_credentials" });
+  const c = await creds();
+  const basicHeader = String(c.basic).includes(":") ? btoa(c.basic) : c.basic;
+  const guest = await postToken(`Basic ${basicHeader}`, { grant_type: "client_credentials" });
   const final = await postToken(`Bearer ${guest.access_token}`, {
     grant_type: "password",
-    username: USERNAME,
-    password: PASSWORD,
+    username: c.username,
+    password: c.password,
   });
   return { accessToken: final.access_token, expiresAt: Date.now() + (final.expires_in - 300) * 1000 };
 }
 
 async function getAccessToken(): Promise<string> {
-  if (!CLIENT_ID || !PASSWORD) {
-    throw new Error("서버에 OPEN API 자격증명이 설정되어 있지 않습니다 (Supabase 시크릿 확인).");
-  }
+  if (!SB || !SK) throw new Error("서버 환경(SUPABASE_URL/SERVICE_ROLE_KEY) 미설정");
   if (cachedToken && cachedToken.expiresAt > Date.now()) return cachedToken.accessToken;
   if (!tokenInFlight) {
     tokenInFlight = issueToken()
@@ -81,8 +84,7 @@ Deno.serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS_HEADERS });
 
   try {
-    // Supabase 플랫폼이 이 함수 호출 자체에 대해 Authorization JWT 검증을 이미 강제한다
-    // (프로젝트 기본 설정 기준 로그인 필수) — 별도 인가 로직 없이 진행.
+    // Supabase 플랫폼이 verify_jwt=true 로 호출 인가(로그인 필수)를 강제한다.
     const payload = await req.json().catch(() => ({}));
     const raw = String(payload.itemNos ?? "");
     const ids = raw

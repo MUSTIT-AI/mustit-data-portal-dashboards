@@ -82,7 +82,17 @@
   </div>
   <div class="fltrs" id="filters"></div>
   <button class="gobtn" id="go">조회</button>
+  <button class="gobtn" id="ai" style="background:#111;color:#fff" title="현재 화면 데이터로 AI 인사이트">🤖 AI 인사이트</button>
   <div class="proj"><div class="l" id="proj_l">예상 마감 거래액</div><div class="v" id="proj_v">–</div><div id="proj_f" style="font-size:10px;color:#a7a49c;margin-top:2px"></div></div>
+</div>
+<div id="ai-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;padding:40px 16px;overflow:auto" onclick="if(event.target===this)this.style.display='none'">
+  <div style="max-width:760px;margin:0 auto;background:#fff;border-radius:14px;padding:22px 26px;box-shadow:0 12px 48px rgba(0,0,0,.25)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <b style="font-size:16px">🤖 AI 인사이트 <span style="font-size:11px;color:#a7a49c;font-weight:400">gpt-5.5</span></b>
+      <button onclick="document.getElementById('ai-modal').style.display='none'" style="border:0;background:none;font-size:20px;cursor:pointer;color:#999">✕</button>
+    </div>
+    <div id="ai-body" style="font-size:14px;line-height:1.75;color:#1c1b19"></div>
+  </div>
 </div>
 <div class="wrap">
   <div id="cmpfull" style="font-size:12px;color:#6b6a66;margin:0 0 8px"></div>
@@ -143,6 +153,7 @@
     [].forEach.call(document.querySelectorAll('input[name=cmp]'),function(r){r.onchange=function(){applyNday(Number(r.value));};});
     $("swap").onclick=function(){var a=$("date_from").value,b=$("date_to").value; $("date_from").value=$("cmp_from").value; $("date_to").value=$("cmp_to").value; $("cmp_from").value=a; $("cmp_to").value=b; clearN();};
     $("go").onclick=function(){ refresh(); };
+    $("ai").onclick=aiInsight;
   }
   var PAYLBL={CARD:"카드",EXTERNAL:"외부결제",NAVER_PAY:"네이버페이",KAKAO_PAY:"카카오페이",TOSS_PAY:"토스",SAMSUNG_PAY:"삼성페이",EASY_BANK:"간편계좌",VBANK:"무통장",PAYCO:"페이코"};
   var TXNLBL={NEW:"신규구매",FIRST:"첫구매",NEW_PURCHASE:"신규구매",REPURCHASE:"재구매"};
@@ -248,6 +259,7 @@
     loadAmpAU();  // 앰플리튜드 AU도 상단 조회기간을 따라 갱신
     window.MUSTIT.fn("openapi-orders",{curFrom:$("date_from").value,curTo:$("date_to").value,cmpFrom:$("cmp_from").value,cmpTo:$("cmp_to").value,filters:getFilters()}).then(function(d){
       if(!d.ok) throw new Error(d.error||'실패');
+      LAST=d;
       if(d.options) buildFilters(d.options);
       renderKPI(d);
       $("proj_v").textContent=won(d.projected)+' 원';
@@ -268,6 +280,30 @@
       $("brandcov").textContent=d.brandCoverage!=null?('· 매칭 '+Math.round(d.brandCoverage*100)+'%'):'';
     }).catch(function(e){ $("kpis").innerHTML='<div class="kpi"><div class="l">오류</div><div class="v" style="font-size:12px;color:#e8384f">'+esc(e.message)+'</div></div>'; })
       .finally(function(){ $("loading").classList.remove("on"); });
+  }
+
+  // ───────────── AI 인사이트 (ai-insight Edge Function · gpt-5.5) ─────────────
+  var LAST=null;
+  function aiData(d){
+    var pick=function(o){return o?{gmv:o.gmv,cnt:o.cnt,aov:o.aov,payment:o.payment,shipping:o.shipping,txn:o.txn,business:o.business,coupons:o.coupons}:null;};
+    return { 조회기간:$("date_from").value+'~'+$("date_to").value, 비교기간:$("cmp_from").value+'~'+$("cmp_to").value,
+      예상마감거래액:d.projected, 비교기간전체거래액:d.cmpFullGmv,
+      조회:pick(d.cur), 비교:pick(d.cmp),
+      브랜드Top:(d.brandTop||[]).slice(0,10), 판매자Top:(d.cur&&d.cur.sellerTop||[]).slice(0,10), 상품Top:(d.cur&&d.cur.itemTop||[]).slice(0,10) };
+  }
+  function mdLite(s){ return esc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/^\s*[-*] /gm,'• ').replace(/\n/g,'<br>'); }
+  function showAi(html){ $("ai-body").innerHTML=html; $("ai-modal").style.display='block'; }
+  function aiInsight(){
+    if(!LAST){ alert('먼저 [조회]로 데이터를 불러오세요.'); return; }
+    var btn=$("ai"), ot=btn.textContent; btn.disabled=true; btn.textContent='분석 중…';
+    showAi('<div style="color:#6b6a66">gpt-5.5로 분석 중입니다… (약 15초)</div>');
+    window.MUSTIT.fn('ai-insight',{
+      context:'머스트잇 실시간 주문 현황 대시보드(거래액=GMV). 조회기간 '+$("date_from").value+'~'+$("date_to").value+' vs 비교기간 '+$("cmp_from").value+'~'+$("cmp_to").value,
+      data:aiData(LAST),
+      question:'조회 vs 비교기간 핵심 변화, 이상징후, 실행 제안을 뽑아줘.'
+    }).then(function(r){ if(r.error) throw new Error(r.error); showAi(mdLite(r.insight||'(빈 응답)')+'<div style="margin-top:14px;font-size:11px;color:#a7a49c">모델 '+esc(r.model||'')+' · '+Math.round((r.ms||0)/1000)+'초</div>'); })
+     .catch(function(e){ showAi('<div style="color:#e8384f">오류: '+esc(e.message)+'</div>'); })
+     .finally(function(){ btn.disabled=false; btn.textContent=ot; });
   }
   // ───────────── 앰플리튜드 AU (방문자) · 상단 조회/비교기간 참조 ─────────────
   // 조회·비교기간의 기간 전체 순유저(uniques)를 그룹막대(조회=빨강 · 비교=파랑)로 비교

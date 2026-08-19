@@ -34,7 +34,7 @@
   .ms .opt.all{font-weight:700}.ms .msdiv{border-top:1px solid #eee;margin:3px 0}
   .proj{margin-left:auto;text-align:right}
   .proj .l{font-size:11px;color:var(--sub)}.proj .v{font-size:20px;font-weight:800;color:var(--red)}
-  .wrap{max-width:1400px;margin:0 auto;padding:14px 16px}
+  .wrap{max-width:100%;margin:0;padding:14px 20px}
   .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:12px}
   .kpi{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 16px}
   .kpi .l{font-size:12px;color:var(--sub);font-weight:600;margin-bottom:8px}
@@ -67,7 +67,7 @@
     <div class="cmp"><label><input type="radio" name="cmp" value="1">1일</label><label><input type="radio" name="cmp" value="7" checked>7일</label></div>
   </div>
   <div class="fltrs" id="filters"></div>
-  <div class="proj"><div class="l" id="proj_l">예상 마감 거래액</div><div class="v" id="proj_v">–</div><div id="proj_f" style="font-size:10px;color:#a7a49c;margin-top:2px"></div></div>
+  <div class="proj"><div class="l" id="proj_l">예상 마감 거래액</div><div class="v" id="proj_v">–</div><div id="proj_f" style="font-size:10px;color:#a7a49c;margin-top:2px"></div><div id="cmpfull" style="font-size:11px;color:#6b6a66;margin-top:4px"></div></div>
 </div>
 <div class="wrap">
   <div class="kpis" id="kpis"></div>
@@ -186,6 +186,7 @@
       $("proj_v").textContent=won(d.projected)+' 원';
       $("proj_l").textContent=d.isToday?'예상 마감 거래액':'거래액(마감)';
       $("proj_f").textContent=d.isToday?'비교일 전체 × (현재 ÷ 비교일 동시각)':'';
+      $("cmpfull").textContent='비교일('+d.cmpDate+') 전체 거래액: '+won(d.cmpFullGmv)+' 원';
       var hours=[];for(var h=0;h<24;h++)hours.push(String(h).padStart(2,'0'));
       vbar("c_hourly",hours,d.cur.hourly,d.cmp.hourly,false);
       var p=pairMap(d.cur.payment,d.cmp.payment,PAYLBL); vbar("c_pay",p.cats,p.cur,p.cmp,true);

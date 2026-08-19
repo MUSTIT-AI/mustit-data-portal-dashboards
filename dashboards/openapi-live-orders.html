@@ -112,10 +112,8 @@
     <div class="card"><h3>로그인 여부별 AU</h3><div class="chart" id="c_au_login" style="height:280px"></div></div>
   </div>
   <div class="card"><h3>디바이스 · 플랫폼별 AU</h3><div class="chart" id="c_au_device" style="height:300px"></div></div>
-  <div class="grid2">
-    <div class="card"><h3>식별 (로그인 · 가입 · 찜)</h3><div class="chart" id="c_au_id" style="height:300px"></div></div>
-    <div class="card"><h3>탐색 지면 (기획전 · 카테고리 · 브랜드 · 랭킹)</h3><div class="chart" id="c_au_nav" style="height:300px"></div></div>
-  </div>
+  <div class="card"><h3>식별 (로그인 · 가입 · 찜)</h3><div class="chart" id="c_au_id" style="height:300px"></div></div>
+  <div class="card"><h3>탐색 지면 (기획전 · 카테고리 · 브랜드 · 랭킹)</h3><div class="chart" id="c_au_nav" style="height:300px"></div></div>
   <div class="card"><h3>상품 관심 (PDP · 검색 · 상품클릭)</h3><div class="chart" id="c_au_prod" style="height:300px"></div></div>
   <p class="muted" style="margin-top:8px">원본: Amplitude 「AU - 핵심 지표 모니터링 (GP)」 · 완료된 주는 원본과 동일, 진행 중인 최신 주는 집계 갱신 중이라 변동될 수 있습니다.</p>
 </div>
@@ -300,45 +298,46 @@
   var ID_EV=[["view_login","로그인 탐색"],["complete_login","로그인 완료"],["view_signup","가입 탐색"],["complete_signup","가입 완료"],["view_mypage","마이페이지"],["view_wish","찜 탐색"],["add_to_wish","찜 담기"]];
   var NAV_EV=[["view_exhibition_home","기획전 홈"],["view_exhibition_detail","기획전 상세"],["view_category_home","카테고리 홈"],["view_category_detail","카테고리 상세"],["view_brand_home","브랜드 홈"],["view_brand_detail","브랜드 상세"],["view_ranking_tab","랭킹"]];
   var PROD_EV=[["view_product_detail","상품상세(PDP)"],["view_search_result","검색결과"],["click_product_in_search_result","검색→상품클릭"],["click_product_in_category_detail","카테고리→상품클릭"],["click_product_in_brand_detail","브랜드→상품클릭"]];
-  function auErr(id,e){ $(id).innerHTML='<p style="color:#e8384f;font-size:12px">로드 실패: '+esc(e.message||e)+'</p>'; }
+  function auErr(ids,e){ (Array.isArray(ids)?ids:[ids]).forEach(function(id){ if($(id)) $(id).innerHTML='<p style="color:#e8384f;font-size:12px">로드 실패: '+esc(e.message||e)+'</p>'; }); }
   // 기간 전체 순유저 합계: seriesCollapsed 우선, 없으면 series 합산(폴백)
-  function collapsed(d,n){
+  function collapsedAll(d,total){
     var sc=d&&d.data&&d.data.seriesCollapsed, out=[];
-    for(var i=0;i<n;i++){
+    for(var i=0;i<total;i++){
       if(sc&&sc[i]&&sc[i][0]&&sc[i][0].value!=null) out.push(sc[i][0].value);
       else { var s=((d.data||{}).series||[])[i]||[]; out.push(s.reduce(function(a,b){return a+(b||0);},0)); }
     }
     return out;
   }
+  function gap(){ return new Promise(function(r){ setTimeout(r,150); }); }
+  // 세그먼트 통합(1 이벤트 × N 세그먼트 = N 시리즈) — 세그먼트는 원본 AU에서 10개 통합 검증됨
   function segCall(event,segs,R){ return amp("events/segmentation",{e:[JSON.stringify(ev(event))],m:"uniques",i:R.i,start:R.s,end:R.e,s:segs.map(function(g){return JSON.stringify(g.c);})}); }
+  // 이벤트는 차트별(≤7개)로 안전하게 호출(N 이벤트 × 1 세그먼트 = N 시리즈)
   function evCall(evs,R){ return amp("events/segmentation",{e:evs.map(function(x){return JSON.stringify(ev(x[0]));}),m:"uniques",i:R.i,start:R.s,end:R.e,s:[JSON.stringify(CRAWLER)]}); }
-  // 조회기간·비교기간 두 번 호출 → 그룹막대(조회 vs 비교)
-  function loadSegBar(id,event,segs){
-    var C=ampRange(), M=cmpRange(), cats=segs.map(function(g){return g.n;});
-    return segCall(event,segs,C).then(function(dc){
-      return segCall(event,segs,M).then(function(dm){
-        vbar(id,cats,collapsed(dc,segs.length),collapsed(dm,segs.length),true);
-      });
-    }).catch(function(e){ auErr(id,e); });
+  var ALLSEG=GENDER_SEG.concat(DEVICE_SEG).concat(LOGIN_SEG);   // 3+6+2=11 → 1쌍 호출로 3개 차트
+  function drawSeg(cur,cmp){
+    function nm(a){return a.map(function(x){return x.n;});}
+    vbar("c_au_gender",nm(GENDER_SEG),cur.slice(0,3),cmp.slice(0,3),true);
+    vbar("c_au_device",nm(DEVICE_SEG),cur.slice(3,9),cmp.slice(3,9),true);
+    vbar("c_au_login", nm(LOGIN_SEG), cur.slice(9,11),cmp.slice(9,11),true);
   }
-  function loadEventsBar(id,evs){
-    var C=ampRange(), M=cmpRange(), cats=evs.map(function(x){return x[1];});
-    return evCall(evs,C).then(function(dc){
-      return evCall(evs,M).then(function(dm){
-        vbar(id,cats,collapsed(dc,evs.length),collapsed(dm,evs.length),true);
-      });
-    }).catch(function(e){ auErr(id,e); });
+  function loadEvPair(id,evs,C,M){
+    return evCall(evs,C).then(function(dc){ return gap().then(function(){return evCall(evs,M);}).then(function(dm){
+      vbar(id,evs.map(function(x){return x[1];}),collapsedAll(dc,evs.length),collapsedAll(dm,evs.length),true);
+    }); }).catch(function(e){ auErr(id,e); });
   }
-  // 순차 호출(동시 호출 시 Amplitude 429 방지). 프록시가 429 자동 재시도.
+  // 총 8회(세그 2 + 이벤트 3차트×2), 150ms 간격 순차 → Amplitude 429 방지
   function loadAmpAU(){
     var f=$("date_from").value,t=$("date_to").value, cf=$("cmp_from").value,ct=$("cmp_to").value;
     var r=$("au_range"); if(r) r.textContent=(f===t?f:(f+"~"+t))+' vs 비교 '+(cf===ct?cf:(cf+"~"+ct));
-    return loadSegBar("c_au_gender","_active",GENDER_SEG)
-      .then(function(){return loadSegBar("c_au_login","_active",LOGIN_SEG);})
-      .then(function(){return loadSegBar("c_au_device","_active",DEVICE_SEG);})
-      .then(function(){return loadEventsBar("c_au_id",ID_EV);})
-      .then(function(){return loadEventsBar("c_au_nav",NAV_EV);})
-      .then(function(){return loadEventsBar("c_au_prod",PROD_EV);});
+    var C=ampRange(), M=cmpRange();
+    return segCall("_active",ALLSEG,C).then(function(dc){
+        return gap().then(function(){return segCall("_active",ALLSEG,M);}).then(function(dm){
+          drawSeg(collapsedAll(dc,ALLSEG.length),collapsedAll(dm,ALLSEG.length));
+        });
+      }).catch(function(e){ auErr(["c_au_gender","c_au_device","c_au_login"],e); })
+      .then(gap).then(function(){ return loadEvPair("c_au_id",ID_EV,C,M); })
+      .then(gap).then(function(){ return loadEvPair("c_au_nav",NAV_EV,C,M); })
+      .then(gap).then(function(){ return loadEvPair("c_au_prod",PROD_EV,C,M); });
   }
 
   function setupTopbar(){

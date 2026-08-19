@@ -97,8 +97,8 @@
   </div>
   <p class="muted">머스트잇 OpenAPI 실시간 주문 조회 · 거래액=GMV · 브랜드는 상품마스터(<code>mustit_products</code>) 조인(매칭분만). 디바이스 구분은 주문 API에 없어 제외. 날짜·필터 변경 시 갱신(자동 새로고침 없음).</p>
 
-  <h2 class="sechd">📈 앰플리튜드 AU (방문자) · 최근 12주</h2>
-  <p class="muted" style="margin:0 0 12px">Live_real_MUSTIT 실데이터 · South Korea · 크롤러 제외 · 주간 순유저(uniques). 위 조회/비교 기간과 무관하게 항상 최근 12주 기준.</p>
+  <h2 class="sechd">📈 앰플리튜드 AU (방문자) · <span id="au_range">조회기간</span></h2>
+  <p class="muted" style="margin:0 0 12px">Live_real_MUSTIT 실데이터 · South Korea · 크롤러 제외 · 순유저(uniques) · <b>상단 조회기간을 그대로 참조</b>(28일 이상 주간, 미만 일간 집계). ※ 상단 필터(결제수단·배송·신규재구매·유형)는 주문 API 전용이라 AU엔 미적용.</p>
   <div class="card"><h3>AU 주요 (세그먼트별 방문자)</h3><div class="chart" id="c_au_main" style="height:320px"></div></div>
   <div class="grid2">
     <div class="card"><h3>플랫폼 · 로그인별 AU</h3><div class="chart" id="c_au_plat" style="height:300px"></div></div>
@@ -231,6 +231,7 @@
 
   function refresh(){
     $("loading").classList.add("on");
+    loadAmpAU();  // 앰플리튜드 AU도 상단 조회기간을 따라 갱신
     window.MUSTIT.fn("openapi-orders",{curFrom:$("date_from").value,curTo:$("date_to").value,cmpFrom:$("cmp_from").value,cmpTo:$("cmp_to").value,filters:getFilters()}).then(function(d){
       if(!d.ok) throw new Error(d.error||'실패');
       if(d.options) buildFilters(d.options);
@@ -256,9 +257,12 @@
   }
   // ───────────── 앰플리튜드 AU (방문자) · 최근 12주 ─────────────
   var PAL=["#c8102e","#e0736f","#f0a39f","#2f80ed","#2fae8f","#7bc6b4","#9b8cf2","#c9bff5","#e8a33d","#bbbbbb"];
-  function afmt(d){return ""+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');}
-  function adaysAgo(n){var d=new Date();d.setDate(d.getDate()-n);return d;}
-  var AEND=afmt(new Date()), ASTART12=afmt(adaysAgo(84));
+  // 상단 조회기간을 그대로 참조. 기간 길이에 따라 일/주 간격 자동
+  function ampRange(){
+    var f=$("date_from").value, t=$("date_to").value;
+    var span=Math.round((new Date(t+"T00:00:00Z")-new Date(f+"T00:00:00Z"))/86400000)+1;
+    return {s:f.replace(/-/g,''), e:t.replace(/-/g,''), i:(span>=28?7:1)};
+  }
   var CF=[{subprop_type:"user",subprop_key:"country",subprop_op:"is",subprop_value:["South Korea"]}];
   function ev(t){return {event_type:t,filters:CF};}
   var CRAWLER=[{prop:"os",op:"does not contain",values:["yeti","bot","headless","bingbot","bingbot2","crawler"]}];
@@ -295,19 +299,21 @@
       legend:{type:"scroll",bottom:0,itemWidth:10,itemHeight:8,textStyle:{fontSize:10}},
       xAxis:{type:"category",data:cats,axisLabel:{fontSize:10,color:"#999"},axisLine:{lineStyle:{color:"#ddd"}}},
       yAxis:{type:"value",axisLabel:{fontSize:10,color:"#999",formatter:function(v){return v>=1000?(v/1000)+"k":v;}},splitLine:{lineStyle:{color:"#eee"}}},
-      series:series.map(function(s){return {name:s.name,type:"line",showSymbol:false,data:s.data};})});
+      series:series.map(function(s){return {name:s.name,type:"line",showSymbol:true,symbolSize:4,data:s.data};})});
     window.addEventListener("resize",function(){el.resize();});
   }
   function auErr(id,e){ $(id).innerHTML='<p style="color:#e8384f;font-size:12px">로드 실패: '+esc(e.message||e)+'</p>'; }
   function loadSeg(id,event,segs){
-    return amp("events/segmentation",{e:[JSON.stringify(ev(event))],m:"uniques",i:7,start:ASTART12,end:AEND,
+    var R=ampRange();
+    return amp("events/segmentation",{e:[JSON.stringify(ev(event))],m:"uniques",i:R.i,start:R.s,end:R.e,
       s:segs.map(function(g){return JSON.stringify(g.c);})}).then(function(d){
       var series=(d.data.series||[]).map(function(arr,i){return {name:(segs[i]||{}).n||("s"+i),data:arr};});
       aline(id,wkLabels(d.data.xValues),series);
     }).catch(function(e){ auErr(id,e); });
   }
   function loadEvents(id,evs){
-    return amp("events/segmentation",{e:evs.map(function(x){return JSON.stringify(ev(x[0]));}),m:"uniques",i:7,start:ASTART12,end:AEND,
+    var R=ampRange();
+    return amp("events/segmentation",{e:evs.map(function(x){return JSON.stringify(ev(x[0]));}),m:"uniques",i:R.i,start:R.s,end:R.e,
       s:[JSON.stringify(CRAWLER)]}).then(function(d){
       var series=(d.data.series||[]).map(function(arr,i){return {name:(evs[i]||[])[1]||("e"+i),data:arr};});
       aline(id,wkLabels(d.data.xValues),series);
@@ -315,6 +321,7 @@
   }
   // 순차 호출(동시 호출 시 Amplitude 429 방지). 프록시가 429 자동 재시도.
   function loadAmpAU(){
+    var f=$("date_from").value,t=$("date_to").value; var r=$("au_range"); if(r) r.textContent=(f===t?f:(f+" ~ "+t));
     return loadSeg("c_au_main","_active",AU_SEG)
       .then(function(){return loadSeg("c_au_plat","_active",PLAT_SEG);})
       .then(function(){return loadEvents("c_au_id",ID_EV);})
@@ -338,8 +345,7 @@
       setupTopbar();
       setDefaults();
       wireControls();
-      refresh();
-      loadAmpAU();  // 앰플리튜드 AU(최근 12주) — 주문 조회와 독립적으로 1회 로드
+      refresh();  // 주문 + 앰플리튜드 AU(상단 조회기간 공유) 함께 갱신
     }).catch(function(){ $("block").style.display="grid"; });
   });
 })();

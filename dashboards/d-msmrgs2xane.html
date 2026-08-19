@@ -128,7 +128,7 @@
 </div>
 <p class="note">선택한 기간의 거래액(GMV) 기준 상품 Top 100이에요. 판매자를 가리지 않고 상품 단위로 합산해요. 브랜드·카테고리·연령대·성별·판매자ID로 필터링할 수 있어요. 카테고리는 대분류 → 중분류 → 소분류 순으로 좁혀지고, 상위를 고르면 하위 목록이 그에 맞게 줄어들어요(연령대·성별은 구매자 기준이며, 개인정보는 조회되지 않고 필터로만 쓰여요).<br>
 "이전기간 대비"는 선택한 기간과 동일한 길이의 바로 직전 기간과 비교한 순위 변동이에요.<br>
-※ 표본이 아니라 <b>기간 내 전체 주문</b>을 DB에서 집계해요(`dash_product_rank`). 12개월 조회도 1초 내외예요. 조회 기간은 최대 <b id="maxdaystxt">366</b>일(약 12개월)이에요. 상품 이미지는 매일 08시 동기화되는 상품 마스터(`mustit_products`/`mustit_catalogs`)에서 가져와요(당일 등록/판매종료 상품은 없을 수 있어요).<br>
+※ 표본이 아니라 <b>기간 내 전체 주문</b>을 DB에서 집계해요(`dash_product_rank`). 12개월 조회도 1초 내외예요. 조회 기간은 최대 <b id="maxdaystxt">366</b>일(약 12개월)이에요. 상품 이미지·최대혜택가는 머스트잇 Open API로 실시간 조회해요(판매종료 등으로 없을 수 있어요).<br>
 <span id="statline"></span></p>
 <div class="err" id="err"></div>
 
@@ -356,47 +356,30 @@ function renderTable(list){
   }).join("");
 }
 
-// ── 상품 이미지 ──
-// mustit_products(item_no→catalog_id) → mustit_catalogs(catalog_id→main_image_url) 2단 조인.
-// 둘 다 매일 08시 동기화되는 비PII 공개 뷰라 키 없이 로그인 세션으로 바로 조회 가능(CLAUDE.md 참고).
+// ── 상품 이미지 (Open API 프록시, Edge Function) ──
+// mustit_products→mustit_catalogs 조인을 먼저 시도했으나, mustit_catalogs가 오래된
+// 카탈로그를 백필하지 않아 다수 누락됨을 확인(실측 54건 중 0건 매칭) — 실시간 API로 전환.
 // itemNo -> imageUrl(string) | null(조회했지만 없음). 날짜를 바꿔도 같은 상품이면 재요청하지 않는다.
 var IMG_CACHE = {};
 function loadImages(list){
   var need = [];
-  list.forEach(function(a){ if(!(a.product_id in IMG_CACHE)) need.push(Number(a.product_id)); });
+  list.forEach(function(a){ if(!(a.product_id in IMG_CACHE)) need.push(a.product_id); });
   if(!need.length){ paintImages(list); return; }
-  window.MUSTIT.client.from("mustit_products").select("item_no,catalog_id").in("item_no", need)
-    .then(function(res){
-      if(res.error) throw res.error;
-      console.log("[상품 이미지] mustit_products 조회:", need.length, "건 요청 →", (res.data||[]).length, "건 매칭", (res.data||[])[0]);
-      var catalogOf = {}, catalogIds = [];
-      (res.data||[]).forEach(function(r){
-        catalogOf[r.item_no] = r.catalog_id;
-        if(r.catalog_id!=null && catalogIds.indexOf(r.catalog_id)<0) catalogIds.push(r.catalog_id);
-      });
-      if(!catalogIds.length){
-        console.log("[상품 이미지] catalog_id를 하나도 못 찾음 — mustit_products 매칭 자체가 안 됐거나 catalog_id가 전부 null");
-        need.forEach(function(pid){ IMG_CACHE[pid]=null; });
-        paintImages(list); return;
-      }
-      return window.MUSTIT.client.from("mustit_catalogs").select("catalog_id,main_image_url,refine_image_url").in("catalog_id", catalogIds)
-        .then(function(res2){
-          if(res2.error) throw res2.error;
-          var imgOf = {};
-          (res2.data||[]).forEach(function(c){ imgOf[c.catalog_id] = c.main_image_url || c.refine_image_url || null; });
-          var withUrl = Object.keys(imgOf).filter(function(k){ return imgOf[k]; }).length;
-          console.log("[상품 이미지] mustit_catalogs 조회:", catalogIds.length, "개 카탈로그 →", (res2.data||[]).length, "건 매칭,", withUrl, "건에 URL 존재", (res2.data||[])[0]);
-          need.forEach(function(pid){
-            var cid = catalogOf[pid];
-            IMG_CACHE[pid] = (cid!=null && imgOf[cid]) ? imgOf[cid] : null;
-          });
-          paintImages(list);
-        });
-    }).catch(function(e){
-      console.error("[상품 이미지] mustit_products/mustit_catalogs 조회 실패:", e);
-      need.forEach(function(pid){ if(!(pid in IMG_CACHE)) IMG_CACHE[pid]=null; });
-      paintImages(list);
+  // 500건 제한(Open API 벌크 상한)에 맞춰 나눠 호출
+  var chunks = [];
+  for(var i=0;i<need.length;i+=500) chunks.push(need.slice(i,i+500));
+  Promise.all(chunks.map(function(c){
+    return window.MUSTIT.fn("product-images", {itemNos:c.join(",")}).catch(function(e){
+      console.error("[상품 이미지] product-images 함수 호출 실패:", e);
+      return {};
     });
+  })).then(function(results){
+    results.forEach(function(m){
+      Object.keys(m||{}).forEach(function(k){ IMG_CACHE[k] = m[k]; });
+    });
+    need.forEach(function(pid){ if(!(pid in IMG_CACHE)) IMG_CACHE[pid]=null; }); // 실패분은 없음으로 확정(무한 재시도 방지)
+    paintImages(list);
+  });
 }
 function paintImages(list){
   list.forEach(function(a){

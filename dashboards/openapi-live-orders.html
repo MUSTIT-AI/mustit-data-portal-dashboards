@@ -83,7 +83,7 @@
     <div class="card"><h3>브랜드별 Top 20 <span class="muted" id="brandcov"></span></h3><div class="chart" id="c_brand" style="height:360px"></div></div>
     <div class="card"><h3>상품별 Top 20</h3><div class="chart" id="c_item" style="height:360px"></div></div>
   </div>
-  <p class="muted">머스트잇 OpenAPI 실시간 주문 조회 · 거래액=GMV · 브랜드는 상품마스터(<code>mustit_products</code>) 조인(매칭분만). 디바이스 구분은 주문 API에 없어 제외. 자동 새로고침 3분.</p>
+  <p class="muted">머스트잇 OpenAPI 실시간 주문 조회 · 거래액=GMV · 브랜드는 상품마스터(<code>mustit_products</code>) 조인(매칭분만). 디바이스 구분은 주문 API에 없어 제외. 날짜·필터 변경 시 갱신(자동 새로고침 없음).</p>
 </div>
 <div class="loading" id="loading">불러오는 중…</div>
 <div class="block" id="block">이 대시보드를 볼 권한이 없습니다. <a href="../index.html" style="color:var(--red);margin-left:6px">← 목록</a></div>
@@ -221,7 +221,6 @@
       $("date").onchange=refresh;
       [].forEach.call(document.querySelectorAll('input[name=cmp]'),function(r){r.onchange=refresh;});
       refresh();
-      timer=setInterval(function(){ if($("date").value===kstToday()) refresh(); }, 180000);
     }).catch(function(){ $("block").style.display="grid"; });
   });
 })();

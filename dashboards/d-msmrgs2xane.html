@@ -368,13 +368,14 @@ function loadImages(list){
   window.MUSTIT.client.from("mustit_products").select("item_no,catalog_id").in("item_no", need)
     .then(function(res){
       if(res.error) throw res.error;
-      console.debug("[상품 이미지] mustit_products 조회:", need.length, "건 요청 →", (res.data||[]).length, "건 매칭");
+      console.log("[상품 이미지] mustit_products 조회:", need.length, "건 요청 →", (res.data||[]).length, "건 매칭", (res.data||[])[0]);
       var catalogOf = {}, catalogIds = [];
       (res.data||[]).forEach(function(r){
         catalogOf[r.item_no] = r.catalog_id;
         if(r.catalog_id!=null && catalogIds.indexOf(r.catalog_id)<0) catalogIds.push(r.catalog_id);
       });
       if(!catalogIds.length){
+        console.log("[상품 이미지] catalog_id를 하나도 못 찾음 — mustit_products 매칭 자체가 안 됐거나 catalog_id가 전부 null");
         need.forEach(function(pid){ IMG_CACHE[pid]=null; });
         paintImages(list); return;
       }
@@ -384,7 +385,7 @@ function loadImages(list){
           var imgOf = {};
           (res2.data||[]).forEach(function(c){ imgOf[c.catalog_id] = c.main_image_url || c.refine_image_url || null; });
           var withUrl = Object.keys(imgOf).filter(function(k){ return imgOf[k]; }).length;
-          console.debug("[상품 이미지] mustit_catalogs 조회:", catalogIds.length, "개 카탈로그 →", (res2.data||[]).length, "건 매칭,", withUrl, "건에 URL 존재");
+          console.log("[상품 이미지] mustit_catalogs 조회:", catalogIds.length, "개 카탈로그 →", (res2.data||[]).length, "건 매칭,", withUrl, "건에 URL 존재", (res2.data||[])[0]);
           need.forEach(function(pid){
             var cid = catalogOf[pid];
             IMG_CACHE[pid] = (cid!=null && imgOf[cid]) ? imgOf[cid] : null;

@@ -368,6 +368,7 @@ function loadImages(list){
   window.MUSTIT.client.from("mustit_products").select("item_no,catalog_id").in("item_no", need)
     .then(function(res){
       if(res.error) throw res.error;
+      console.debug("[상품 이미지] mustit_products 조회:", need.length, "건 요청 →", (res.data||[]).length, "건 매칭");
       var catalogOf = {}, catalogIds = [];
       (res.data||[]).forEach(function(r){
         catalogOf[r.item_no] = r.catalog_id;
@@ -382,13 +383,16 @@ function loadImages(list){
           if(res2.error) throw res2.error;
           var imgOf = {};
           (res2.data||[]).forEach(function(c){ imgOf[c.catalog_id] = c.main_image_url || c.refine_image_url || null; });
+          var withUrl = Object.keys(imgOf).filter(function(k){ return imgOf[k]; }).length;
+          console.debug("[상품 이미지] mustit_catalogs 조회:", catalogIds.length, "개 카탈로그 →", (res2.data||[]).length, "건 매칭,", withUrl, "건에 URL 존재");
           need.forEach(function(pid){
             var cid = catalogOf[pid];
             IMG_CACHE[pid] = (cid!=null && imgOf[cid]) ? imgOf[cid] : null;
           });
           paintImages(list);
         });
-    }).catch(function(){
+    }).catch(function(e){
+      console.error("[상품 이미지] mustit_products/mustit_catalogs 조회 실패:", e);
       need.forEach(function(pid){ if(!(pid in IMG_CACHE)) IMG_CACHE[pid]=null; });
       paintImages(list);
     });

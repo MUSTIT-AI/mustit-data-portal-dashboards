@@ -52,11 +52,13 @@
   .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px}
   .card h3{margin:0 0 8px;font-size:14px}
   .chart{width:100%;height:260px}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   .grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px}
   .grid4{display:grid;grid-template-columns:1fr 1fr 1fr 1fr;gap:12px}
   @media(max-width:1100px){.grid3,.grid4{grid-template-columns:1fr 1fr}}
-  @media(max-width:640px){.grid3,.grid4,.kpis{grid-template-columns:1fr}}
+  @media(max-width:640px){.grid2,.grid3,.grid4,.kpis{grid-template-columns:1fr}}
   .muted{font-size:11px;color:#a7a49c}
+  .sechd{font-size:15px;margin:24px 0 2px;border-top:2px solid var(--border);padding-top:18px}
   .loading{position:fixed;inset:0;background:rgba(255,255,255,.55);display:none;align-items:center;justify-content:center;z-index:80;font-weight:700;color:var(--red)}
   .loading.on{display:flex}
   .block{display:none;position:fixed;inset:0;background:var(--bg);z-index:80;place-items:center;text-align:center;color:var(--sub);font-family:system-ui}
@@ -94,6 +96,17 @@
     <div class="card"><h3>상품별 Top 20</h3><div class="chart" id="c_item" style="height:360px"></div></div>
   </div>
   <p class="muted">머스트잇 OpenAPI 실시간 주문 조회 · 거래액=GMV · 브랜드는 상품마스터(<code>mustit_products</code>) 조인(매칭분만). 디바이스 구분은 주문 API에 없어 제외. 날짜·필터 변경 시 갱신(자동 새로고침 없음).</p>
+
+  <h2 class="sechd">📈 앰플리튜드 AU (방문자) · 최근 12주</h2>
+  <p class="muted" style="margin:0 0 12px">Live_real_MUSTIT 실데이터 · South Korea · 크롤러 제외 · 주간 순유저(uniques). 위 조회/비교 기간과 무관하게 항상 최근 12주 기준.</p>
+  <div class="card"><h3>AU 주요 (세그먼트별 방문자)</h3><div class="chart" id="c_au_main" style="height:320px"></div></div>
+  <div class="grid2">
+    <div class="card"><h3>플랫폼 · 로그인별 AU</h3><div class="chart" id="c_au_plat" style="height:300px"></div></div>
+    <div class="card"><h3>식별 (로그인 · 가입 · 찜)</h3><div class="chart" id="c_au_id" style="height:300px"></div></div>
+    <div class="card"><h3>탐색 지면 (기획전 · 카테고리 · 브랜드 · 랭킹)</h3><div class="chart" id="c_au_nav" style="height:300px"></div></div>
+    <div class="card"><h3>상품 관심 (PDP · 검색 · 상품클릭)</h3><div class="chart" id="c_au_prod" style="height:300px"></div></div>
+  </div>
+  <p class="muted" style="margin-top:8px">원본: Amplitude 「AU - 핵심 지표 모니터링 (GP)」 · 완료된 주는 원본과 동일, 진행 중인 최신 주는 집계 갱신 중이라 변동될 수 있습니다.</p>
 </div>
 <div class="loading" id="loading">불러오는 중…</div>
 <div class="block" id="block">이 대시보드를 볼 권한이 없습니다. <a href="../index.html" style="color:var(--red);margin-left:6px">← 목록</a></div>
@@ -241,6 +254,74 @@
     }).catch(function(e){ $("kpis").innerHTML='<div class="kpi"><div class="l">오류</div><div class="v" style="font-size:12px;color:#e8384f">'+esc(e.message)+'</div></div>'; })
       .finally(function(){ $("loading").classList.remove("on"); });
   }
+  // ───────────── 앰플리튜드 AU (방문자) · 최근 12주 ─────────────
+  var PAL=["#c8102e","#e0736f","#f0a39f","#2f80ed","#2fae8f","#7bc6b4","#9b8cf2","#c9bff5","#e8a33d","#bbbbbb"];
+  function afmt(d){return ""+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');}
+  function adaysAgo(n){var d=new Date();d.setDate(d.getDate()-n);return d;}
+  var AEND=afmt(new Date()), ASTART12=afmt(adaysAgo(84));
+  var CF=[{subprop_type:"user",subprop_key:"country",subprop_op:"is",subprop_value:["South Korea"]}];
+  function ev(t){return {event_type:t,filters:CF};}
+  var CRAWLER=[{prop:"os",op:"does not contain",values:["yeti","bot","headless","bingbot","bingbot2","crawler"]}];
+  function amp(endpoint,params){ return window.MUSTIT.fn("amplitude-proxy",{endpoint:endpoint,params:params}).then(function(r){ return r.data; }); }
+  // 세그먼트 정의
+  var AU_SEG=[
+    {n:"0. 전체",c:CRAWLER},
+    {n:"0.1 남성",c:[{prop:"gp:gender",op:"is",values:["남성","MALE","M"]}]},
+    {n:"0.2 여성",c:[{prop:"gp:gender",op:"is",values:["여성","W"]}]},
+    {n:"1. APP",c:[{prop:"platform",op:"is",values:["iOS","Android"]}]},
+    {n:"2. WEB",c:[{prop:"platform",op:"is",values:["Web"]}]},
+    {n:"2-1. MO-Web",c:[{prop:"platform",op:"is",values:["Web"]},{prop:"os",op:"does not contain",values:["headless","bot","yeti","bingbot","bingbot2","crawler"]},{prop:"device",op:"contains",values:["Android","iOS","Apple iPhone","Samsung Phone"]}]},
+    {n:"2-2. PC",c:[{prop:"platform",op:"is",values:["Web"]},{prop:"os",op:"does not contain",values:["iOS","Android","Mobile","headless","yeti","bot","apple","samsung"]},{prop:"device",op:"does not contain",values:["Apple iPhone","Samsung Phone","iOS","Android","samsung","apple"]}]},
+    {n:"A-1. 로그인",c:[{prop:"user_id",op:"is not",values:["(none)"]},{prop:"gp:signup_date",op:"is not",values:["(none)"]}]},
+    {n:"A-2. 비로그인",c:[{prop:"user_id",op:"is",values:["(none)"]},{prop:"gp:signup_date",op:"is",values:["(none)"]}]}
+  ];
+  var PLAT_SEG=[
+    {n:"APP",c:[{prop:"platform",op:"is",values:["iOS","Android"]}]},
+    {n:"APP_iOS",c:[{prop:"platform",op:"is",values:["iOS"]}]},
+    {n:"APP_Android",c:[{prop:"platform",op:"is",values:["Android"]}]},
+    {n:"WEB",c:[{prop:"platform",op:"is",values:["Web"]}]},
+    {n:"MO-Web",c:[{prop:"platform",op:"is",values:["Web"]},{prop:"os",op:"does not contain",values:["headless","bot","yeti","bingbot","bingbot2","crawler"]},{prop:"device",op:"contains",values:["Android","iOS","Apple iPhone","Samsung Phone"]}]},
+    {n:"PC",c:[{prop:"platform",op:"is",values:["Web"]},{prop:"os",op:"does not contain",values:["iOS","Android","Mobile","headless","yeti","bot","apple","samsung"]},{prop:"device",op:"does not contain",values:["Apple iPhone","Samsung Phone","iOS","Android","samsung","apple"]}]},
+    {n:"로그인",c:[{prop:"user_id",op:"is not",values:["(none)"]},{prop:"gp:signup_date",op:"is not",values:["(none)"]}]},
+    {n:"비로그인",c:[{prop:"user_id",op:"is",values:["(none)"]},{prop:"gp:signup_date",op:"is",values:["(none)"]}]}
+  ];
+  var ID_EV=[["view_login","로그인 탐색"],["complete_login","로그인 완료"],["view_signup","가입 탐색"],["complete_signup","가입 완료"],["view_mypage","마이페이지"],["view_wish","찜 탐색"],["add_to_wish","찜 담기"]];
+  var NAV_EV=[["view_exhibition_home","기획전 홈"],["view_exhibition_detail","기획전 상세"],["view_category_home","카테고리 홈"],["view_category_detail","카테고리 상세"],["view_brand_home","브랜드 홈"],["view_brand_detail","브랜드 상세"],["view_ranking_tab","랭킹"]];
+  var PROD_EV=[["view_product_detail","상품상세(PDP)"],["view_search_result","검색결과"],["click_product_in_search_result","검색→상품클릭"],["click_product_in_category_detail","카테고리→상품클릭"],["click_product_in_brand_detail","브랜드→상품클릭"]];
+  function wkLabels(xv){return (xv||[]).map(function(s){return String(s).slice(5).replace("-","/");});}
+  function aline(id,cats,series){
+    var el=echarts.init($(id));
+    el.setOption({color:PAL,grid:{left:52,right:14,top:14,bottom:52},tooltip:{trigger:"axis"},
+      legend:{type:"scroll",bottom:0,itemWidth:10,itemHeight:8,textStyle:{fontSize:10}},
+      xAxis:{type:"category",data:cats,axisLabel:{fontSize:10,color:"#999"},axisLine:{lineStyle:{color:"#ddd"}}},
+      yAxis:{type:"value",axisLabel:{fontSize:10,color:"#999",formatter:function(v){return v>=1000?(v/1000)+"k":v;}},splitLine:{lineStyle:{color:"#eee"}}},
+      series:series.map(function(s){return {name:s.name,type:"line",showSymbol:false,data:s.data};})});
+    window.addEventListener("resize",function(){el.resize();});
+  }
+  function auErr(id,e){ $(id).innerHTML='<p style="color:#e8384f;font-size:12px">로드 실패: '+esc(e.message||e)+'</p>'; }
+  function loadSeg(id,event,segs){
+    return amp("events/segmentation",{e:[JSON.stringify(ev(event))],m:"uniques",i:7,start:ASTART12,end:AEND,
+      s:segs.map(function(g){return JSON.stringify(g.c);})}).then(function(d){
+      var series=(d.data.series||[]).map(function(arr,i){return {name:(segs[i]||{}).n||("s"+i),data:arr};});
+      aline(id,wkLabels(d.data.xValues),series);
+    }).catch(function(e){ auErr(id,e); });
+  }
+  function loadEvents(id,evs){
+    return amp("events/segmentation",{e:evs.map(function(x){return JSON.stringify(ev(x[0]));}),m:"uniques",i:7,start:ASTART12,end:AEND,
+      s:[JSON.stringify(CRAWLER)]}).then(function(d){
+      var series=(d.data.series||[]).map(function(arr,i){return {name:(evs[i]||[])[1]||("e"+i),data:arr};});
+      aline(id,wkLabels(d.data.xValues),series);
+    }).catch(function(e){ auErr(id,e); });
+  }
+  // 순차 호출(동시 호출 시 Amplitude 429 방지). 프록시가 429 자동 재시도.
+  function loadAmpAU(){
+    return loadSeg("c_au_main","_active",AU_SEG)
+      .then(function(){return loadSeg("c_au_plat","_active",PLAT_SEG);})
+      .then(function(){return loadEvents("c_au_id",ID_EV);})
+      .then(function(){return loadEvents("c_au_nav",NAV_EV);})
+      .then(function(){return loadEvents("c_au_prod",PROD_EV);});
+  }
+
   function setupTopbar(){
     window.MUSTIT.rpc("dash_list",{}).then(function(list){
       list=list||[]; var cur=list.filter(function(d){return d.file===FILE;})[0];
@@ -258,6 +339,7 @@
       setDefaults();
       wireControls();
       refresh();
+      loadAmpAU();  // 앰플리튜드 AU(최근 12주) — 주문 조회와 독립적으로 1회 로드
     }).catch(function(){ $("block").style.display="grid"; });
   });
 })();

@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
 <title>새 대시보드 · MUST IT</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../auth.js"></script>
@@ -86,7 +87,7 @@
           list=list||[];
           var cur=list.filter(function(d){return d.file===FILE;})[0];
           if(cur){
-            $("dashowner").textContent=(cur.title||FILE)+(cur.owner_name?(" · "+cur.owner_name):"");
+            $("dashowner").textContent=(cur.title||FILE)+(cur.owner_name?(" · "+cur.owner_name):""); document.title="Data Portal - "+(cur.title||FILE);
             if(cur.manage){ $("editname").style.display=""; $("editname").onclick=function(){ renameDash(cur.title||""); }; }
             var meEmail=((window.MUSTIT.user()&&window.MUSTIT.user().email)||"").toLowerCase();
             if(cur.owner_email && meEmail && String(cur.owner_email).toLowerCase()===meEmail){  // 삭제는 생성자(소유자)만

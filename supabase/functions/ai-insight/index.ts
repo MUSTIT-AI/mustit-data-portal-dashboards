@@ -43,11 +43,12 @@ Deno.serve(async (req: Request) => {
   try {
     const body: any = await req.json().catch(() => ({}));
 
-    // 이력 조회
+    // 이력 조회 (id 지정 시 단건 = 공유 URL용)
     if (body.history) {
+      const idq = body.id ? `&id=eq.${Number(body.id)}` : "";
       const dash = body.dashboard ? `&dashboard=eq.${encodeURIComponent(String(body.dashboard))}` : "";
-      const lim = Math.min(Number(body.limit) || 20, 100);
-      const r = await fetch(`${SB}/rest/v1/ai_insights?select=id,created_at,author,dashboard,params,question,insight,model&order=created_at.desc&limit=${lim}${dash}`, { headers: DBH });
+      const lim = Math.min(Number(body.limit) || 20, 200);
+      const r = await fetch(`${SB}/rest/v1/ai_insights?select=id,created_at,author,dashboard,params,question,insight,model&order=created_at.desc&limit=${lim}${dash}${idq}`, { headers: DBH });
       return json(200, { history: r.ok ? await r.json() : [] });
     }
 
@@ -81,18 +82,18 @@ Deno.serve(async (req: Request) => {
     if (!r.ok) return json(r.status, { error: j?.error?.message ?? `OpenAI HTTP ${r.status}`, model: useModel });
     const insight = j?.choices?.[0]?.message?.content ?? "";
 
-    // 이력 저장 (실패해도 결과 반환은 유지)
-    let saved = false;
+    // 이력 저장 (실패해도 결과 반환은 유지) · 저장 성공 시 id 반환(공유 URL용)
+    let saved = false; let insightId: number | null = null;
     try {
       const author = await userEmail(req);
       const sr = await fetch(`${SB}/rest/v1/ai_insights`, {
-        method: "POST", headers: { ...DBH, Prefer: "return=minimal" },
+        method: "POST", headers: { ...DBH, Prefer: "return=representation" },
         body: JSON.stringify({ author, dashboard: body.dashboard ?? null, params: body.params ?? null, question, insight, model: useModel }),
       });
-      saved = sr.ok;
+      if (sr.ok) { const row = await sr.json(); insightId = Array.isArray(row) && row[0] ? row[0].id : null; saved = true; }
     } catch { /* 저장 실패 무시 */ }
 
-    return json(200, { insight, model: useModel, ms: Date.now() - t0, saved });
+    return json(200, { insight, model: useModel, ms: Date.now() - t0, saved, id: insightId });
   } catch (e) {
     return json(500, { error: String((e as Error)?.message ?? e) });
   }

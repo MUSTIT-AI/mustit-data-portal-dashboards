@@ -305,24 +305,29 @@
       question:'조회 vs 비교기간 핵심 변화, 이상징후, 실행 제안을 뽑아줘.',
       dashboard:'openapi-live-orders',
       params:{조회:$("date_from").value+'~'+$("date_to").value, 비교:$("cmp_from").value+'~'+$("cmp_to").value, filters:getFilters()}
-    }).then(function(r){ if(r.error) throw new Error(r.error); showAi(mdLite(r.insight||'(빈 응답)')+'<div style="margin-top:14px;font-size:11px;color:#a7a49c">모델 '+esc(r.model||'')+' · '+Math.round((r.ms||0)/1000)+'초 · '+(r.saved?'이력 저장됨':'저장 안됨')+'</div>'); })
+    }).then(function(r){ if(r.error) throw new Error(r.error);
+      var sh=r.id?(' · <a href="../ai-history.html?id='+r.id+'" target="_blank" style="color:#c8102e;text-decoration:none">🔗 공유 링크</a>'):'';
+      showAi(mdLite(r.insight||'(빈 응답)')+'<div style="margin-top:14px;font-size:11px;color:#a7a49c">모델 '+esc(r.model||'')+' · '+Math.round((r.ms||0)/1000)+'초 · '+(r.saved?'이력 저장됨':'저장 안됨')+sh+'</div>'); })
      .catch(function(e){ showAi('<div style="color:#e8384f">오류: '+esc(e.message)+'</div>'); })
      .finally(function(){ btn.disabled=false; btn.textContent=ot; });
   }
+  var FLBL={paymentMethod:'결제수단',shippingType:'배송',transactionType:'거래구분',businessType:'비즈니스'};
+  function fmtP(p){ if(!p)return ''; var a=[]; if(p['조회'])a.push('조회 '+p['조회']); if(p['비교'])a.push('비교 '+p['비교']); var f=p.filters||{}; Object.keys(f).forEach(function(k){var v=f[k]; if(v&&v.length)a.push((FLBL[k]||k)+':'+v.join(','));}); return a.join(' · '); }
   function aiHistory(){
     showAi('<div style="color:#6b6a66">이력 불러오는 중…</div>');
     window.MUSTIT.fn('ai-insight',{history:true,dashboard:'openapi-live-orders',limit:20}).then(function(r){
       var list=r.history||[];
-      if(!list.length){ showAi('<div style="color:#6b6a66">저장된 인사이트가 없습니다. [🤖 AI 인사이트]로 먼저 생성하세요.</div>'); return; }
+      var top='<div style="font-size:12px;margin-bottom:10px"><a href="../ai-history.html" target="_blank" style="color:#c8102e;font-weight:700;text-decoration:none">🔗 전체 이력·공유 링크 페이지 →</a></div>';
+      if(!list.length){ showAi(top+'<div style="color:#6b6a66">저장된 인사이트가 없습니다. [🤖 AI 인사이트]로 먼저 생성하세요.</div>'); return; }
       var html=list.map(function(x){
         var dt=(x.created_at||'').replace('T',' ').slice(0,16);
-        var pr=x.params?(' · '+esc((x.params['조회']||'')+' vs '+(x.params['비교']||''))):'';
         return '<details style="border:1px solid #eee;border-radius:8px;padding:10px 12px;margin-bottom:8px">'+
-          '<summary style="cursor:pointer;font-size:13px"><b>'+dt+'</b> · '+esc(x.author||'-')+pr+'</summary>'+
-          '<div style="margin-top:8px;font-size:13.5px;line-height:1.7">'+mdLite(x.insight||'')+'</div>'+
-          '<div style="margin-top:6px;font-size:11px;color:#a7a49c">모델 '+esc(x.model||'')+'</div></details>';
+          '<summary style="cursor:pointer;font-size:13px"><b>'+dt+'</b> · '+esc(x.author||'-')+'</summary>'+
+          '<div style="font-size:11.5px;color:#8a8780;margin:6px 0">'+esc(fmtP(x.params))+'</div>'+
+          '<div style="margin-top:4px;font-size:13.5px;line-height:1.7">'+mdLite(x.insight||'')+'</div>'+
+          '<div style="margin-top:6px;font-size:11px;color:#a7a49c">모델 '+esc(x.model||'')+' · id '+x.id+'</div></details>';
       }).join('');
-      showAi('<div style="font-size:13px;color:#6b6a66;margin-bottom:8px">최근 인사이트 '+list.length+'건</div>'+html);
+      showAi(top+'<div style="font-size:13px;color:#6b6a66;margin-bottom:8px">최근 인사이트 '+list.length+'건</div>'+html);
     }).catch(function(e){ showAi('<div style="color:#e8384f">오류: '+esc(e.message)+'</div>'); });
   }
   // ───────────── 앰플리튜드 AU (방문자) · 상단 조회/비교기간 참조 ─────────────

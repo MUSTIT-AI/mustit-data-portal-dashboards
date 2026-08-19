@@ -151,17 +151,20 @@
       '<div class="chg '+t.ch.c+'">'+t.ch.t+'</div></div></div>';}).join("");
   }
   function fmtAxis(v){return v>=1e6?(Math.round(v/1e5)/10)+"M":v>=1e3?Math.round(v/1e3)+"k":v;}
-  // 세로 그룹막대 (조회=빨강 + 비교=파랑)
+  function labFmt(p){var v=Number(p.value)||0; if(v>=1e6)return Math.round(v/1e6)+"M"; if(v>=1e3)return Math.round(v/1e3)+"k"; return v?String(v):"";}
+  // 세로 그룹막대 (조회=빨강 + 비교=파랑) · 데이터레이블 축약 · 막대굵기 반응형(최대40px)
   function vbar(id,cats,cur,cmp,rotate){
     var el=echarts.init($(id));
-    el.setOption({grid:{left:48,right:10,top:28,bottom:rotate?78:28},
+    el.setOption({grid:{left:48,right:10,top:32,bottom:rotate?78:28},
       tooltip:{trigger:"axis",valueFormatter:function(v){return won(v);}},
       legend:{top:0,right:0,itemWidth:10,itemHeight:8,textStyle:{fontSize:10}},
       xAxis:{type:"category",data:cats,axisTick:{show:false},axisLine:{lineStyle:{color:"#ddd"}},
         axisLabel:{fontSize:9,color:"#777",interval:0,rotate:rotate?55:0}},
       yAxis:{type:"value",axisLabel:{fontSize:9,color:"#999",formatter:fmtAxis},splitLine:{lineStyle:{color:"#eee"}}},
-      series:[{name:"조회",type:"bar",data:cur,itemStyle:{color:RED},barMaxWidth:14},
-              {name:"비교",type:"bar",data:cmp,itemStyle:{color:BLUE},barMaxWidth:14}]});
+      series:[{name:"조회",type:"bar",data:cur,itemStyle:{color:RED},barMaxWidth:40,barGap:"10%",
+               label:{show:true,position:"top",fontSize:9,color:"#c8102e",formatter:labFmt}},
+              {name:"비교",type:"bar",data:cmp,itemStyle:{color:BLUE},barMaxWidth:40,
+               label:{show:true,position:"top",fontSize:9,color:"#7a8bbf",formatter:labFmt}}]});
     window.addEventListener("resize",function(){el.resize();});
   }
   // 맵(결제/쿠폰 등) → 조회 기준 정렬한 cats/cur/cmp

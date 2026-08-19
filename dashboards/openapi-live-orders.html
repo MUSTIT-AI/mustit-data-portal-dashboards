@@ -67,7 +67,7 @@
     <div class="cmp"><label><input type="radio" name="cmp" value="1">1일</label><label><input type="radio" name="cmp" value="7" checked>7일</label></div>
   </div>
   <div class="fltrs" id="filters"></div>
-  <div class="proj"><div class="l" id="proj_l">예상 마감 거래액</div><div class="v" id="proj_v">–</div></div>
+  <div class="proj"><div class="l" id="proj_l">예상 마감 거래액</div><div class="v" id="proj_v">–</div><div id="proj_f" style="font-size:10px;color:#a7a49c;margin-top:2px"></div></div>
 </div>
 <div class="wrap">
   <div class="kpis" id="kpis"></div>
@@ -185,6 +185,7 @@
       renderKPI(d);
       $("proj_v").textContent=won(d.projected)+' 원';
       $("proj_l").textContent=d.isToday?'예상 마감 거래액':'거래액(마감)';
+      $("proj_f").textContent=d.isToday?'비교일 전체 × (현재 ÷ 비교일 동시각)':'';
       var hours=[];for(var h=0;h<24;h++)hours.push(String(h).padStart(2,'0'));
       vbar("c_hourly",hours,d.cur.hourly,d.cmp.hourly,false);
       var p=pairMap(d.cur.payment,d.cmp.payment,PAYLBL); vbar("c_pay",p.cats,p.cur,p.cmp,true);

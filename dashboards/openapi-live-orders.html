@@ -59,6 +59,8 @@
   @media(max-width:640px){.grid2,.grid3,.grid4,.kpis{grid-template-columns:1fr}}
   .muted{font-size:11px;color:#a7a49c}
   .sechd{font-size:15px;margin:24px 0 2px;border-top:2px solid var(--border);padding-top:18px}
+  .aunote{background:#fff7ed;border:1px solid #f4c78a;border-radius:10px;padding:10px 14px;font-size:12px;line-height:1.7;color:#7a4a12;margin:0 0 12px}
+  .aunote code{background:#fbe6c8;border-radius:4px;padding:0 5px;font-size:11.5px}
   .loading{position:fixed;inset:0;background:rgba(255,255,255,.55);display:none;align-items:center;justify-content:center;z-index:80;font-weight:700;color:var(--red)}
   .loading.on{display:flex}
   .block{display:none;position:fixed;inset:0;background:var(--bg);z-index:80;place-items:center;text-align:center;color:var(--sub);font-family:system-ui}
@@ -98,14 +100,23 @@
   <p class="muted">머스트잇 OpenAPI 실시간 주문 조회 · 거래액=GMV · 브랜드는 상품마스터(<code>mustit_products</code>) 조인(매칭분만). 디바이스 구분은 주문 API에 없어 제외. 날짜·필터 변경 시 갱신(자동 새로고침 없음).</p>
 
   <h2 class="sechd">📈 앰플리튜드 AU (방문자) · <span id="au_range">조회기간</span></h2>
-  <p class="muted" style="margin:0 0 12px">Live_real_MUSTIT 실데이터 · South Korea · 크롤러 제외 · 기간 전체 <b>순유저(uniques)</b> · <b style="color:#e8384f">조회</b> vs <b style="color:#7a8bbf">비교</b> 그룹막대(상단 조회·비교기간 참조). ※ 상단 필터(결제수단·배송·신규재구매·유형)는 주문 API 전용이라 AU엔 미적용.</p>
-  <div class="card"><h3>AU 주요 (세그먼트별 방문자)</h3><div class="chart" id="c_au_main" style="height:320px"></div></div>
+  <p class="muted" style="margin:0 0 8px">Live_real_MUSTIT 실데이터 · South Korea · 크롤러 제외 · 기간 전체 <b>순유저(uniques)</b> · <b style="color:#e8384f">조회</b> vs <b style="color:#7a8bbf">비교</b> 그룹막대(상단 조회·비교기간 참조). ※ 상단 필터(결제수단·배송·신규재구매·유형)는 주문 API 전용이라 AU엔 미적용.</p>
+  <div class="aunote">
+    ⚠️ <b>비교 기준 안내</b> — 앰플리튜드 AU의 <b>비교기간은 "기간 전체(종일)"</b> 실적입니다. 주문 데이터처럼 <u>현재 시각까지 잘라서</u> 비교하지 <b>않습니다</b>.
+    (앰플리튜드 세그먼트 API는 <b>일(day) 단위</b>이고, <b>순유저</b>는 시간대별 합산·시각 컷이 불가능) →
+    <b>진행 중인 오늘</b>을 종일 실적과 비교하면 AU가 실제보다 낮게 보입니다.
+    <b>완결된 같은 길이 기간끼리</b> 비교하세요. 예: 조회 <code>어제</code> vs 비교 <code>지난주 같은 요일</code>.
+  </div>
   <div class="grid2">
-    <div class="card"><h3>플랫폼 · 로그인별 AU</h3><div class="chart" id="c_au_plat" style="height:300px"></div></div>
+    <div class="card"><h3>성별별 AU</h3><div class="chart" id="c_au_gender" style="height:280px"></div></div>
+    <div class="card"><h3>로그인 여부별 AU</h3><div class="chart" id="c_au_login" style="height:280px"></div></div>
+  </div>
+  <div class="card"><h3>디바이스 · 플랫폼별 AU</h3><div class="chart" id="c_au_device" style="height:300px"></div></div>
+  <div class="grid2">
     <div class="card"><h3>식별 (로그인 · 가입 · 찜)</h3><div class="chart" id="c_au_id" style="height:300px"></div></div>
     <div class="card"><h3>탐색 지면 (기획전 · 카테고리 · 브랜드 · 랭킹)</h3><div class="chart" id="c_au_nav" style="height:300px"></div></div>
-    <div class="card"><h3>상품 관심 (PDP · 검색 · 상품클릭)</h3><div class="chart" id="c_au_prod" style="height:300px"></div></div>
   </div>
+  <div class="card"><h3>상품 관심 (PDP · 검색 · 상품클릭)</h3><div class="chart" id="c_au_prod" style="height:300px"></div></div>
   <p class="muted" style="margin-top:8px">원본: Amplitude 「AU - 핵심 지표 모니터링 (GP)」 · 완료된 주는 원본과 동일, 진행 중인 최신 주는 집계 갱신 중이라 변동될 수 있습니다.</p>
 </div>
 <div class="loading" id="loading">불러오는 중…</div>
@@ -267,25 +278,22 @@
   function ev(t){return {event_type:t,filters:CF};}
   var CRAWLER=[{prop:"os",op:"does not contain",values:["yeti","bot","headless","bingbot","bingbot2","crawler"]}];
   function amp(endpoint,params){ return window.MUSTIT.fn("amplitude-proxy",{endpoint:endpoint,params:params}).then(function(r){ return r.data; }); }
-  // 세그먼트 정의
-  var AU_SEG=[
-    {n:"0. 전체",c:CRAWLER},
-    {n:"0.1 남성",c:[{prop:"gp:gender",op:"is",values:["남성","MALE","M"]}]},
-    {n:"0.2 여성",c:[{prop:"gp:gender",op:"is",values:["여성","W"]}]},
-    {n:"1. APP",c:[{prop:"platform",op:"is",values:["iOS","Android"]}]},
-    {n:"2. WEB",c:[{prop:"platform",op:"is",values:["Web"]}]},
-    {n:"2-1. MO-Web",c:[{prop:"platform",op:"is",values:["Web"]},{prop:"os",op:"does not contain",values:["headless","bot","yeti","bingbot","bingbot2","crawler"]},{prop:"device",op:"contains",values:["Android","iOS","Apple iPhone","Samsung Phone"]}]},
-    {n:"2-2. PC",c:[{prop:"platform",op:"is",values:["Web"]},{prop:"os",op:"does not contain",values:["iOS","Android","Mobile","headless","yeti","bot","apple","samsung"]},{prop:"device",op:"does not contain",values:["Apple iPhone","Samsung Phone","iOS","Android","samsung","apple"]}]},
-    {n:"A-1. 로그인",c:[{prop:"user_id",op:"is not",values:["(none)"]},{prop:"gp:signup_date",op:"is not",values:["(none)"]}]},
-    {n:"A-2. 비로그인",c:[{prop:"user_id",op:"is",values:["(none)"]},{prop:"gp:signup_date",op:"is",values:["(none)"]}]}
+  // 세그먼트 정의 — 성별 / 디바이스·플랫폼 / 로그인여부 로 분리
+  var _MOWEB={prop:"device",op:"contains",values:["Android","iOS","Apple iPhone","Samsung Phone"]};
+  var GENDER_SEG=[
+    {n:"전체",c:CRAWLER},
+    {n:"남성",c:[{prop:"gp:gender",op:"is",values:["남성","MALE","M"]}]},
+    {n:"여성",c:[{prop:"gp:gender",op:"is",values:["여성","W"]}]}
   ];
-  var PLAT_SEG=[
+  var DEVICE_SEG=[
     {n:"APP",c:[{prop:"platform",op:"is",values:["iOS","Android"]}]},
-    {n:"APP_iOS",c:[{prop:"platform",op:"is",values:["iOS"]}]},
-    {n:"APP_Android",c:[{prop:"platform",op:"is",values:["Android"]}]},
+    {n:"APP iOS",c:[{prop:"platform",op:"is",values:["iOS"]}]},
+    {n:"APP AOS",c:[{prop:"platform",op:"is",values:["Android"]}]},
     {n:"WEB",c:[{prop:"platform",op:"is",values:["Web"]}]},
-    {n:"MO-Web",c:[{prop:"platform",op:"is",values:["Web"]},{prop:"os",op:"does not contain",values:["headless","bot","yeti","bingbot","bingbot2","crawler"]},{prop:"device",op:"contains",values:["Android","iOS","Apple iPhone","Samsung Phone"]}]},
-    {n:"PC",c:[{prop:"platform",op:"is",values:["Web"]},{prop:"os",op:"does not contain",values:["iOS","Android","Mobile","headless","yeti","bot","apple","samsung"]},{prop:"device",op:"does not contain",values:["Apple iPhone","Samsung Phone","iOS","Android","samsung","apple"]}]},
+    {n:"MO-Web",c:[{prop:"platform",op:"is",values:["Web"]},{prop:"os",op:"does not contain",values:["headless","bot","yeti","bingbot","bingbot2","crawler"]},_MOWEB]},
+    {n:"PC",c:[{prop:"platform",op:"is",values:["Web"]},{prop:"os",op:"does not contain",values:["iOS","Android","Mobile","headless","yeti","bot","apple","samsung"]},{prop:"device",op:"does not contain",values:["Apple iPhone","Samsung Phone","iOS","Android","samsung","apple"]}]}
+  ];
+  var LOGIN_SEG=[
     {n:"로그인",c:[{prop:"user_id",op:"is not",values:["(none)"]},{prop:"gp:signup_date",op:"is not",values:["(none)"]}]},
     {n:"비로그인",c:[{prop:"user_id",op:"is",values:["(none)"]},{prop:"gp:signup_date",op:"is",values:["(none)"]}]}
   ];
@@ -325,8 +333,9 @@
   function loadAmpAU(){
     var f=$("date_from").value,t=$("date_to").value, cf=$("cmp_from").value,ct=$("cmp_to").value;
     var r=$("au_range"); if(r) r.textContent=(f===t?f:(f+"~"+t))+' vs 비교 '+(cf===ct?cf:(cf+"~"+ct));
-    return loadSegBar("c_au_main","_active",AU_SEG)
-      .then(function(){return loadSegBar("c_au_plat","_active",PLAT_SEG);})
+    return loadSegBar("c_au_gender","_active",GENDER_SEG)
+      .then(function(){return loadSegBar("c_au_login","_active",LOGIN_SEG);})
+      .then(function(){return loadSegBar("c_au_device","_active",DEVICE_SEG);})
       .then(function(){return loadEventsBar("c_au_id",ID_EV);})
       .then(function(){return loadEventsBar("c_au_nav",NAV_EV);})
       .then(function(){return loadEventsBar("c_au_prod",PROD_EV);});

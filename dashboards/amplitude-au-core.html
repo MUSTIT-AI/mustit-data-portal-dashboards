@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<title>AU 핵심 지표 (앰플리튜드) · MUST IT</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../auth.js"></script>
+<style>
+  :root{--red:#c8102e;--ink:#1c1b19;--sub:#6b6a66;--bg:#eef0f2;--panel:#fff;--border:#e2e0da}
+  *{box-sizing:border-box}
+  body{font-family:'Pretendard','Malgun Gothic',system-ui,sans-serif;margin:0;background:var(--bg);color:var(--ink);font-size:13px}
+  .topbar{display:flex;align-items:center;gap:14px;background:#fbfbfc;border-bottom:1px solid var(--border);padding:8px 16px;position:sticky;top:0;z-index:40}
+  .topbar .logo{font-weight:800;color:#232a33;text-decoration:none}
+  .topbar .logo:hover{color:var(--red)}
+  .topbar .right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .topbar .owner{font-size:12.5px;font-weight:700;white-space:nowrap}
+  .topbar #dashnav{border:1px solid #d6d4ce;border-radius:7px;padding:5px 9px;font-size:12.5px;background:#fff;max-width:230px}
+  .wrap{max-width:1240px;margin:0 auto;padding:16px}
+  h1{font-size:18px;margin:2px 0 2px}
+  .lead{color:var(--sub);font-size:12px;margin:0 0 14px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+  .card.full{grid-column:1/-1}
+  .card h3{margin:0 0 2px;font-size:14px}
+  .card .csub{color:var(--sub);font-size:11px;margin:0 0 8px}
+  .chart{width:100%;height:320px}
+  .tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .tile{background:#f7f6f2;border-radius:10px;padding:12px 14px}
+  .tile .l{font-size:11.5px;color:var(--sub);margin-bottom:6px;line-height:1.35;min-height:2.4em}
+  .tile .v{font-size:26px;font-weight:800;color:var(--red);font-variant-numeric:tabular-nums}
+  .err{color:var(--red);font-size:12px}
+  .loading{position:fixed;inset:0;background:rgba(255,255,255,.55);display:none;align-items:center;justify-content:center;z-index:80;font-weight:700;color:var(--red)}
+  .loading.on{display:flex}
+  .block{display:none;position:fixed;inset:0;background:var(--bg);z-index:80;place-items:center;text-align:center;color:var(--sub);font-family:system-ui}
+  @media(max-width:900px){.grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a class="logo" href="../index.html">🛍️ Data Portal</a>
+  <div class="right">
+    <span class="owner" id="dashowner"></span>
+    <select id="dashnav" title="대시보드 이동"></select>
+  </div>
+</div>
+<div class="wrap">
+  <h1>AU / 주문수 (KR)</h1>
+  <p class="lead">앰플리튜드 <b>Live_real_MUSTIT</b> 실데이터 · KST · 최근 12주(주간). 서버(amplitude-proxy)가 앰플리튜드 API를 대신 조회합니다.</p>
+  <div class="grid">
+    <div class="card full"><h3>AU / 주문수 추이</h3><p class="csub" id="s_au">complete_order · 세그먼트별 순유저(주간)</p><div class="chart" id="c_au"></div></div>
+    <div class="card"><h3>GP 전환율 · AU/KR</h3><p class="csub">Any Active Event → complete_order (이번 달, 전환창 24h)</p><div class="tiles" id="tiles"><div class="err">불러오는 중…</div></div></div>
+    <div class="card"><h3>구매 퍼널 (South Korea)</h3><p class="csub" id="s_fn">장바구니→주문서→주문완료 순유저(주간)</p><div class="chart" id="c_fn" style="height:280px"></div></div>
+  </div>
+  <p class="lead" style="margin-top:14px">원본: Amplitude 「AU - 핵심 지표 모니터링 (GP)」 (er82yzim) · 완료된 주는 원본과 동일, 진행 중인 최신 주는 집계 갱신 중이라 변동될 수 있습니다.</p>
+</div>
+<div class="loading" id="loading">불러오는 중…</div>
+<div class="block" id="block">이 대시보드를 볼 권한이 없습니다. <a href="../index.html" style="color:var(--red);margin-left:6px">← 목록</a></div>
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id);};
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  var FILE="amplitude-au-core.html";
+  var PAL=["#c8102e","#e0736f","#f0a39f","#2f80ed","#2fae8f","#7bc6b4","#9b8cf2","#c9bff5","#e8a33d","#bbbbbb"];
+
+  // 날짜 유틸
+  function fmt(d){return ""+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');}
+  function daysAgo(n){var d=new Date();d.setDate(d.getDate()-n);return d;}
+  var END=fmt(new Date()), START12=fmt(daysAgo(84)), MSTART=fmt(new Date(new Date().getFullYear(),new Date().getMonth(),1));
+
+  // 국가 필터(공통)
+  var CF=[{subprop_type:"user",subprop_key:"country",subprop_op:"is",subprop_value:["South Korea"]}];
+  function ev(t){return {event_type:t,filters:CF};}
+
+  // amplitude-proxy 호출 → 앰플리튜드 응답(.data) 반환
+  function amp(endpoint,params){
+    return window.MUSTIT.fn("amplitude-proxy",{endpoint:endpoint,params:params}).then(function(r){ return r.data; });
+  }
+
+  // AU/주문수 세그먼트 10개
+  var AU_SEG=[
+    {n:"0. 전체",c:[{prop:"os",op:"does not contain",values:["yeti","bot","headless","bingbot","bingbot2","crawler"]}]},
+    {n:"0.1 남성",c:[{prop:"gp:gender",op:"is",values:["남성","MALE","M"]}]},
+    {n:"0.2 여성",c:[{prop:"gp:gender",op:"is",values:["여성","W"]}]},
+    {n:"1. APP",c:[{prop:"platform",op:"is",values:["iOS","Android"]}]},
+    {n:"2. WEB",c:[{prop:"platform",op:"is",values:["Web"]}]},
+    {n:"2-1. MO-Web",c:[{prop:"platform",op:"is",values:["Web"]},{prop:"os",op:"does not contain",values:["headless","bot","yeti","bingbot","bingbot2","crawler"]},{prop:"device",op:"contains",values:["Android","iOS","Apple iPhone","Samsung Phone"]}]},
+    {n:"2-2. PC",c:[{prop:"platform",op:"is",values:["Web"]},{prop:"os",op:"does not contain",values:["iOS","Android","Mobile","headless","yeti","bot","apple","samsung"]},{prop:"device",op:"does not contain",values:["Apple iPhone","Samsung Phone","iOS","Android","samsung","apple"]}]},
+    {n:"3. Crawler",c:[{prop:"platform",op:"is",values:["Web"]},{prop:"os",op:"contains",values:["headless","bot","yeti","bingbot","bingbot2","crawler"]}]},
+    {n:"A-1. 로그인",c:[{prop:"user_id",op:"is not",values:["(none)"]},{prop:"gp:signup_date",op:"is not",values:["(none)"]}]},
+    {n:"A-2. 비로그인",c:[{prop:"user_id",op:"is",values:["(none)"]},{prop:"gp:signup_date",op:"is",values:["(none)"]}]}
+  ];
+  var FUNNEL=[["view_cart","장바구니 탐색"],["add_to_cart","장바구니 담기"],["view_order_form","주문서 탐색"],["click_order_button","주문 버튼 클릭"],["complete_order","주문 완료"],["complete_order_product","주문 완료(상품)"]];
+  var GP_SEG=[
+    {n:"AU 전체(크롤러 제외)",c:[{prop:"os",op:"does not contain",values:["yeti","bot","headless"]}]},
+    {n:"AU 여성",c:[{prop:"gp:gender",op:"is",values:["여성","W"]}]},
+    {n:"AU 남성",c:[{prop:"gp:gender",op:"is",values:["남성","MALE","M"]}]},
+    {n:"로그인",c:[{prop:"user_id",op:"is not",values:["(none)"]},{prop:"gp:signup_date",op:"is not",values:["(none)"]}]}
+  ];
+
+  function wkLabels(xv){return (xv||[]).map(function(s){return String(s).slice(5).replace("-","/");});}
+  function line(id,cats,series){
+    var el=echarts.init($(id));
+    el.setOption({color:PAL,grid:{left:52,right:14,top:14,bottom:52},tooltip:{trigger:"axis"},
+      legend:{type:"scroll",bottom:0,itemWidth:10,itemHeight:8,textStyle:{fontSize:10}},
+      xAxis:{type:"category",data:cats,axisLabel:{fontSize:10,color:"#999"},axisLine:{lineStyle:{color:"#ddd"}}},
+      yAxis:{type:"value",axisLabel:{fontSize:10,color:"#999",formatter:function(v){return v>=1000?(v/1000)+"k":v;}},splitLine:{lineStyle:{color:"#eee"}}},
+      series:series.map(function(s){return {name:s.name,type:"line",showSymbol:false,data:s.data};})});
+    window.addEventListener("resize",function(){el.resize();});
+  }
+
+  function loadAU(){
+    return amp("events/segmentation",{e:[JSON.stringify(ev("complete_order"))],m:"uniques",i:7,start:START12,end:END,
+      s:AU_SEG.map(function(g){return JSON.stringify(g.c);})}).then(function(d){
+      var series=(d.data.series||[]).map(function(arr,i){return {name:(AU_SEG[i]||{}).n||("s"+i),data:arr};});
+      line("c_au",wkLabels(d.data.xValues),series);
+    }).catch(function(e){ $("c_au").innerHTML='<p class="err">AU 로드 실패: '+esc(e.message)+'</p>'; });
+  }
+  function loadFunnel(){
+    return amp("events/segmentation",{e:FUNNEL.map(function(f){return JSON.stringify(ev(f[0]));}),m:"uniques",i:7,start:START12,end:END,
+      s:[JSON.stringify([{prop:"os",op:"does not contain",values:["yeti","bot","headless","bingbot","bingbot2","crawler"]}])]}).then(function(d){
+      var series=(d.data.series||[]).map(function(arr,i){return {name:(FUNNEL[i]||[])[1]||("e"+i),data:arr};});
+      line("c_fn",wkLabels(d.data.xValues),series);
+    }).catch(function(e){ $("c_fn").innerHTML='<p class="err">퍼널 로드 실패: '+esc(e.message)+'</p>'; });
+  }
+  function loadGP(){
+    return amp("funnels",{e:[JSON.stringify(ev("_active")),JSON.stringify(ev("complete_order"))],start:MSTART,end:END,cs:86400,
+      s:GP_SEG.map(function(g){return JSON.stringify(g.c);})}).then(function(d){
+      var rows=d.data||[];
+      $("tiles").innerHTML=GP_SEG.map(function(g,i){
+        var conv=(rows[i]&&rows[i].cumulative&&rows[i].cumulative[1]!=null)?rows[i].cumulative[1]:null;
+        var pct=conv==null?"—":(conv*100).toFixed(2)+"%";
+        return '<div class="tile"><div class="l">'+esc(g.n)+'</div><div class="v">'+pct+'</div></div>';
+      }).join("");
+    }).catch(function(e){ $("tiles").innerHTML='<p class="err">전환율 로드 실패: '+esc(e.message)+'</p>'; });
+  }
+
+  function setupTopbar(){
+    window.MUSTIT.rpc("dash_list",{}).then(function(list){
+      list=list||[];
+      var cur=list.filter(function(d){return d.file===FILE;})[0];
+      if(cur){ $("dashowner").textContent=(cur.title||"")+(cur.owner_name?(" · "+cur.owner_name):""); document.title="Data Portal - "+(cur.title||FILE); }
+      var sel=$("dashnav");
+      sel.innerHTML=list.map(function(d){return '<option value="_starter.html?f='+encodeURIComponent(d.file)+'" data-file="'+esc(d.file)+'"'+(d.file===FILE?' selected':'')+'>'+esc(d.title||d.file)+'</option>';}).join("");
+      sel.onchange=function(){var o=sel.options[sel.selectedIndex];if(o&&o.getAttribute('data-file')!==FILE)location.href=o.value;};
+    }).catch(function(){});
+  }
+
+  window.MUSTIT.ready(function(){
+    window.MUSTIT.rpc("dash_access",{p_dashboard:FILE}).then(function(a){
+      if(!a || a.view===false){ $("block").style.display="grid"; return; }
+      setupTopbar();
+      $("loading").classList.add("on");
+      // 순차 호출(동시 호출 시 Amplitude 429 방지). 프록시가 429 자동 재시도.
+      loadAU().then(loadFunnel).then(loadGP).finally(function(){ $("loading").classList.remove("on"); });
+    }).catch(function(){ $("block").style.display="grid"; });
+  });
+})();
+</script>
+</body>
+</html>

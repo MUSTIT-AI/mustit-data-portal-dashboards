@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<title>일별 전환·방문자당 매출 · MUST IT</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../auth.js"></script>
+<style>
+  :root{--red:#c8102e;--blue:#2f80ed;--ink:#1c1b19;--sub:#6b6a66;--bg:#eef0f2;--panel:#fff;--border:#e2e0da}
+  *{box-sizing:border-box}
+  body{font-family:'Pretendard','Malgun Gothic',system-ui,sans-serif;margin:0;background:var(--bg);color:var(--ink);font-size:13px}
+  .topbar{display:flex;align-items:center;gap:14px;background:#fbfbfc;border-bottom:1px solid var(--border);padding:8px 16px;position:sticky;top:0;z-index:40}
+  .topbar .logo{font-weight:800;color:#232a33;text-decoration:none}
+  .topbar .logo:hover{color:var(--red)}
+  .topbar .right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .topbar .owner{font-size:12.5px;font-weight:700;white-space:nowrap}
+  .topbar #dashnav{border:1px solid #d6d4ce;border-radius:7px;padding:5px 9px;font-size:12.5px;background:#fff;max-width:230px}
+  .filters{background:#fff;border-bottom:1px solid var(--border);padding:9px 16px;display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+  .fld{display:flex;flex-direction:column;gap:3px}
+  .fld label{font-size:10.5px;color:var(--sub);font-weight:600}
+  .fld input{border:1px solid #d6d4ce;border-radius:6px;padding:5px 7px;font-size:12px;height:29px}
+  .btn{border:0;border-radius:7px;padding:6px 15px;font-size:12.5px;font-weight:700;cursor:pointer;height:29px;background:var(--red);color:#fff}
+  .wrap{max-width:1240px;margin:0 auto;padding:14px 16px}
+  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-bottom:12px}
+  @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:11px 13px}
+  .kpi .l{font-size:11px;color:var(--sub);margin-bottom:5px}
+  .kpi .v{font-size:21px;font-weight:800;font-variant-numeric:tabular-nums}
+  .kpi .v.red{color:var(--red)}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px}
+  .card h3{margin:0 0 2px;font-size:14px}.card .csub{color:var(--sub);font-size:11px;margin:0 0 8px}
+  .chart{width:100%;height:300px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:900px){.row2{grid-template-columns:1fr}}
+  .loading{position:fixed;inset:0;background:rgba(255,255,255,.55);display:none;align-items:center;justify-content:center;z-index:80;font-weight:700;color:var(--red)}
+  .loading.on{display:flex}
+  .block{display:none;position:fixed;inset:0;background:var(--bg);z-index:80;place-items:center;text-align:center;color:var(--sub);font-family:system-ui}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a class="logo" href="../index.html">🛍️ Data Portal</a>
+  <div class="right">
+    <span class="owner" id="dashowner"></span>
+    <select id="dashnav" title="대시보드 이동"></select>
+  </div>
+</div>
+<div class="filters">
+  <div class="fld"><label>시작일</label><input type="date" id="from"></div>
+  <div class="fld"><label>종료일</label><input type="date" id="to"></div>
+  <button class="btn" id="go">조회</button>
+  <span style="font-size:11px;color:var(--sub)">방문자=앰플리튜드 DAU(한국·크롤러제외) · 매출=주문DB(순매출)</span>
+</div>
+<div class="wrap">
+  <div class="kpis" id="kpis"></div>
+  <div class="card"><h3>방문자수 · 주문수</h3><p class="csub">일별 방문자(막대) + 주문수(선)</p><div class="chart" id="c_vo"></div></div>
+  <div class="row2">
+    <div class="card"><h3>구매 전환율</h3><p class="csub">주문수 ÷ 방문자수 (%)</p><div class="chart" id="c_conv" style="height:260px"></div></div>
+    <div class="card"><h3>방문자당 매출(RPU) · 객단가(AOV)</h3><p class="csub">순매출÷방문자 · 순매출÷주문</p><div class="chart" id="c_rpu" style="height:260px"></div></div>
+  </div>
+  <p class="csub" style="color:#a7a49c">방문자(앰플리튜드)와 주문·매출(주문DB)을 <b>날짜로 조인</b>한 대시보드입니다. 방문자는 매일 1회 동기화됩니다.</p>
+</div>
+<div class="loading" id="loading">불러오는 중…</div>
+<div class="block" id="block">이 대시보드를 볼 권한이 없습니다. <a href="../index.html" style="color:var(--red);margin-left:6px">← 목록</a></div>
+<script>
+(function(){
+  "use strict";
+  var $=function(id){return document.getElementById(id);};
+  function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+  var FILE="daily-conversion.html";
+  function won(v){return (Math.round(Number(v)||0)).toLocaleString('en-US');}
+  function fmtWon(v){return '₩'+won(v);}
+  function d10(s){return String(s).slice(0,10);}
+  function md(s){return d10(s).slice(5).replace('-','/');}
+  function ymd(d){return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+
+  function setDefaults(){
+    var y=new Date(); y.setDate(y.getDate()-1);
+    var s=new Date(y); s.setDate(s.getDate()-29);
+    $("to").value=ymd(y); $("from").value=ymd(s);
+  }
+
+  function renderKPI(rows){
+    var dau=0,ord=0,net=0,n=0,buyers=0;
+    rows.forEach(function(r){ if(r.dau){dau+=r.dau;n++;} ord+=r.orders||0; net+=r.net_rev||0; buyers+=r.buyers||0; });
+    var avgDau=n?Math.round(dau/n):0;
+    var conv=dau?ord/dau:0;
+    var rpu=dau?net/dau:0;
+    var aov=ord?net/ord:0;
+    var tiles=[
+      {l:'평균 방문자/일',v:won(avgDau)},
+      {l:'총 주문수',v:won(ord)},
+      {l:'총 순매출',v:fmtWon(net),red:1},
+      {l:'평균 전환율',v:(conv*100).toFixed(2)+'%',red:1},
+      {l:'방문자당 매출',v:fmtWon(rpu)}
+    ];
+    $("kpis").innerHTML=tiles.map(function(t){return '<div class="kpi"><div class="l">'+t.l+'</div><div class="v'+(t.red?' red':'')+'">'+t.v+'</div></div>';}).join("");
+  }
+  function barLine(id,x,barName,bar,lineName,line){
+    var el=echarts.init($(id));
+    el.setOption({grid:{left:56,right:56,top:20,bottom:40},tooltip:{trigger:"axis"},
+      legend:{bottom:0,itemWidth:10,itemHeight:8,textStyle:{fontSize:10}},
+      xAxis:{type:"category",data:x,axisLabel:{fontSize:10,color:"#999"},axisLine:{lineStyle:{color:"#ddd"}}},
+      yAxis:[{type:"value",axisLabel:{fontSize:10,color:"#999",formatter:function(v){return v>=1000?(v/1000)+"k":v;}},splitLine:{lineStyle:{color:"#eee"}}},
+             {type:"value",axisLabel:{fontSize:10,color:"#999"},splitLine:{show:false}}],
+      series:[{name:barName,type:"bar",data:bar,itemStyle:{color:"#9fb6e8"},barMaxWidth:22},
+              {name:lineName,type:"line",yAxisIndex:1,smooth:false,showSymbol:false,data:line,itemStyle:{color:"#c8102e"}}]});
+    window.addEventListener("resize",function(){el.resize();});
+  }
+  function lines(id,x,series,pct){
+    var el=echarts.init($(id));
+    el.setOption({color:["#c8102e","#2f80ed"],grid:{left:56,right:16,top:20,bottom:40},
+      tooltip:{trigger:"axis",valueFormatter: pct?function(v){return (v*100).toFixed(2)+'%';}:function(v){return '₩'+won(v);}},
+      legend:{bottom:0,itemWidth:10,itemHeight:8,textStyle:{fontSize:10}},
+      xAxis:{type:"category",data:x,axisLabel:{fontSize:10,color:"#999"},axisLine:{lineStyle:{color:"#ddd"}}},
+      yAxis:{type:"value",axisLabel:{fontSize:10,color:"#999",formatter: pct?function(v){return (v*100).toFixed(1)+'%';}:function(v){return v>=1000?(v/1000)+"k":v;}},splitLine:{lineStyle:{color:"#eee"}}},
+      series:series.map(function(s){return {name:s.name,type:"line",smooth:false,showSymbol:false,data:s.data};})});
+    window.addEventListener("resize",function(){el.resize();});
+  }
+
+  function refresh(){
+    $("loading").classList.add("on");
+    var p={from:$("from").value,to:$("to").value};
+    window.MUSTIT.rpc("dash_daily_conversion",{p:p}).then(function(rows){
+      rows=rows||[];
+      var x=rows.map(function(r){return md(r.d);});
+      renderKPI(rows);
+      barLine("c_vo",x,"방문자수",rows.map(function(r){return r.dau;}),"주문수",rows.map(function(r){return r.orders;}));
+      lines("c_conv",x,[{name:"전환율",data:rows.map(function(r){return r.conv;})}],true);
+      lines("c_rpu",x,[{name:"방문자당매출(RPU)",data:rows.map(function(r){return r.rpu;})},{name:"객단가(AOV)",data:rows.map(function(r){return r.aov;})}],false);
+    }).catch(function(e){ $("kpis").innerHTML='<div class="kpi"><div class="l">오류</div><div class="v" style="font-size:13px;color:#c8102e">'+esc(e.message)+'</div></div>'; })
+      .finally(function(){ $("loading").classList.remove("on"); });
+  }
+
+  function setupTopbar(){
+    window.MUSTIT.rpc("dash_list",{}).then(function(list){
+      list=list||[];
+      var cur=list.filter(function(d){return d.file===FILE;})[0];
+      if(cur){ $("dashowner").textContent=(cur.title||"")+(cur.owner_name?(" · "+cur.owner_name):""); document.title="Data Portal - "+(cur.title||FILE); }
+      var sel=$("dashnav");
+      sel.innerHTML=list.map(function(d){return '<option value="_starter.html?f='+encodeURIComponent(d.file)+'" data-file="'+esc(d.file)+'"'+(d.file===FILE?' selected':'')+'>'+esc(d.title||d.file)+'</option>';}).join("");
+      sel.onchange=function(){var o=sel.options[sel.selectedIndex];if(o&&o.getAttribute('data-file')!==FILE)location.href=o.value;};
+    }).catch(function(){});
+  }
+
+  window.MUSTIT.ready(function(){
+    window.MUSTIT.rpc("dash_access",{p_dashboard:FILE}).then(function(a){
+      if(!a || a.view===false){ $("block").style.display="grid"; return; }
+      setupTopbar(); setDefaults();
+      $("go").onclick=refresh;
+      refresh();
+    }).catch(function(){ $("block").style.display="grid"; });
+  });
+})();
+</script>
+</body>
+</html>

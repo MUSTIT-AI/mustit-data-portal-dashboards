@@ -6,6 +6,7 @@
 - 정적 사이트(GitHub Pages). 빌드 없음. `main`에 push → 자동 배포.
 - 브라우저가 **서울 Supabase**(ref `hhvmhtejmhhxksnldfmi`)의 집계 RPC를 직접 호출.
 - **대시보드 1개 = `dashboards/` 폴더의 HTML 파일 1개** (자기완결형). `dashboards.json`에 목록 등록.
+- **데이터 소스 3종**(아래 각 절 참고 · 서로 조인 가능): ① **주문**(퀵사이트 지표 · `orders_secure`/RPC) · ② **Open API 상품·카탈로그**(`mustit_*` 뷰/RPC) · ③ **앰플리튜드**(행동·유입 · `amplitude-proxy`).
 
 ## 로그인·데이터 접근 (중요)
 - 사이트 전체가 **로그인 게이트**(Supabase Auth). 페이지에 아래를 넣고, 데이터는 로그인 후에만 로드:
@@ -42,11 +43,59 @@
   ```
 - PostgREST 기본 응답 상한(~1000행)·집계 한계가 있으니, **대용량·복잡 집계는 여전히 전용 RPC**(SECURITY DEFINER + `_dash_guard()`)가 낫다. 단순 조회·필터·중간규모는 이 뷰가 편하다.
 
+## 앰플리튜드(Amplitude) 데이터
+앰플리튜드 지표는 Edge Function 프록시로 가져온다. 키는 Supabase 시크릿(`AMPLITUDE_API_KEY`/`AMPLITUDE_SECRET_KEY`)에만 있고 프런트엔 절대 넣지 말 것. 프로젝트=`Live_real_MUSTIT`(540504).
+- 호출: `window.MUSTIT.fn("amplitude-proxy", { endpoint, params })` → `res.data` = Amplitude Dashboard REST 응답. 로그인 게이트 적용, 429 자동 재시도 내장.
+  ```js
+  window.MUSTIT.fn("amplitude-proxy",{ endpoint:"events/segmentation", params:{
+    e:[JSON.stringify({event_type:"complete_order",filters:[{subprop_type:"user",subprop_key:"country",subprop_op:"is",subprop_value:["South Korea"]}]})],
+    m:"uniques", i:7, start:"20260701", end:"20260731",
+    s:[JSON.stringify([{prop:"os",op:"does not contain",values:["yeti","bot","headless"]}])]  // 세그먼트(선택)
+  }}).then(function(r){ var d=r.data.data; /* d.series, d.xValues, d.seriesLabels */ });
+  ```
+  - `params`는 Amplitude REST 파라미터 그대로: `e`(이벤트 JSON 문자열 배열), `m`(uniques/totals/…), `i`(1일/7주/30월), `start`/`end`(YYYYMMDD), `s`(세그먼트 JSON 문자열 배열, 여러 개=여러 시리즈), `g`/event.group_by(그룹바이). 배열은 프록시가 반복 파라미터로 전개.
+  - 허용 endpoint: `events/segmentation` `funnels` `retention` `users` `composition` `sessions/*` `events/list` `annotations`.
+- **429(호출량 제한)**: 차트 여러 개는 **순차 호출**(Promise.all 금지). 매일 보는 무거운 지표는 **하루 1회 캐시**로: Amplitude→Supabase 테이블 적재(예: `amp_daily`, Edge `amp-sync`)→RPC로 조회. 캐시가 429·속도 모두 해결.
+- **주문 데이터와 조인**: **날짜/카테고리/플랫폼 차원 조인 권장**(집계끼리 공통 축 결합). 예: RPC `dash_daily_conversion`(`amp_daily` ⨝ `orders_v` by date → 방문자·주문·전환율·RPU). 주문단위(order_no)도 되지만 **유입경로(referrer)·광고 attribution은 주문 이벤트에 안 실림**(세션 단위)이라 행 레벨 유입 귀속은 불가.
+- 참고 구현: `dashboards/amplitude-au-core.html`(순수 앰플), `dashboards/daily-conversion.html`(날짜 조인).
+
+## 머스트잇 Open API — 상품·카탈로그 마스터 (`mustit_api`)
+머스트잇 파트너 OpenAPI로 **매일 08:00 KST 자동 적재**되는 상품·카탈로그 마스터(Edge `openapi-daily-sync` + pg_cron). **비(非)개인정보**라 로그인 계정 누구나 조회 가능. 자격증명은 서버(Vault)에만 있고, 대시보드는 아래 뷰/RPC만 쓰면 됨(키 불필요).
+
+- **public 뷰 (로그인=`authenticated` 조회 가능)**:
+  - `mustit_products` (상품 마스터, ~340만) — `item_no, catalog_id, item_name, seller_id, stock, selling_price, product_status`(IN_STOCK/OUT_OF_STOCK/SUSPENDED)`, brand_code, category, created_at, updated_at`
+  - `mustit_catalogs` — `catalog_id, brand_name, brand_code, catalog_name, category, category_code, main_image_url, refine_image_url, serial_no, model_no, color_no, created_at`
+  - `mustit_brands` (2,279) — `brand_code, brand_kor, brand_eng`
+  - `mustit_categories` (492) — `category_code, category_name, level, parent_code, header_category_type`
+  - 조회(로그인 JWT 자동, `orders_secure`와 동일 방식):
+    ```js
+    window.MUSTIT.ready(function(){
+      window.MUSTIT.client.from('mustit_brands').select('brand_code,brand_kor').limit(50)
+        .then(function(r){ var rows=r.data||[]; /* 차트 */ });
+    });
+    ```
+- **⚠️ 상품은 ~340만 행 → 브라우저로 당겨 집계 절대 금지.** 브랜드별·카테고리별 집계 등은 **DB 집계 RPC**를 쓸 것. 준비된 예: `mustit_products_by_brand(p_limit)` → 브랜드별 상품수·평균가(순위).
+  ```js
+  window.MUSTIT.rpc('mustit_products_by_brand', {p_limit:20}).then(function(r){ /* r = [{brand_code,brand_kor,brand_eng,product_count,avg_price}] */ });
+  ```
+  새 집계가 필요하면 같은 패턴으로 RPC 추가: `language sql/plpgsql security definer set search_path=''`, `mustit_api.*` 조회, `authenticated`(+`anon`)에 execute grant.
+- **주문 데이터와 조인**: 공통 키 `brand_code`(→`mustit_brands`), `category`(카테고리 코드), `catalog_id`로 `orders_secure`/`orders_v`와 결합. 예: 주문 판매 상위 상품 × `mustit_products`로 상품명·카탈로그·가격 붙이기.
+- **날짜는 KST**(`created_at` 등 그대로, `AT TIME ZONE` 금지). **적재 주기**: 매일 08:00 — 브랜드·카테고리 전체 갱신 + 신규 상품/카탈로그 증분. **가격·재고 실시간 변경은 미반영**(신규 등록 기준)이라 최신 가격이 꼭 필요하면 별도 확인.
+
 ## 절대 규칙
+> **공통 분석 지침의 단일 출처(SSOT) = DB.** 대시보드를 만들거나 데이터를 분석하기 전에 먼저 아래를 실행해 최신 공통 지침을 읽고 그 규칙을 반드시 따르라:
+> ```sql
+> select content from public.portal_guidelines order by updated_at desc;
+> ```
+> 아래 재무 정의·시간대 규칙은 **편의용 사본**이며, **충돌하면 `portal_guidelines`가 우선**한다. 공통 규칙 변경은 포털 "③ 공통 지침"(=이 테이블)에서만 하고 여기(CLAUDE.md)엔 개발 전용 규칙만 둔다.
+
 1. **일시는 이미 KST** → `AT TIME ZONE` 금지. `order_datetime` 그대로. 기간 필터는 인덱스를 타서 빠름 — 항상 기간을 좁힐 것.
 2. **재무 정의**: 매출=`gross_revenue`(총매출), 거래액/GMV=`total_purchase`, 순매출=총매출−자사할인, 순이익=순매출−결제수수료. 마스터뷰 기본은 **전체 주문상태**(정산완료만 보려면 `filters.order_status:["정산완료"]`).
 3. **보안**: `service_role` 키를 프런트에 절대 넣지 말 것(계정관리 같은 관리자 기능은 Edge Function `admin-users` 서버측에서만). 개인정보 컬럼은 로그인+허용목록(`dash_allowed`)으로만 접근. 새 RPC를 만들면 `anon`에는 주지 말고 `authenticated`+`_dash_guard()` 검사를 넣을 것.
 4. 새 대시보드는 기존 파일을 건드리지 말고 **새 HTML 파일**로 추가 (동시 작업 충돌 방지).
+5. **필터는 항상 복수 선택 가능하게** — 단일 `<select>` 금지, **체크박스 드롭다운(다중선택)** 으로 구현. 미선택=전체, 선택 시 서버에 배열로 전달해 `in` 필터. 참고 구현: `dashboards/openapi-live-orders.html`의 `.ms` 멀티셀렉트(buildFilters/getFilters). 결제수단은 **외부결제 vs 중개거래(그 외 전부)** 2버킷으로 집계·필터(Edge `openapi-orders`의 payBucket).
+6. **파비콘·타이틀 통일** — 모든 페이지 `<head>`에 `<link rel="icon" type="image/svg+xml" href="favicon.svg">`(루트) 또는 `../favicon.svg`(dashboards/). 브라우저 탭 제목은 **`Data Portal - {대시보드명}`** 으로 — `setupTopbar`에서 `document.title="Data Portal - "+(cur.title||FILE)` 동적 설정.
+7. **전체 폭 사용 + 반응형(필수)** — 본문은 **화면 너비 100%** 로 쓴다(`max-width` 고정 금지, `.wrap{max-width:100%;padding:14px 20px}`). 레이아웃은 **반응형**: 차트 그리드는 `grid-template-columns` + `@media(max-width:1100px/640px)`로 열 수를 줄이고, 차트 컨테이너는 `width:100%`, ECharts는 `window resize`에서 `el.resize()` 호출. 막대 굵기도 고정폭 대신 `barMaxWidth`(예: 40)로 화면 폭에 따라 조절, 데이터 레이블은 단위 축약(M/k). 참고: `dashboards/openapi-live-orders.html`.
 
 ## 권한·소유권 (중요)
 계정 관리(admin.html)에서 계정별로 설정: **역할**(viewer/editor/admin), **GitHub 아이디**(`github_id`), **개인정보 열람**(`can_view_pii`), 그리고 **대시보드별 열람/수정**(`dashboard_acl`).

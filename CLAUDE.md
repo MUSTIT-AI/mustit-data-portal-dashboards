@@ -95,6 +95,7 @@
 4. 새 대시보드는 기존 파일을 건드리지 말고 **새 HTML 파일**로 추가 (동시 작업 충돌 방지).
 5. **필터는 항상 복수 선택 가능하게** — 단일 `<select>` 금지, **체크박스 드롭다운(다중선택)** 으로 구현. 미선택=전체, 선택 시 서버에 배열로 전달해 `in` 필터. 참고 구현: `dashboards/openapi-live-orders.html`의 `.ms` 멀티셀렉트(buildFilters/getFilters). 결제수단은 **외부결제 vs 중개거래(그 외 전부)** 2버킷으로 집계·필터(Edge `openapi-orders`의 payBucket).
 6. **파비콘·타이틀 통일** — 모든 페이지 `<head>`에 `<link rel="icon" type="image/svg+xml" href="favicon.svg">`(루트) 또는 `../favicon.svg`(dashboards/). 브라우저 탭 제목은 **`Data Portal - {대시보드명}`** 으로 — `setupTopbar`에서 `document.title="Data Portal - "+(cur.title||FILE)` 동적 설정.
+7. **전체 폭 사용 + 반응형(필수)** — 본문은 **화면 너비 100%** 로 쓴다(`max-width` 고정 금지, `.wrap{max-width:100%;padding:14px 20px}`). 레이아웃은 **반응형**: 차트 그리드는 `grid-template-columns` + `@media(max-width:1100px/640px)`로 열 수를 줄이고, 차트 컨테이너는 `width:100%`, ECharts는 `window resize`에서 `el.resize()` 호출. 막대 굵기도 고정폭 대신 `barMaxWidth`(예: 40)로 화면 폭에 따라 조절, 데이터 레이블은 단위 축약(M/k). 참고: `dashboards/openapi-live-orders.html`.
 
 ## 권한·소유권 (중요)
 계정 관리(admin.html)에서 계정별로 설정: **역할**(viewer/editor/admin), **GitHub 아이디**(`github_id`), **개인정보 열람**(`can_view_pii`), 그리고 **대시보드별 열람/수정**(`dashboard_acl`).

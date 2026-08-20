@@ -63,7 +63,9 @@
   .card h3{margin:0 0 2px;font-size:14px;font-weight:700}
   .card .h-sub{color:var(--sub);font-size:10.5px;margin:0 0 6px}
   .card .htools{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-  .chart{width:100%;height:340px}
+  .chart{width:100%;height:140px}
+  .card.compact{padding:8px 14px 4px}
+  .card.compact h3{font-size:12.5px}
   .loading{position:fixed;inset:0;background:rgba(255,255,255,.55);display:none;align-items:center;justify-content:center;z-index:80;font-weight:700;color:var(--red)}
   .loading.on{display:flex}
   .err{color:var(--red);padding:10px 14px;font-size:12.5px}
@@ -84,18 +86,27 @@
   table.sumtbl th[data-nosort]{cursor:default}
   table.sumtbl th.sortasc:after{content:" ▲"}
   table.sumtbl th.sortdesc:after{content:" ▼"}
-  /* 누적거래액까지(1~6열) 고정, 일별 컬럼(7열~)만 가로 스크롤 */
-  table.sumtbl th:nth-child(-n+6),table.sumtbl td:nth-child(-n+6){ position:sticky; box-sizing:border-box }
-  table.sumtbl td:nth-child(-n+6){ background:#fff; z-index:2 }
-  table.sumtbl th:nth-child(-n+6){ background:#f4f3ef; z-index:15 }
-  table.sumtbl tr:hover td:nth-child(-n+6){ background:#fafaf7 }
-  table.sumtbl tr.tot td:nth-child(-n+6){ background:#f8f7f3 }
-  table.sumtbl th:nth-child(1),table.sumtbl td:nth-child(1){ left:0; width:150px; min-width:150px; max-width:150px }
-  table.sumtbl th:nth-child(2),table.sumtbl td:nth-child(2){ left:150px; width:70px; min-width:70px; max-width:70px }
-  table.sumtbl th:nth-child(3),table.sumtbl td:nth-child(3){ left:220px; width:115px; min-width:115px; max-width:115px }
-  table.sumtbl th:nth-child(4),table.sumtbl td:nth-child(4){ left:335px; width:105px; min-width:105px; max-width:105px }
-  table.sumtbl th:nth-child(5),table.sumtbl td:nth-child(5){ left:440px; width:68px; min-width:68px; max-width:68px }
-  table.sumtbl th:nth-child(6),table.sumtbl td:nth-child(6){ left:508px; width:105px; min-width:105px; max-width:105px; box-shadow:2px 0 0 var(--border) }
+  /* #piv: 누적거래액까지(1~6열) 고정, 일별 컬럼(7열~)만 가로 스크롤 */
+  #piv th:nth-child(-n+6),#piv td:nth-child(-n+6){ position:sticky; box-sizing:border-box }
+  #piv td:nth-child(-n+6){ background:#fff; z-index:2 }
+  #piv th:nth-child(-n+6){ background:#f4f3ef; z-index:15 }
+  #piv tr:hover td:nth-child(-n+6){ background:#fafaf7 }
+  #piv tr.tot td:nth-child(-n+6){ background:#f8f7f3 }
+  #piv th:nth-child(1),#piv td:nth-child(1){ left:0; width:150px; min-width:150px; max-width:150px }
+  #piv th:nth-child(2),#piv td:nth-child(2){ left:150px; width:70px; min-width:70px; max-width:70px }
+  #piv th:nth-child(3),#piv td:nth-child(3){ left:220px; width:115px; min-width:115px; max-width:115px }
+  #piv th:nth-child(4),#piv td:nth-child(4){ left:335px; width:105px; min-width:105px; max-width:105px }
+  #piv th:nth-child(5),#piv td:nth-child(5){ left:440px; width:68px; min-width:68px; max-width:68px }
+  #piv th:nth-child(6),#piv td:nth-child(6){ left:508px; width:105px; min-width:105px; max-width:105px; box-shadow:2px 0 0 var(--border) }
+  /* #unjoinedTbl: 담당자·판매자ID·참고목표·누적거래액(1~4열) 고정 */
+  #unjoinedTbl th:nth-child(-n+4),#unjoinedTbl td:nth-child(-n+4){ position:sticky; box-sizing:border-box }
+  #unjoinedTbl td:nth-child(-n+4){ background:#fff; z-index:2 }
+  #unjoinedTbl th:nth-child(-n+4){ background:#f4f3ef; z-index:15 }
+  #unjoinedTbl tr:hover td:nth-child(-n+4){ background:#fafaf7 }
+  #unjoinedTbl th:nth-child(1),#unjoinedTbl td:nth-child(1){ left:0; width:70px; min-width:70px; max-width:70px }
+  #unjoinedTbl th:nth-child(2),#unjoinedTbl td:nth-child(2){ left:70px; width:115px; min-width:115px; max-width:115px }
+  #unjoinedTbl th:nth-child(3),#unjoinedTbl td:nth-child(3){ left:185px; width:105px; min-width:105px; max-width:105px }
+  #unjoinedTbl th:nth-child(4),#unjoinedTbl td:nth-child(4){ left:290px; width:105px; min-width:105px; max-width:105px; box-shadow:2px 0 0 var(--border) }
 </style>
 </head>
 <body>
@@ -116,13 +127,14 @@
   <div class="btns">
     <button class="btn go" id="refreshbtn">새로고침</button>
     <button class="btn reset" id="reset">초기화</button>
+    <button class="btn reset" id="toggleUnjoined">미가입 판매자 보기</button>
   </div>
 </div>
 
 <div class="wrap">
   <div class="kpis" id="kpis"></div>
 
-  <div class="card">
+  <div class="card compact">
     <h3>일별 거래액 추이</h3>
     <p class="h-sub" id="trendsub">현재 필터 기준 합계</p>
     <div id="c_trend" class="chart"></div>
@@ -139,7 +151,20 @@
     <div class="topscroll" id="topscroll"><div class="topscroll-inner" id="topscrollInner"></div></div>
     <div class="tblscroll" id="tblscroll"><table class="sumtbl" id="piv"></table></div>
   </div>
-  <p class="note">* 패키지·담당MD·목표액은 <code>그로스 패키지 가입 셀러 리스트</code> 시트에서 가져온 스냅샷입니다(매월 갱신 필요). 당월 달성율·누적 거래액·일별 추이는 <code>orders_secure</code>를 판매자ID로 좁혀 실시간 조회한 값입니다(개인정보 없이 판매자ID·주문일자·거래액만 조회, 로그인 계정 권한 내에서 자동 마스킹).</p>
+
+  <div class="card" id="unjoinedCard" style="display:none">
+    <div class="htools">
+      <div>
+        <h3 id="unjoinedTitle">미가입 판매자</h3>
+        <p class="h-sub" id="unjoinedSub">이번 시즌 패키지에 가입하지 않은 판매자 참고 목록</p>
+      </div>
+      <button class="btn csv" id="csvUnjoined" disabled>⬇ CSV 다운로드</button>
+    </div>
+    <div class="topscroll" id="topscrollUnjoined"><div class="topscroll-inner" id="topscrollUnjoinedInner"></div></div>
+    <div class="tblscroll" id="tblscrollUnjoined"><table class="sumtbl" id="unjoinedTbl"></table></div>
+  </div>
+
+  <p class="note">* 패키지·담당MD·목표액은 <code>그로스 패키지 가입 셀러 리스트</code> 시트에서 가져온 스냅샷입니다(매월 갱신 필요). 당월 달성율·누적 거래액·일별 추이는 <code>orders_secure</code>를 판매자ID로 좁혀 실시간 조회한 값입니다(개인정보 없이 판매자ID·주문일자·거래액만 조회, 로그인 계정 권한 내에서 자동 마스킹). 미가입 판매자는 참고 목표(7월, 미가입 전 기준)만 스냅샷이고, 누적 거래액·일별 거래액은 위 표와 동일하게 실시간 조회한 값입니다.</p>
 </div>
 
 <!-- 대시보드 설정 모달 (소유자/관리자) -->
@@ -178,10 +203,11 @@ function datesBetween(startStr, endStr){
 }
 
 var MAP = null;   // {target_month, source, rows:[{package,seller_id,md,aug_target}]} — data/seller_md_map.json 스냅샷
+var UNJOINED = null;  // {ref_month, source, rows:[{seller_id,md,ref_target}]} — data/seller_unjoined.json 스냅샷(참고용, 필요시에만 로드/표시)
 var SELECTED_MONTH = null;  // 조회 월(YYYY-MM). 목표액은 항상 MAP.target_month 기준, 나머지(누적·달성율·일별)는 이 값 기준
 var DATA = {};    // seller_id -> {total, byDate:{date:sum}} — orders_secure 실시간 조회 결과(선택 월 기준)
 var JOINED = [];  // 매핑 + 실적 결합 후 필터/정렬 대상 행
-var SORT_KEY = "rate", SORT_DIR = 1;  // 기본: 당월 달성율 오름차순(미달 판매자 먼저 확인)
+var SORT_KEY = "target", SORT_DIR = -1;  // 기본: 목표액 높은 순(내림차순)
 var THUMB = location.hash.indexOf("thumb") >= 0;  // 홈 갤러리 썸네일: 무거운 조회 스킵(필수 규약)
 var ROW_LIMIT = 20000;  // 매핑된 전체 판매자·당월 라인아이템 상한. 도달 시 경고(실측: 196개 판매자·19일 ≈ 3,600행).
 
@@ -221,6 +247,105 @@ function monthOptions(){
 
 function loadMap(){
   return fetch("data/seller_md_map.json").then(function(r){ return r.json(); }).then(function(j){ MAP=j; });
+}
+var DATA_UNJOINED = {};  // seller_id -> {total, byDate:{date:sum}} — 미가입 판매자용 orders_secure 실시간 조회 결과(선택 월 기준)
+var UNJOINED_SORT_KEY = "cum", UNJOINED_SORT_DIR = -1;
+
+function unjoinedVisible(){ return $("unjoinedCard").style.display !== "none"; }
+// 미가입 판매자 목록·실데이터는 "미가입 판매자 보기" 토글을 켤 때만 불러온다(평소엔 조회하지 않음)
+function loadUnjoinedIfNeeded(){
+  if(UNJOINED) return Promise.resolve();
+  return fetch("data/seller_unjoined.json").then(function(r){ return r.json(); }).then(function(j){ UNJOINED=j; });
+}
+function loadUnjoinedData(){
+  if(THUMB) return Promise.resolve();
+  var ids = UNJOINED.rows.map(function(r){ return r.seller_id; });
+  var range = monthRangeFor(SELECTED_MONTH);
+  return fetchAllPages(ids, range).then(function(rows){
+    DATA_UNJOINED = {};
+    rows.forEach(function(r){
+      var sid = r.seller_id;
+      var d = String(r.order_datetime).slice(0,10);  // 이미 KST 값 그대로(문자열 슬라이스, 타임존 변환 없음)
+      if(!DATA_UNJOINED[sid]) DATA_UNJOINED[sid] = { total:0, byDate:{} };
+      DATA_UNJOINED[sid].total += (Number(r.total_purchase)||0);
+      DATA_UNJOINED[sid].byDate[d] = (DATA_UNJOINED[sid].byDate[d]||0) + (Number(r.total_purchase)||0);
+    });
+  });
+}
+
+var UNJOINED_CSV_HEAD=[], UNJOINED_CSV_ROWS=[];
+function renderUnjoined(){
+  var md=$("f_md").value;
+  var terms = $("f_search").value.split(",").map(function(s){return s.trim().toLowerCase();}).filter(Boolean);
+  var days = monthRangeFor(SELECTED_MONTH).days;
+  var dlabel = monthLabel(SELECTED_MONTH);
+  var tlabel = monthLabel(UNJOINED.ref_month);
+  $("unjoinedTitle").textContent = "미가입 판매자 ("+dlabel+" 일별 거래액)";
+
+  var rows = UNJOINED.rows.filter(function(r){
+    if(md && r.md!==md) return false;
+    if(terms.length){
+      var sid = r.seller_id.toLowerCase();
+      if(!terms.some(function(t){ return sid.indexOf(t)>=0; })) return false;
+    }
+    return true;
+  }).map(function(r){
+    var d = DATA_UNJOINED[r.seller_id] || { total:0, byDate:{} };
+    return { seller_id:r.seller_id, md:r.md, ref_target:r.ref_target||0, cum:d.total,
+      daily: days.map(function(dt){ return d.byDate[dt]||0; }) };
+  });
+  var key=UNJOINED_SORT_KEY, dir=UNJOINED_SORT_DIR;
+  rows.sort(function(a,b){
+    var av=a[key], bv=b[key];
+    if(typeof av==="string") return dir*av.localeCompare(bv);
+    return dir*(av-bv);
+  });
+
+  var head = [
+    {k:"md",label:"담당자",txt:1},{k:"seller_id",label:"판매자ID",txt:1},
+    {k:"ref_target",label:tlabel+" 참고 목표(미가입 전)"},{k:"cum",label:dlabel+" 누적 거래액"}
+  ].concat(days.map(function(d,i){ return {k:"d"+i, label:dayLabel(d), nosort:1}; }));
+  var thead = "<thead><tr>"+head.map(function(h){
+    var cls=(h.txt?"txt ":"")+(!h.nosort && UNJOINED_SORT_KEY===h.k ? (UNJOINED_SORT_DIR>0?"sortasc":"sortdesc") : "");
+    return '<th class="'+cls.trim()+'" data-k="'+h.k+'"'+(h.nosort?' data-nosort="1"':'')+'>'+h.label+'</th>';
+  }).join("")+"</tr></thead>";
+  var tbody = "<tbody>"+rows.map(function(r){
+    var dayCells = r.daily.map(function(v){ return "<td>"+won(v)+"</td>"; }).join("");
+    return "<tr>"+
+      '<td class="txt">'+esc(r.md||"")+'</td>'+
+      '<td class="txt">'+esc(r.seller_id)+'</td>'+
+      '<td>'+won(r.ref_target)+'</td>'+
+      '<td>'+won(r.cum)+'</td>'+
+      dayCells+
+      "</tr>";
+  }).join("")+"</tbody>";
+  $("unjoinedTbl").innerHTML = thead+tbody;
+  wireMirrorScroll("topscrollUnjoined","topscrollUnjoinedInner","tblscrollUnjoined");
+
+  [].forEach.call(document.querySelectorAll("#unjoinedTbl th[data-k]"), function(th){
+    if(th.getAttribute("data-nosort")) return;
+    th.onclick=function(){
+      var k = th.getAttribute("data-k");
+      if(UNJOINED_SORT_KEY===k) UNJOINED_SORT_DIR=-UNJOINED_SORT_DIR; else { UNJOINED_SORT_KEY=k; UNJOINED_SORT_DIR=-1; }
+      renderUnjoined();
+    };
+  });
+
+  $("unjoinedSub").textContent = "이번 시즌 패키지에 가입하지 않은 판매자 참고 목록 · "+rows.length+"명";
+  $("csvUnjoined").disabled = rows.length===0;
+
+  UNJOINED_CSV_HEAD = ["담당자","판매자ID",tlabel+" 참고 목표",dlabel+" 누적 거래액"].concat(days.map(dayLabel));
+  UNJOINED_CSV_ROWS = rows.map(function(r){ return [r.md||"",r.seller_id,r.ref_target,r.cum].concat(r.daily); });
+}
+function downloadUnjoinedCSV(){
+  if(!UNJOINED_CSV_ROWS.length) return;
+  var head = UNJOINED_CSV_HEAD.map(csvCell).join(",");
+  var body = UNJOINED_CSV_ROWS.map(function(r){ return r.map(csvCell).join(","); }).join("\r\n");
+  var blob = new Blob(["﻿"+head+"\r\n"+body], {type:"text/csv;charset=utf-8;"});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a"); a.href=url; a.download="seller_unjoined_"+SELECTED_MONTH+".csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 }
 function populateFilterOptions(){
   var mds = Array.from(new Set(MAP.rows.map(function(r){return r.md;}))).sort();
@@ -316,15 +441,17 @@ function sortRows(rows){
 }
 
 // 표가 길어서 아래쪽 가로 스크롤바가 화면 밖일 때도 스크롤할 수 있도록, 표 위쪽에 미러 스크롤바를 두고 서로 동기화
-var SYNCING_SCROLL = false;
-function syncTopScroll(){
-  var top = $("topscroll"), inner = $("topscrollInner"), tbl = $("tblscroll");
-  inner.style.width = tbl.querySelector("table").scrollWidth+"px";
+function wireMirrorScroll(topId, innerId, tblId){
+  var top = $(topId), inner = $(innerId), tbl = $(tblId);
+  var tableEl = tbl.querySelector("table");
+  inner.style.width = (tableEl?tableEl.scrollWidth:0)+"px";
   if(top.dataset.wired) return;
   top.dataset.wired = "1";
-  top.addEventListener("scroll", function(){ if(SYNCING_SCROLL) return; SYNCING_SCROLL=true; tbl.scrollLeft=top.scrollLeft; SYNCING_SCROLL=false; });
-  tbl.addEventListener("scroll", function(){ if(SYNCING_SCROLL) return; SYNCING_SCROLL=true; top.scrollLeft=tbl.scrollLeft; SYNCING_SCROLL=false; });
+  var syncing = false;
+  top.addEventListener("scroll", function(){ if(syncing) return; syncing=true; tbl.scrollLeft=top.scrollLeft; syncing=false; });
+  tbl.addEventListener("scroll", function(){ if(syncing) return; syncing=true; top.scrollLeft=tbl.scrollLeft; syncing=false; });
 }
+function syncTopScroll(){ wireMirrorScroll("topscroll","topscrollInner","tblscroll"); }
 
 var WD = ["일","월","화","수","목","금","토"];
 function dayLabel(dateStr){
@@ -417,15 +544,26 @@ $("editdash").onclick=openEditModal;
 $("m_close").onclick=function(){ $("editmodal").style.display="none"; };
 $("m_save").onclick=saveMeta;
 $("editmodal").onclick=function(e){ if(e.target===$("editmodal")) $("editmodal").style.display="none"; };
-$("f_month").onchange=function(){ SELECTED_MONTH=$("f_month").value; refreshAll(); };
-$("f_md").onchange=render;
+function renderAll(){ render(); if(unjoinedVisible()) renderUnjoined(); }
+function refreshUnjoinedIfVisible(){ return unjoinedVisible() ? loadUnjoinedData().then(renderUnjoined) : Promise.resolve(); }
+$("f_month").onchange=function(){ SELECTED_MONTH=$("f_month").value; refreshAll().then(refreshUnjoinedIfVisible); };
+$("f_md").onchange=renderAll;
 $("f_pkg").onchange=render;
-$("f_search").addEventListener("input", render);
+$("f_search").addEventListener("input", renderAll);
 $("reset").onclick=function(){
   $("f_md").value=""; $("f_pkg").value=""; $("f_search").value="";
-  if(SELECTED_MONTH!==MAP.target_month){ SELECTED_MONTH=MAP.target_month; $("f_month").value=SELECTED_MONTH; refreshAll(); }
-  else render();
+  if(SELECTED_MONTH!==MAP.target_month){ SELECTED_MONTH=MAP.target_month; $("f_month").value=SELECTED_MONTH; refreshAll().then(refreshUnjoinedIfVisible); }
+  else renderAll();
 };
+$("toggleUnjoined").onclick=function(){
+  var card=$("unjoinedCard");
+  var showing = card.style.display!=="none";
+  if(showing){ card.style.display="none"; $("toggleUnjoined").textContent="미가입 판매자 보기"; return; }
+  $("toggleUnjoined").textContent="미가입 판매자 숨기기";
+  card.style.display="";
+  loadUnjoinedIfNeeded().then(loadUnjoinedData).then(renderUnjoined);
+};
+$("csvUnjoined").onclick=downloadUnjoinedCSV;
 
 function init(){
   return loadMap().then(function(){

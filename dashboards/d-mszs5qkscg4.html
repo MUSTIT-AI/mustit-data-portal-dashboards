@@ -112,8 +112,8 @@
 
 <div class="wrap">
   <p class="note">
-    <b>매칭 정의</b>: 같은 카탈로그(<code>catalog_id</code>)에 상품이 2개 이상 묶이면 <b>매칭</b>, 혼자뿐이면 <b>미매칭</b>.
-    ① <b>DB 파트</b>는 Open API 상품 마스터(<code>mustit_api.products</code>, 매일 08:00 갱신) 기준 신규 등록 시점의 현재 매칭 상태입니다.
+    <b>매칭 정의</b>: 상품이 속한 카탈로그의 <b>매칭 상품 수(matchedItemCount)가 2개 이상</b>이면 매칭, 1개 이하면 미매칭.
+    ① <b>DB 파트</b>는 머스트잇 Open API(<code>catalogs/stats</code>)의 실측 매칭 상품 수를 매일 적재한 스냅샷(<code>catalog_match_snapshot</code>)과 신규 등록 상품(<code>mustit_api.products</code>)을 결합해 판정합니다. <span id="snapmeta"></span>
     ② <b>앰플리튜드 파트</b>는 PDP(상품상세) 조회 이벤트의 가격비교 매칭 상품 수(<code>count_price_comparison</code>≥2)로 판정. 전체 추이는 <b>조회(uniques) 기준</b>으로 근사(Amplitude 원본 대시보드의 상품 고유수 수식은 이 프록시로 재현 불가), 브랜드별·카테고리별은 원본 대시보드와 동일하게 <b>조회건수(totals) 기준</b>입니다.
     <b>카탈로그 등록 처리자(관리자/AI/자동동기화) 구분</b>은 이 스키마에 없어 제외되었습니다.
   </p>
@@ -121,7 +121,7 @@
   <div class="kpis" id="kpis"></div>
 
   <div class="grid2">
-    <div class="card"><h3>주간 신규 카탈로그 등록 · 매칭 추이</h3><span class="h-sub">DB 기준 (mustit_api.products, 등록일 기준)</span><div id="c_weekly" class="chart"></div></div>
+    <div class="card"><h3>주간 신규 카탈로그 등록 · 매칭 추이</h3><span class="h-sub">Open API 실측 스냅샷 기준 · 상품 등록일 기준</span><div id="c_weekly" class="chart"></div></div>
     <div class="card"><h3>PDP 조회 기준 매칭·미매칭 추이</h3><span class="h-sub">Amplitude · view_product_detail (uniques, 봇 제외)</span><div id="c_amp" class="chart"></div></div>
   </div>
 
@@ -176,7 +176,13 @@ var THUMB = location.hash.indexOf("thumb") >= 0;
 
 // ── ECharts ──
 var CH = {};
-function chart(id){ if(!CH[id]) CH[id]=echarts.init($(id)); return CH[id]; }
+// 실패 메시지를 innerHTML로 넣었던 컨테이너도 재조회 시 정상 복구되도록 매번 상태 확인
+function chart(id){
+  if(CH[id] && !CH[id].isDisposed()) return CH[id];
+  var el = $(id); el.innerHTML = "";
+  CH[id] = echarts.init(el);
+  return CH[id];
+}
 window.addEventListener("resize", function(){ Object.keys(CH).forEach(function(k){ CH[k].resize(); }); });
 var GRID = { left:46, right:46, top:34, bottom:38 };
 var TIP = { trigger:"axis", confine:true, textStyle:{fontSize:11} };
@@ -333,30 +339,72 @@ function fetchAmpWeekly(from, to){
   }});
 }
 
-// 브랜드별/카테고리별 PDP 조회 · 매칭 현황 (원본 Amplitude 대시보드와 동일하게 조회건수=totals 기준,
-// totals는 구간 합산 가능한 지표라 일자별로 받아 합산한다)
-function fetchAmpBreakdown(dim, from, to){
-  var eMatched   = JSON.stringify({event_type:"view_product_detail", filters:[matchedFilter()],   group_by:[{type:"event",value:dim,group_type:"User"}]});
-  var eUnmatched = JSON.stringify({event_type:"view_product_detail", filters:[unmatchedFilter()], group_by:[{type:"event",value:dim,group_type:"User"}]});
+// group_by 응답의 시리즈 라벨 → 그룹명. 세그먼트가 함께 걸리면 [세그먼트, 그룹값] 배열로 오므로 마지막 요소를 쓴다.
+function labelName(lbl){
+  if(Array.isArray(lbl)) return String(lbl[lbl.length-1]);
+  return lbl==null ? "" : String(lbl);
+}
+function sumSeries(values){ return (values||[]).reduce(function(a,b){ return a+(Number(b)||0); }, 0); }
+
+// 한 차원(brand_name/category_2_name)에 대해 group_by 1개 + 이벤트 1개로 조회 → {그룹명: 합계}
+// (이벤트를 2개 넣고 group_by까지 거는 조합은 REST 세그멘테이션에서 응답 구조가 불안정해 분리 호출한다)
+function fetchAmpGrouped(dim, filter, from, to){
+  var ev = JSON.stringify({event_type:"view_product_detail", filters:[filter], group_by:[{type:"event",value:dim}]});
   return window.MUSTIT.fn("amplitude-proxy", { endpoint:"events/segmentation", params:{
-    e:[eMatched, eUnmatched], m:"totals", i:7,
+    e:[ev], m:"totals", i:7,
     start:ymdCompact(from), end:ymdCompact(to),
     s:BOT_SEG
   }}).then(function(r){
-    var d = r && r.data && r.data.data; if(!d) return [];
-    // seriesCollapsed(있으면) 또는 series를 그룹명별로 구간 합산
-    var byName = {}; // name -> {matched, unmatched}
-    (d.series||[]).forEach(function(seriesForEvent, eventIdx){
-      var labels = (d.seriesLabels && d.seriesLabels[eventIdx]) || [];
-      seriesForEvent.forEach(function(values, groupIdx){
-        var name = labels[groupIdx] != null ? String(labels[groupIdx]) : ("그룹 "+groupIdx);
-        var sum = (values||[]).reduce(function(a,b){ return a+(Number(b)||0); }, 0);
-        byName[name] = byName[name] || {name:name, matched:0, unmatched:0};
-        if(eventIdx===0) byName[name].matched += sum; else byName[name].unmatched += sum;
+    var d = r && r.data && r.data.data;
+    var out = {};
+    if(!d) return out;
+    var labels = d.seriesLabels || [];
+    (d.series||[]).forEach(function(values, idx){
+      var name = labelName(labels[idx]);
+      if(!name || name==="(none)") return;
+      out[name] = (out[name]||0) + sumSeries(values);  // totals는 구간 합산 가능
+    });
+    return out;
+  });
+}
+
+// 브랜드별/카테고리별 PDP 조회 · 매칭 현황 (원본 Amplitude 대시보드와 동일하게 조회건수=totals 기준)
+// ⚠ 앰플리튜드는 429(호출량 제한)가 있어 반드시 순차 호출 (CLAUDE.md 규약: Promise.all 금지)
+function fetchAmpBreakdown(dim, from, to){
+  return fetchAmpGrouped(dim, matchedFilter(), from, to).then(function(matchedMap){
+    return fetchAmpGrouped(dim, unmatchedFilter(), from, to).then(function(unmatchedMap){
+      var names = {};
+      Object.keys(matchedMap).forEach(function(k){ names[k]=1; });
+      Object.keys(unmatchedMap).forEach(function(k){ names[k]=1; });
+      return Object.keys(names).map(function(name){
+        return { name:name, matched:matchedMap[name]||0, unmatched:unmatchedMap[name]||0 };
       });
     });
-    return Object.keys(byName).map(function(k){ return byName[k]; }).filter(function(r){ return r.name && r.name!=="(none)"; });
   });
+}
+
+// 스냅샷 신선도·커버리지 표시. 스냅샷에 없는 카탈로그는 미매칭으로 집계되므로 누락이 있으면 경고한다.
+function renderSnapshotMeta(meta){
+  var el = $("snapmeta"); if(!el) return;
+  if(!meta){ el.textContent=""; return; }
+  var parts = [];
+  if(meta.snapshot_ingested_at) parts.push("스냅샷 갱신: "+new Date(meta.snapshot_ingested_at).toLocaleString("ko-KR"));
+  if(meta.snapshot_catalogs != null) parts.push("카탈로그 "+won(meta.snapshot_catalogs)+"건");
+  var html = parts.length ? '<span style="color:var(--sub)">('+parts.join(" · ")+')</span>' : "";
+  var miss = Number(meta.rows_without_snapshot)||0, total = Number(meta.total_items)||0;
+  if(miss > 0){
+    var rate = total ? (miss/total*100).toFixed(1) : "?";
+    html += ' <b style="color:var(--warn)">⚠ 스냅샷에 없는 상품 '+won(miss)+'건('+rate+'%)은 미매칭으로 집계됨 — 실제 매칭률은 이보다 높을 수 있습니다.</b>';
+  }
+  el.innerHTML = html;
+}
+
+function ampFail(id, label, e){
+  var msg = (e && e.message) ? e.message : "응답 없음";
+  if(CH[id] && !CH[id].isDisposed()){ CH[id].dispose(); }
+  delete CH[id];
+  $(id).innerHTML = '<div style="color:var(--sub);font-size:12px;padding:20px;line-height:1.6">'+
+    label+' 데이터를 불러오지 못했습니다.<br><span style="color:#b4523a">'+esc(msg)+'</span></div>';
 }
 
 // ── refresh ──
@@ -365,35 +413,43 @@ function refresh(){
   var to   = new Date($("to").value+"T00:00:00");
   $("loading").classList.add("on"); $("err").textContent="";
 
-  var calls = [
-    rpc("catalog_matching_report", {p_from: ymd(from), p_to: ymd(to), p_seller_limit: 1000}),
-    THUMB ? Promise.resolve(null) : fetchAmpWeekly(from, to).catch(function(e){ return null; }),
-    THUMB ? Promise.resolve(null) : fetchAmpBreakdown("brand_name", from, to).catch(function(e){ return null; }),
-    THUMB ? Promise.resolve(null) : fetchAmpBreakdown("category_2_name", from, to).catch(function(e){ return null; })
-  ];
+  // DB(RPC)는 앰플과 무관하니 병렬로 먼저 띄우고, 앰플리튜드 5회 호출은 순차로 진행(429 방지)
+  var dbCall = rpc("catalog_matching_report", {p_from: ymd(from), p_to: ymd(to), p_seller_limit: 1000})
+    .then(function(report){
+      report = report||{};
+      var weekly = report.weekly||[], sellers = report.sellers||[];
+      SELLERS = sellers; sortSellers(); PAGE=0;
+      renderKPI(weekly, sellers);
+      renderWeeklyChart(weekly);
+      renderSnapshotMeta(report.meta);
+      if(!THUMB) paintSellers();
+    });
 
-  Promise.all(calls).then(function(res){
-    var report = res[0]||{}, weekly = report.weekly||[], sellers = report.sellers||[],
-        amp = res[1], brandRows = res[2], categoryRows = res[3];
-    SELLERS = sellers; sortSellers(); PAGE=0;
-    renderKPI(weekly, sellers);
-    renderWeeklyChart(weekly);
-    if(!THUMB){
-      paintSellers();
-      if(amp && amp.data && amp.data.data){
-        var d = amp.data.data;
+  var ampChain = THUMB ? Promise.resolve() : dbCall.catch(function(){}).then(function(){
+    return fetchAmpWeekly(from, to)
+      .then(function(r){
+        var d = r && r.data && r.data.data;
+        if(!d) throw new Error("응답 형식이 예상과 다릅니다");
         renderAmpChart(d.xValues||[], (d.series&&d.series[0])||[], (d.series&&d.series[1])||[]);
-      } else {
-        $("c_amp").innerHTML = '<div style="color:var(--sub);font-size:12px;padding:20px">앰플리튜드 데이터를 불러오지 못했습니다.</div>';
-      }
-      if(brandRows && brandRows.length) renderBreakdownChart("c_brand", brandRows);
-      else $("c_brand").innerHTML = '<div style="color:var(--sub);font-size:12px;padding:20px">앰플리튜드 브랜드별 데이터를 불러오지 못했습니다.</div>';
-      if(categoryRows && categoryRows.length) renderBreakdownChart("c_category", categoryRows);
-      else $("c_category").innerHTML = '<div style="color:var(--sub);font-size:12px;padding:20px">앰플리튜드 카테고리별 데이터를 불러오지 못했습니다.</div>';
-    }
-  })
-  .catch(function(e){ $("err").textContent = "오류: "+e.message; })
-  .finally(function(){ $("loading").classList.remove("on"); });
+      })
+      .catch(function(e){ ampFail("c_amp", "앰플리튜드", e); })
+      .then(function(){ return fetchAmpBreakdown("brand_name", from, to); })
+      .then(function(rows){
+        if(rows && rows.length) renderBreakdownChart("c_brand", rows);
+        else ampFail("c_brand", "앰플리튜드 브랜드별", new Error("조회 결과가 비어 있습니다"));
+      })
+      .catch(function(e){ ampFail("c_brand", "앰플리튜드 브랜드별", e); })
+      .then(function(){ return fetchAmpBreakdown("category_2_name", from, to); })
+      .then(function(rows){
+        if(rows && rows.length) renderBreakdownChart("c_category", rows);
+        else ampFail("c_category", "앰플리튜드 카테고리별", new Error("조회 결과가 비어 있습니다"));
+      })
+      .catch(function(e){ ampFail("c_category", "앰플리튜드 카테고리별", e); });
+  });
+
+  Promise.all([dbCall, ampChain])
+    .catch(function(e){ $("err").textContent = "오류: "+((e&&e.message)||e); })
+    .finally(function(){ $("loading").classList.remove("on"); });
 }
 
 function setDefaultDates(){

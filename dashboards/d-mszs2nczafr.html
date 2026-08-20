@@ -97,6 +97,7 @@
 </div>
 
 <div class="filters" id="filters">
+  <div class="fld"><label>조회 월</label><select id="f_month"></select></div>
   <div class="fld"><label>담당 MD</label><select id="f_md"><option value="">전체</option></select></div>
   <div class="fld"><label>패키지</label><select id="f_pkg"><option value="">전체</option></select></div>
   <div class="fld"><label>판매자ID 검색</label><input type="text" id="f_search" placeholder="판매자ID로 검색"></div>
@@ -164,7 +165,8 @@ function datesBetween(startStr, endStr){
 }
 
 var MAP = null;   // {target_month, source, rows:[{package,seller_id,md,aug_target}]} — data/seller_md_map.json 스냅샷
-var DATA = {};    // seller_id -> {total, byDate:{date:sum}} — orders_secure 실시간 조회 결과
+var SELECTED_MONTH = null;  // 조회 월(YYYY-MM). 목표액은 항상 MAP.target_month 기준, 나머지(누적·달성율·일별)는 이 값 기준
+var DATA = {};    // seller_id -> {total, byDate:{date:sum}} — orders_secure 실시간 조회 결과(선택 월 기준)
 var JOINED = [];  // 매핑 + 실적 결합 후 필터/정렬 대상 행
 var SORT_KEY = "rate", SORT_DIR = 1;  // 기본: 당월 달성율 오름차순(미달 판매자 먼저 확인)
 var THUMB = location.hash.indexOf("thumb") >= 0;  // 홈 갤러리 썸네일: 무거운 조회 스킵(필수 규약)
@@ -186,11 +188,22 @@ function renderTrendChart(days, rows){
   }, true);
 }
 
-function monthLabel(){ return String(Number(MAP.target_month.split("-")[1]))+"월"; }
-function monthRange(){
-  var start = MAP.target_month+"-01";
-  var today = ymd(new Date());
-  return { start:start, end:nextDay(today), days:datesBetween(start, today) };
+function monthLabel(monthStr){ return String(Number(monthStr.split("-")[1]))+"월"; }
+// 선택한 월(YYYY-MM)의 조회 범위: 지난 달=월초~말일 전체, 이번 달(진행중)=월초~오늘까지
+function monthRangeFor(monthStr){
+  var start = monthStr+"-01";
+  var y = Number(monthStr.split("-")[0]), m = Number(monthStr.split("-")[1]);
+  var nextMonthStart = ymd(new Date(y, m, 1));  // m은 1-based라 Date()엔 그대로 넣으면 "다음 달 1일"이 됨
+  var todayNext = nextDay(ymd(new Date()));
+  var end = nextMonthStart < todayNext ? nextMonthStart : todayNext;
+  var endInclusive = new Date(end+"T00:00:00"); endInclusive.setDate(endInclusive.getDate()-1);
+  return { start:start, end:end, days:datesBetween(start, ymd(endInclusive)) };
+}
+// 조회 월 셀렉트 옵션: 기준월(target_month)까지 최근 6개월
+function monthOptions(){
+  var out=[]; var y=Number(MAP.target_month.split("-")[0]), m=Number(MAP.target_month.split("-")[1]);
+  for(var i=0;i<6;i++){ out.unshift(y+"-"+String(m).padStart(2,"0")); m--; if(m===0){ m=12; y--; } }
+  return out;
 }
 
 function loadMap(){
@@ -201,6 +214,9 @@ function populateFilterOptions(){
   var pkgs = Array.from(new Set(MAP.rows.map(function(r){return r.package;}))).sort();
   $("f_md").innerHTML = '<option value="">전체</option>'+mds.map(function(m){return '<option value="'+esc(m)+'">'+esc(m)+'</option>';}).join("");
   $("f_pkg").innerHTML = '<option value="">전체</option>'+pkgs.map(function(p){return '<option value="'+esc(p)+'">'+esc(p)+'</option>';}).join("");
+  $("f_month").innerHTML = monthOptions().map(function(mo){
+    return '<option value="'+mo+'"'+(mo===SELECTED_MONTH?' selected':'')+'>'+monthLabel(mo)+' ('+mo+')</option>';
+  }).join("");
 }
 
 // ── 스파크라인: 행마다 ECharts 인스턴스를 만들면 무거워서(최대 196행) 가벼운 inline SVG로 직접 그림 ──
@@ -222,7 +238,7 @@ function sparkline(values){
 function loadData(){
   if(THUMB) return Promise.resolve();  // 썸네일 미리보기에서는 실데이터 조회 스킵
   var ids = MAP.rows.map(function(r){ return r.seller_id; });
-  var range = monthRange();
+  var range = monthRangeFor(SELECTED_MONTH);
   $("loading").classList.add("on"); $("err").textContent="";
   return window.MUSTIT.client.from("orders_secure")
     .select("seller_id,order_datetime,total_purchase")
@@ -248,12 +264,13 @@ function loadData(){
 }
 
 function buildJoined(){
-  var range = monthRange();
+  var range = monthRangeFor(SELECTED_MONTH);
+  var isTargetMonth = SELECTED_MONTH === MAP.target_month;  // 목표는 스냅샷 기준월에만 존재 — 다른 달엔 달성율 비교 불가
   JOINED = MAP.rows.map(function(m){
     var d = DATA[m.seller_id] || { total:0, byDate:{} };
     return {
       package:m.package, md:m.md, seller_id:m.seller_id, target:m.aug_target||0,
-      cum:d.total, rate:(m.aug_target>0 ? d.total/m.aug_target : null),
+      cum:d.total, rate:(isTargetMonth && m.aug_target>0 ? d.total/m.aug_target : null),
       daily: range.days.map(function(dt){ return d.byDate[dt]||0; })
     };
   });
@@ -283,22 +300,24 @@ function sortRows(rows){
 var CSV_HEAD=[], CSV_ROWS=[];
 function render(){
   var rows = sortRows(applyFilters());
-  var mlabel = monthLabel();
-  $("tblTitle").textContent = mlabel+" 그로스 패키지 판매자 현황";
+  var tlabel = monthLabel(MAP.target_month);   // 목표액 기준월(고정, 스냅샷)
+  var dlabel = monthLabel(SELECTED_MONTH);     // 조회 월(선택, 누적/달성율/일별 기준)
+  var isTargetMonth = SELECTED_MONTH === MAP.target_month;
+  $("tblTitle").textContent = "그로스 패키지 판매자 현황 ("+dlabel+" 일별 거래액)";
 
   var tgtSum=0, cumSum=0;
   rows.forEach(function(r){ tgtSum+=r.target; cumSum+=r.cum; });
-  renderTrendChart(monthRange().days, rows);
+  renderTrendChart(monthRangeFor(SELECTED_MONTH).days, rows);
   $("kpis").innerHTML = [
     {l:"대상 판매자 수", v:won(rows.length)},
-    {l:mlabel+" 목표 합계", v:won(tgtSum)},
-    {l:"당월 누적 거래액", v:won(cumSum)},
-    {l:"전체 달성율", v:(tgtSum>0?pct(cumSum/tgtSum):"-"), rate:1}
+    {l:tlabel+" 목표 합계", v:won(tgtSum)},
+    {l:dlabel+" 누적 거래액", v:won(cumSum)},
+    {l:"전체 달성율", v:(isTargetMonth && tgtSum>0?pct(cumSum/tgtSum):"-"), rate:1}
   ].map(function(k){ return '<div class="kpi"><div class="l">'+k.l+'</div><div class="v'+(k.rate?" rate":"")+'">'+k.v+'</div></div>'; }).join("");
 
   var head = [
     {k:"package",label:"패키지",txt:1},{k:"md",label:"담당자",txt:1},{k:"seller_id",label:"판매자ID",txt:1},
-    {k:"target",label:mlabel+" 목표액"},{k:"rate",label:"당월 달성율"},{k:"cum",label:"월 누적 거래액"},{k:"daily",label:"일별 거래액",nosort:1}
+    {k:"target",label:tlabel+" 목표액"},{k:"rate",label:dlabel+" 달성율"},{k:"cum",label:dlabel+" 누적 거래액"},{k:"daily",label:dlabel+" 일별 거래액",nosort:1}
   ];
   var thead = "<thead><tr>"+head.map(function(h){
     var cls=(h.txt?"txt ":"")+(!h.nosort && SORT_KEY===h.k ? (SORT_DIR>0?"sortasc":"sortdesc") : "");
@@ -317,7 +336,7 @@ function render(){
       "</tr>";
   }).join("")+
     '<tr class="tot"><td class="txt">합계</td><td class="txt"></td><td class="txt">'+rows.length+'개</td>'+
-    '<td>'+won(tgtSum)+'</td><td>'+(tgtSum>0?pct(cumSum/tgtSum):"-")+'</td><td>'+won(cumSum)+'</td><td></td></tr>'+
+    '<td>'+won(tgtSum)+'</td><td>'+(isTargetMonth && tgtSum>0?pct(cumSum/tgtSum):"-")+'</td><td>'+won(cumSum)+'</td><td></td></tr>'+
     "</tbody>";
   $("piv").innerHTML = thead+tbody;
 
@@ -329,10 +348,10 @@ function render(){
     };
   });
 
-  CSV_HEAD = ["패키지","담당자","판매자ID",mlabel+" 목표액","당월 달성율(%)","월 누적 거래액"];
+  CSV_HEAD = ["패키지","담당자","판매자ID",tlabel+" 목표액",dlabel+" 달성율(%)",dlabel+" 누적 거래액"];
   CSV_ROWS = rows.map(function(r){ return [r.package,r.md,r.seller_id,r.target,(r.rate==null?"":(r.rate*100).toFixed(1)),r.cum]; });
   $("csv").disabled = rows.length===0;
-  $("pivsub").textContent = "기준월 "+MAP.target_month+" · "+rows.length+"개 판매자"+(THUMB?" (미리보기)":"");
+  $("pivsub").textContent = "조회 월 "+SELECTED_MONTH+" · "+rows.length+"개 판매자"+(THUMB?" (미리보기)":"");
 }
 
 function csvCell(v){ v=(v==null?"":String(v)); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
@@ -342,7 +361,7 @@ function downloadCSV(){
   var body = CSV_ROWS.map(function(r){ return r.map(csvCell).join(","); }).join("\r\n");
   var blob = new Blob(["﻿"+head+"\r\n"+body], {type:"text/csv;charset=utf-8;"});
   var url = URL.createObjectURL(blob);
-  var a = document.createElement("a"); a.href=url; a.download="seller_package_"+(MAP?MAP.target_month:"")+".csv";
+  var a = document.createElement("a"); a.href=url; a.download="seller_package_"+SELECTED_MONTH+".csv";
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 }
@@ -355,14 +374,22 @@ $("editdash").onclick=openEditModal;
 $("m_close").onclick=function(){ $("editmodal").style.display="none"; };
 $("m_save").onclick=saveMeta;
 $("editmodal").onclick=function(e){ if(e.target===$("editmodal")) $("editmodal").style.display="none"; };
+$("f_month").onchange=function(){ SELECTED_MONTH=$("f_month").value; refreshAll(); };
 $("f_md").onchange=render;
 $("f_pkg").onchange=render;
 $("f_search").addEventListener("input", render);
-$("reset").onclick=function(){ $("f_md").value=""; $("f_pkg").value=""; $("f_search").value=""; render(); };
+$("reset").onclick=function(){
+  $("f_md").value=""; $("f_pkg").value=""; $("f_search").value="";
+  if(SELECTED_MONTH!==MAP.target_month){ SELECTED_MONTH=MAP.target_month; $("f_month").value=SELECTED_MONTH; refreshAll(); }
+  else render();
+};
 
 function init(){
-  return loadMap().then(function(){ populateFilterOptions(); return refreshAll(); })
-    .catch(function(e){ $("err").textContent = "매핑 데이터 로드 오류: "+e.message; });
+  return loadMap().then(function(){
+    SELECTED_MONTH = MAP.target_month;
+    populateFilterOptions();
+    return refreshAll();
+  }).catch(function(e){ $("err").textContent = "매핑 데이터 로드 오류: "+e.message; });
 }
 var ACCESS=null;
 function blockNoAccess(msg){

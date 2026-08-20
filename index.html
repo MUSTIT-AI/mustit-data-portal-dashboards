@@ -7,8 +7,9 @@
 <title>MUST IT Data Portal 통합 대시보드</title>
 <style>
   body{font-family:'Pretendard','Malgun Gothic',system-ui,sans-serif;margin:0;background:#eef0f2;color:#1c1b19}
-  .wrap{max-width:1320px;margin:0 auto;padding:36px 32px}
-  h1{font-size:24px;margin:0 0 4px;letter-spacing:-.01em}
+  .wrap{max-width:100%;margin:0;padding:28px 28px}
+  @media(max-width:640px){.wrap{padding:18px 14px}}
+  h1{font-size:24px;margin:0;letter-spacing:-.01em}
   .sub{color:#6b6a66;font-size:14px;margin:0 0 18px}
   .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px;margin-top:8px}
   .gcard{position:relative;display:block;background:#fff;border:1px solid #e2e0da;border-radius:14px;overflow:hidden;cursor:pointer;color:inherit;transition:border-color .15s,box-shadow .15s}
@@ -248,7 +249,7 @@
       : '<div class="thumb">' + fld + star + cog + '<span class="badge-prep">준비중</span><div class="ph"><span class="pico">' + esc(d.icon || '📊') + '</span><span>준비중</span></div></div>';
     var tags = (d.tags && d.tags.length) ? ('<div class="gtags">' + d.tags.map(function (t) { return '<span class="tg">#' + esc(t) + '</span>'; }).join('') + '</div>') : '';
     var owner = d.owner_name ? esc(d.owner_name) : '';
-    var dt = d.date ? ('업데이트 ' + fmtDT(d.date)) : '';
+    var dt = d.date ? ('갱신 ' + fmtDT(d.date)) : '';
     return '<div class="gcard" data-href="' + href + '">' + thumb +
       '<div class="gmeta"><div class="gname">' + esc(d.title || d.file) + '</div>' +
       (d.short ? '<div class="gdesc">' + esc(d.short) + '</div>' : '') + tags +

@@ -101,14 +101,8 @@
 </div>
 
 <div class="filters" id="filters">
-  <div class="fld"><label>조회 기간</label>
-    <select id="weeks">
-      <option value="8">최근 8주</option>
-      <option value="12" selected>최근 12주</option>
-      <option value="26">최근 26주</option>
-      <option value="52">최근 52주</option>
-    </select>
-  </div>
+  <div class="fld"><label>조회 시작일</label><input type="date" id="from"></div>
+  <div class="fld"><label>조회 종료일</label><input type="date" id="to"></div>
   <div class="fld"><label>판매자 검색</label><input type="text" id="sellerq" placeholder="판매자ID 검색"></div>
   <div class="btns">
     <button class="btn go" id="go">조회</button>
@@ -120,7 +114,7 @@
   <p class="note">
     <b>매칭 정의</b>: 같은 카탈로그(<code>catalog_id</code>)에 상품이 2개 이상 묶이면 <b>매칭</b>, 혼자뿐이면 <b>미매칭</b>.
     ① <b>DB 파트</b>는 Open API 상품 마스터(<code>mustit_api.products</code>, 매일 08:00 갱신) 기준 신규 등록 시점의 현재 매칭 상태입니다.
-    ② <b>앰플리튜드 파트</b>는 PDP(상품상세) 조회 이벤트의 가격비교 매칭 상품 수(<code>count_price_comparison</code>≥2)로 판정하며, <b>조회(uniques) 기준 추이</b>로 근사한 것입니다(Amplitude 원본 대시보드의 상품 고유수 수식은 이 프록시로 재현 불가).
+    ② <b>앰플리튜드 파트</b>는 PDP(상품상세) 조회 이벤트의 가격비교 매칭 상품 수(<code>count_price_comparison</code>≥2)로 판정. 전체 추이는 <b>조회(uniques) 기준</b>으로 근사(Amplitude 원본 대시보드의 상품 고유수 수식은 이 프록시로 재현 불가), 브랜드별·카테고리별은 원본 대시보드와 동일하게 <b>조회건수(totals) 기준</b>입니다.
     <b>카탈로그 등록 처리자(관리자/AI/자동동기화) 구분</b>은 이 스키마에 없어 제외되었습니다.
   </p>
 
@@ -129,6 +123,11 @@
   <div class="grid2">
     <div class="card"><h3>주간 신규 카탈로그 등록 · 매칭 추이</h3><span class="h-sub">DB 기준 (mustit_api.products, 등록일 기준)</span><div id="c_weekly" class="chart"></div></div>
     <div class="card"><h3>PDP 조회 기준 매칭·미매칭 추이</h3><span class="h-sub">Amplitude · view_product_detail (uniques, 봇 제외)</span><div id="c_amp" class="chart"></div></div>
+  </div>
+
+  <div class="grid2">
+    <div class="card"><h3>브랜드별 PDP 조회 · 매칭 현황</h3><span class="h-sub">Amplitude · brand_name 기준 Top 10 (조회건수)</span><div id="c_brand" class="chart" style="height:320px"></div></div>
+    <div class="card"><h3>카테고리별 PDP 조회 · 매칭 현황</h3><span class="h-sub">Amplitude · category_2_name(중분류) 기준 Top 10 (조회건수)</span><div id="c_category" class="chart" style="height:320px"></div></div>
   </div>
 
   <div class="tblwrap">
@@ -208,6 +207,22 @@ function renderAmpChart(dates, matched, unmatched){
     series:[
       { name:"매칭(조회)",   type:"line", data:matched,   symbol:"circle", symbolSize:4, lineStyle:{color:"#2fae8f",width:1.6}, itemStyle:{color:"#2fae8f"} },
       { name:"미매칭(조회)", type:"line", data:unmatched, symbol:"circle", symbolSize:4, lineStyle:{color:"#ee3b52",width:1.6}, itemStyle:{color:"#ee3b52"} }
+    ]
+  }, true);
+}
+
+// rows: [{name, matched, unmatched}] — Top 10, 조회건수(matched+unmatched) 내림차순
+function renderBreakdownChart(id, rows){
+  var sorted = rows.slice().sort(function(a,b){ return (b.matched+b.unmatched)-(a.matched+a.unmatched); }).slice(0,10);
+  sorted.reverse(); // 가로 막대는 아래→위로 그려지므로 1위가 맨 위에 오도록 반전
+  var names = sorted.map(function(r){ return r.name; });
+  chart(id).setOption({
+    grid:{ left:90, right:20, top:26, bottom:26 }, tooltip:TIP, legend:legend(["매칭(조회)","미매칭(조회)"]),
+    xAxis:{ type:"value", axisLabel:{fontSize:9,color:"#999"}, splitLine:{lineStyle:{color:"#eee"}} },
+    yAxis:{ type:"category", data:names, axisLabel:{fontSize:10,color:"#555"}, axisTick:{show:false}, axisLine:{lineStyle:{color:"#ddd"}} },
+    series:[
+      { name:"매칭(조회)",   type:"bar", stack:"s", data:sorted.map(function(r){return r.matched;}),   itemStyle:{color:"#2fae8f"}, barMaxWidth:16 },
+      { name:"미매칭(조회)", type:"bar", stack:"s", data:sorted.map(function(r){return r.unmatched;}), itemStyle:{color:"#ee3b52"}, barMaxWidth:16 }
     ]
   }, true);
 }
@@ -302,36 +317,64 @@ function downloadCSV(){
   setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 }
 
-// ── Amplitude: PDP 조회 기준 매칭/미매칭 주간 추이 ──
-function fetchAmpWeekly(weeks){
-  var end = new Date(); // 오늘까지
-  var start = mondayOf(new Date(end.getTime() - weeks*7*86400000));
-  var BOT_SEG = [JSON.stringify([{prop:"os",op:"does not contain",values:["yeti","bot","headless"]}])];
-  var eMatched   = JSON.stringify({event_type:"view_product_detail", filters:[{subprop_type:"event",subprop_key:"count_price_comparison",subprop_op:"greater or equal",subprop_value:["2"]}]});
-  var eUnmatched = JSON.stringify({event_type:"view_product_detail", filters:[{subprop_type:"event",subprop_key:"count_price_comparison",subprop_op:"is",subprop_value:["0","(none)","1"]}]});
+// ── Amplitude 공통 ──
+var BOT_SEG = [JSON.stringify([{prop:"os",op:"does not contain",values:["yeti","bot","headless"]}])];
+function matchedFilter(){ return {subprop_type:"event",subprop_key:"count_price_comparison",subprop_op:"greater or equal",subprop_value:["2"]}; }
+function unmatchedFilter(){ return {subprop_type:"event",subprop_key:"count_price_comparison",subprop_op:"is",subprop_value:["0","(none)","1"]}; }
+
+// PDP 조회 기준 매칭/미매칭 주간 추이 (uniques 근사)
+function fetchAmpWeekly(from, to){
+  var eMatched   = JSON.stringify({event_type:"view_product_detail", filters:[matchedFilter()]});
+  var eUnmatched = JSON.stringify({event_type:"view_product_detail", filters:[unmatchedFilter()]});
   return window.MUSTIT.fn("amplitude-proxy", { endpoint:"events/segmentation", params:{
     e:[eMatched, eUnmatched], m:"uniques", i:7,
-    start:ymdCompact(start), end:ymdCompact(end),
+    start:ymdCompact(from), end:ymdCompact(to),
     s:BOT_SEG
   }});
 }
 
+// 브랜드별/카테고리별 PDP 조회 · 매칭 현황 (원본 Amplitude 대시보드와 동일하게 조회건수=totals 기준,
+// totals는 구간 합산 가능한 지표라 일자별로 받아 합산한다)
+function fetchAmpBreakdown(dim, from, to){
+  var eMatched   = JSON.stringify({event_type:"view_product_detail", filters:[matchedFilter()],   group_by:[{type:"event",value:dim,group_type:"User"}]});
+  var eUnmatched = JSON.stringify({event_type:"view_product_detail", filters:[unmatchedFilter()], group_by:[{type:"event",value:dim,group_type:"User"}]});
+  return window.MUSTIT.fn("amplitude-proxy", { endpoint:"events/segmentation", params:{
+    e:[eMatched, eUnmatched], m:"totals", i:7,
+    start:ymdCompact(from), end:ymdCompact(to),
+    s:BOT_SEG
+  }}).then(function(r){
+    var d = r && r.data && r.data.data; if(!d) return [];
+    // seriesCollapsed(있으면) 또는 series를 그룹명별로 구간 합산
+    var byName = {}; // name -> {matched, unmatched}
+    (d.series||[]).forEach(function(seriesForEvent, eventIdx){
+      var labels = (d.seriesLabels && d.seriesLabels[eventIdx]) || [];
+      seriesForEvent.forEach(function(values, groupIdx){
+        var name = labels[groupIdx] != null ? String(labels[groupIdx]) : ("그룹 "+groupIdx);
+        var sum = (values||[]).reduce(function(a,b){ return a+(Number(b)||0); }, 0);
+        byName[name] = byName[name] || {name:name, matched:0, unmatched:0};
+        if(eventIdx===0) byName[name].matched += sum; else byName[name].unmatched += sum;
+      });
+    });
+    return Object.keys(byName).map(function(k){ return byName[k]; }).filter(function(r){ return r.name && r.name!=="(none)"; });
+  });
+}
+
 // ── refresh ──
 function refresh(){
-  var weeks = Number($("weeks").value)||12;
-  var end = new Date();
-  var from = mondayOf(new Date(end.getTime() - weeks*7*86400000));
-  var to = end;
+  var from = new Date($("from").value+"T00:00:00");
+  var to   = new Date($("to").value+"T00:00:00");
   $("loading").classList.add("on"); $("err").textContent="";
 
   var calls = [
-    rpc("catalog_matching_weekly", {p_weeks: weeks}),
+    rpc("catalog_matching_weekly", {p_from: ymd(from), p_to: ymd(to)}),
     THUMB ? Promise.resolve([]) : rpc("catalog_matching_by_seller", {p_from: ymd(from), p_to: ymd(to), p_limit: 1000}),
-    THUMB ? Promise.resolve(null) : fetchAmpWeekly(weeks).catch(function(e){ return null; })
+    THUMB ? Promise.resolve(null) : fetchAmpWeekly(from, to).catch(function(e){ return null; }),
+    THUMB ? Promise.resolve(null) : fetchAmpBreakdown("brand_name", from, to).catch(function(e){ return null; }),
+    THUMB ? Promise.resolve(null) : fetchAmpBreakdown("category_2_name", from, to).catch(function(e){ return null; })
   ];
 
   Promise.all(calls).then(function(res){
-    var weekly = res[0]||[], sellers = res[1]||[], amp = res[2];
+    var weekly = res[0]||[], sellers = res[1]||[], amp = res[2], brandRows = res[3], categoryRows = res[4];
     SELLERS = sellers; sortSellers(); PAGE=0;
     renderKPI(weekly, sellers);
     renderWeeklyChart(weekly);
@@ -343,12 +386,23 @@ function refresh(){
       } else {
         $("c_amp").innerHTML = '<div style="color:var(--sub);font-size:12px;padding:20px">앰플리튜드 데이터를 불러오지 못했습니다.</div>';
       }
+      if(brandRows && brandRows.length) renderBreakdownChart("c_brand", brandRows);
+      else $("c_brand").innerHTML = '<div style="color:var(--sub);font-size:12px;padding:20px">앰플리튜드 브랜드별 데이터를 불러오지 못했습니다.</div>';
+      if(categoryRows && categoryRows.length) renderBreakdownChart("c_category", categoryRows);
+      else $("c_category").innerHTML = '<div style="color:var(--sub);font-size:12px;padding:20px">앰플리튜드 카테고리별 데이터를 불러오지 못했습니다.</div>';
     }
   })
   .catch(function(e){ $("err").textContent = "오류: "+e.message; })
   .finally(function(){ $("loading").classList.remove("on"); });
 }
 
+function setDefaultDates(){
+  var to = new Date(); to.setDate(to.getDate()-1);            // 종료일 = 어제
+  var from = mondayOf(new Date(to.getTime() - 12*7*86400000)); // 시작일 = 12주 전 월요일
+  $("from").value = ymd(from); $("to").value = ymd(to);
+}
+
+setDefaultDates();
 $("go").onclick=refresh;
 $("csv").onclick=downloadCSV;
 $("sellerq").addEventListener("input", function(){ PAGE=0; paintSellers(); });

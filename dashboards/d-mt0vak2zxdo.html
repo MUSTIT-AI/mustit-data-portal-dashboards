@@ -42,7 +42,8 @@
   .filters{background:#fff;border-bottom:1px solid var(--border);padding:8px 12px;display:flex;flex-wrap:wrap;gap:7px 10px;align-items:flex-end;position:sticky;top:39px;z-index:30}
   .fld{display:flex;flex-direction:column;gap:3px}
   .fld label{font-size:10.5px;color:var(--sub);font-weight:600;letter-spacing:.02em}
-  .fld input[type=date]{border:1px solid #d6d4ce;border-radius:6px;padding:5px 7px;font-size:12px;background:#fff;height:29px}
+  .fld input[type=date],.fld input[type=text]{border:1px solid #d6d4ce;border-radius:6px;padding:5px 7px;font-size:12px;background:#fff;height:29px}
+  .fld input[type=text]{width:150px}
   .ms{position:relative}
   .ms>button{border:1px solid #d6d4ce;border-radius:6px;background:#fff;padding:5px 8px;font-size:12px;height:29px;min-width:96px;max-width:150px;
     display:flex;align-items:center;justify-content:space-between;gap:6px;cursor:pointer;white-space:nowrap;overflow:hidden}
@@ -81,6 +82,8 @@
   table.raw{border-collapse:collapse;white-space:nowrap;font-size:11.5px;width:100%}
   table.raw th{background:#f4f3ef;color:#33322f;padding:6px 8px;text-align:left;border-bottom:1px solid #e2e0da;position:sticky;top:0;font-weight:700}
   table.raw td{padding:5px 8px;border-bottom:1px solid #f0efe9;font-variant-numeric:tabular-nums}
+  table.raw td.num{text-align:right}
+  table.raw td.zero{color:#b6b4ae}
   table.raw tr:hover td{background:#fafaf7}
   .loading{position:fixed;inset:0;background:rgba(255,255,255,.55);display:none;align-items:center;justify-content:center;z-index:80;font-weight:700;color:var(--red)}
   .loading.on{display:flex}
@@ -102,13 +105,14 @@
   <div class="fld"><label>가입일 (종료)</label><input type="date" id="join_to"></div>
   <div class="fld"><label>최근접속일 (시작)</label><input type="date" id="login_from"></div>
   <div class="fld"><label>최근접속일 (종료)</label><input type="date" id="login_to"></div>
+  <div class="fld"><label>회원ID</label><input type="text" id="member_ids" placeholder="쉼표로 구분"></div>
   <div id="dropdowns" style="display:contents"></div>
   <div class="btns">
     <button class="btn go" id="go">조회</button>
     <button class="btn reset" id="reset">초기화</button>
   </div>
 </div>
-<p class="hint">* 가입일 또는 최근접속일 범위 중 하나는 반드시 입력하세요(각 축 최대 90일). 성별·연령대·구매자등급은 조회된 결과 안에서 체크박스로 필터링합니다(즉시 반영, 재조회 없음).</p>
+<p class="hint">* <b>회원ID</b>를 입력하면 날짜 조건 없이 해당 회원만 조회합니다(최대 50개, 날짜 범위는 무시). 비워두면 <b>가입일 또는 최근접속일</b> 범위 중 하나는 반드시 입력하세요(각 축 최대 90일). 성별·연령대·구매자등급은 조회된 결과 안에서 체크박스로 필터링합니다(즉시 반영, 재조회 없음).</p>
 <p class="warn" id="truncwarn" style="display:none">⚠ 상한(10,000행)에 도달해 일부만 표시 중입니다. 기간을 좁혀 다시 조회하세요.</p>
 
 <div class="grid3">
@@ -125,6 +129,7 @@
       <button class="btn csv" id="csv">⬇ CSV 다운로드</button>
     </div>
   </div>
+  <p class="hint" id="pwindow" style="padding:0 0 6px"></p>
   <div class="tblscroll"><table class="raw" id="raw"></table></div>
   <div class="pager" id="pager"></div>
 </div>
@@ -283,12 +288,15 @@ var COLS = [
   ["joinedAt","가입일시"],["lastLoginAt","최근접속일시"],
   ["memberNo","회원번호"],["memberId","회원ID"],
   ["gender","성별"],["ageGroup","연령대"],["buyerGrade","구매자등급"],
+  ["orderCount","구매건수(30일)"],["gmv","구매금액(30일)"],["netGmv","실거래액(30일)"],
   ["marketingConsent","마케팅수신동의"],["smsConsent","SMS수신동의"],["emailConsent","이메일수신동의"],
   ["kakaoConsent","카카오톡수신동의"],["pushConsent","앱PUSH수신동의"],["nightPushConsent","야간PUSH수신동의"]
 ];
+var NUM_COLS = {orderCount:1, gmv:1, netGmv:1};
 var GENDER_MAP = {M:"남성", W:"여성", U:"미상"};
 var CONSENT_MAP = {Y:"동의", N:"거부"};
 function fmtCell(col, v){
+  if(NUM_COLS[col]) return v==null ? "-" : won(v);
   if(v==null||v==="") return "-";
   if(col==="gender") return GENDER_MAP[v]||v;
   if(/Consent$/.test(col)) return CONSENT_MAP[v]||v;
@@ -306,11 +314,16 @@ function paintRaw(){
 
   var thead = "<thead><tr>"+COLS.map(function(c){return "<th>"+c[1]+"</th>";}).join("")+"</tr></thead>";
   var tbody = "<tbody>"+slice.map(function(r){
-    return "<tr>"+COLS.map(function(c){ return "<td>"+esc(fmtCell(c[0], r[c[0]]))+"</td>"; }).join("")+"</tr>";
+    return "<tr>"+COLS.map(function(c){
+      var cls = NUM_COLS[c[0]] ? (" class=\"num"+(!r[c[0]] ? " zero" : "")+"\"") : "";
+      return "<td"+cls+">"+esc(fmtCell(c[0], r[c[0]]))+"</td>";
+    }).join("")+"</tr>";
   }).join("")+"</tbody>";
   $("raw").innerHTML = thead+tbody;
 
-  $("rawcount").textContent = "총 "+won(total)+"명";
+  var buyers = VIEW_ROWS.filter(function(r){ return r.orderCount>0; });
+  $("rawcount").textContent = "총 "+won(total)+"명"
+    + (buyers.length ? " · 최근 30일 구매 "+won(buyers.length)+"명 / "+won(buyers.reduce(function(a,r){return a+(r.gmv||0);},0))+"원" : "");
   $("csv").disabled = total===0;
   var from = total===0 ? 0 : PAGE*PAGE_SIZE+1;
   var to   = Math.min(total, (PAGE+1)*PAGE_SIZE);
@@ -327,7 +340,10 @@ function downloadCSV(){
   if(!VIEW_ROWS.length) return;
   var head = COLS.map(function(c){ return csvCell(c[1]); }).join(",");
   var body = VIEW_ROWS.map(function(r){
-    return COLS.map(function(c){ return csvCell(fmtCell(c[0], r[c[0]])); }).join(",");
+    // 숫자 컬럼은 천단위 콤마 없이 원시값으로 — 엑셀에서 숫자로 인식되게 한다.
+    return COLS.map(function(c){
+      return NUM_COLS[c[0]] ? (r[c[0]]==null ? "" : String(r[c[0]])) : csvCell(fmtCell(c[0], r[c[0]]));
+    }).join(",");
   }).join("\r\n");
   var blob = new Blob(["﻿"+head+"\r\n"+body], {type:"text/csv;charset=utf-8;"});
   var url = URL.createObjectURL(blob);
@@ -353,19 +369,26 @@ function applyFilters(){
   paintRaw();
 }
 
-// ── 홈 갤러리 썸네일(iframe #thumb)로 뜰 땐 API 호출 없이 빈 상태로 표시 — 트래픽/쿼터 절감 ──
+// ── 홈 갤러리 썸네일(iframe #thumb) — 최근 7일 회원만 가볍게 받고 30일 구매집계(주문 전량 스캔)는 생략 ──
 var THUMB = location.hash.indexOf("thumb") >= 0;
 
 // ── 조회 ──
 function refresh(){
-  if(THUMB) return;
-  var p = {
-    joinedFrom: $("join_from").value, joinedTo: $("join_to").value,
-    lastLoginFrom: $("login_from").value, lastLoginTo: $("login_to").value
-  };
-  if(!((p.joinedFrom && p.joinedTo) || (p.lastLoginFrom && p.lastLoginTo))){
-    $("err").textContent = "가입일 또는 최근접속일 범위 중 하나는 반드시 입력하세요.";
-    return;
+  var p;
+  if(THUMB){
+    var t=new Date(); t.setDate(t.getDate()-1);
+    var f=new Date(t.getTime()); f.setDate(f.getDate()-6);
+    p = { joinedFrom:ymd(f), joinedTo:ymd(t), withPurchases:false };
+  } else {
+    p = {
+      joinedFrom: $("join_from").value, joinedTo: $("join_to").value,
+      lastLoginFrom: $("login_from").value, lastLoginTo: $("login_to").value,
+      memberIds: $("member_ids").value.trim()
+    };
+    if(!p.memberIds && !((p.joinedFrom && p.joinedTo) || (p.lastLoginFrom && p.lastLoginTo))){
+      $("err").textContent = "회원ID를 입력하거나, 가입일·최근접속일 범위 중 하나를 지정하세요.";
+      return;
+    }
   }
   $("err").textContent = ""; $("loading").classList.add("on"); $("truncwarn").style.display="none";
   window.MUSTIT.fn("member-list", p).then(function(res){
@@ -374,6 +397,10 @@ function refresh(){
     SEL.gender = new Set(); SEL.ageGroup = new Set(); SEL.buyerGrade = new Set();
     buildDropdowns();
     if(res.truncated){ $("truncwarn").style.display=""; }
+    var w = res.purchaseWindow;
+    $("pwindow").textContent = w
+      ? "* 구매건수·구매금액은 최근 30일("+w.from+" ~ "+w.to+") 주문 기준. 구매금액=GMV(전체 주문상태), 실거래액=취소·반품 제외."
+      : "";
     applyFilters();
   }).catch(function(e){ $("err").textContent = "오류: "+e.message; })
   .finally(function(){ $("loading").classList.remove("on"); });
@@ -390,8 +417,9 @@ $("go").onclick=refresh;
 $("csv").onclick=downloadCSV;
 $("reset").onclick=function(){
   FDEFS.forEach(function(d){ SEL[d.key]=new Set(); d._updateBtn&&d._updateBtn(); });
-  setDefaultDates(); refresh();
+  $("member_ids").value=""; setDefaultDates(); refresh();
 };
+$("member_ids").addEventListener("keydown", function(e){ if(e.key==="Enter") refresh(); });
 $("editdash").onclick=openEditModal;
 $("m_close").onclick=function(){ $("editmodal").style.display="none"; };
 $("m_save").onclick=saveMeta;

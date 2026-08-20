@@ -142,6 +142,7 @@
   <div class="sechead">DAU / WAU / MAU 분석 컴포넌트 <span style="font-weight:400">(각자 독립된 기간·그룹바이·필터)</span></div>
   <div id="au_components"></div>
   <button class="btn go" id="ac_add" type="button" style="margin-bottom:14px">+ 위젯 추가</button>
+  <button class="btn reset" id="ac_refresh_all" type="button" style="margin-bottom:14px">🔄 전체 위젯 조회</button>
   <p class="note">위젯 구성(제목·차트종류·필터·그룹바이·순서 등)은 <b>이 브라우저에만</b> 저장됩니다(localStorage) — 다른 사람에게는 공유되지 않고, 캐시를 지우면 초기화됩니다.</p>
 
   <div class="card">
@@ -643,6 +644,8 @@ function renderWidgets(){
   $("au_components").innerHTML = WIDGETS.map(widgetHTML).join("");
   WIDGETS.forEach(wireWidget);
   wireDragReorder();
+  // 위젯은 자동으로 조회하지 않음(앰플리튜드 호출이 많아 느려짐) — "조회"/"전체 위젯 조회"를 눌러야 로드됨
+  WIDGETS.forEach(function(w){ var n=$("auc_"+w.id+"_note"); if(n) n.textContent="※ 아직 조회되지 않았습니다 — 이 위젯의 \"조회\" 버튼이나 아래 \"전체 위젯 조회\"를 눌러주세요."; });
 }
 function addWidget(){
   var w = {id:newWidgetId(), title:"새 위젯", note:"", event:"_active", vis:"bar", days:7, gran:1, compare:"none", groupBy:[{op:"AND",key:""}], filters:[null,null,null], showRevenue:false};
@@ -842,6 +845,7 @@ function deleteDash(name){
 $("go").onclick=refresh;
 $("csv").onclick=downloadCSV;
 $("ac_add").onclick=addWidget;
+$("ac_refresh_all").onclick=function(){ refreshAllAUComponents(); };
 $("editdash").onclick=openEditModal;
 $("m_close").onclick=function(){ $("editmodal").style.display="none"; };
 $("m_save").onclick=saveMeta;
@@ -856,8 +860,8 @@ window.MUSTIT.ready(function(){
     if(!a || a.view===false){ $("block").style.display="grid"; return; }
     setupTopbar();
     buildAUComponents();
-    // 요약 조회 → 위젯 조회 순서를 강제(동시 실행 시 앰플리튜드 429·재시도로 오히려 더 느려짐)
-    refresh().then(refreshAllAUComponents);
+    // 위젯은 자동조회 안 함(앰플리튜드 호출 다수 → 느려짐) — 요약만 자동 로드, 위젯은 버튼으로 로드
+    refresh();
   }).catch(function(e){ $("block").style.display="grid"; });
 });
 })();

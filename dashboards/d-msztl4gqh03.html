@@ -150,7 +150,7 @@
   </div>
   <div class="fld"><label>첫구매 인정기간 (N일)</label>
     <div class="ntoggle" id="ntoggle">
-      <button data-n="7">7일</button><button data-n="14">14일</button><button data-n="30" class="on">30일</button>
+      <button data-n="7" class="on">7일</button><button data-n="14">14일</button><button data-n="30">30일</button>
     </div>
   </div>
   <div class="fld"><label>채널</label><div id="chanfilter"></div></div>
@@ -198,14 +198,7 @@
   <div class="funnelrow" id="funnelrow"><div class="secload">불러오는 중…</div></div>
   <div id="hypowrap" style="margin-top:12px"></div>
 
-  <!-- ④ Channel -->
-  <div class="sechd">채널 성과 <span class="badge real">실데이터 · Amplitude</span></div>
-  <div class="grid2">
-    <div class="card">
-      <div class="tblscroll" style="overflow-x:auto"><table class="chtbl" id="chtbl"><tbody><tr><td class="secload" colspan="8">불러오는 중…</td></tr></tbody></table></div>
-    </div>
-    <div class="card"><h3>채널별 신규가입 추이(주간) <span class="badge real">실데이터</span></h3><p class="csub">가입 코호트 기간 내 채널별 주간 신규가입자 수</p><div class="chart" id="c_chantrend"></div></div>
-  </div>
+  <!-- ④ Channel — 속도 이슈로 임시 제외(2026-08-20). 필요시 refresh()에 loadChannel/loadChannelTrend 다시 추가 -->
 
   <!-- ⑤ Cohort Trend -->
   <div class="sechd">가입 주차별 코호트 전환 추이 <span class="badge real">실데이터</span></div>
@@ -287,7 +280,7 @@ var FUNNEL_EVENTS=["complete_signup","_active","add_to_cart","complete_order"];
 var FUNNEL_LABELS=["가입","첫 세션(재방문)","장바구니 담기","첫 결제"];
 
 // ── state ──
-var N=30;
+var N=7;
 var STATE={cur:null, wow:null, mom:null, yoy:null, funnel:null, channel:null, cohort:{}, ttfp:null, siteDaily:null, signupTotal:null};
 
 function setDefaults(){
@@ -721,8 +714,6 @@ function refresh(){
   loadNorthStar()
     .then(loadCrossCheck)
     .then(loadFunnel)
-    .then(loadChannel)
-    .then(loadChannelTrend)
     .then(loadCohort)
     .then(loadTTFP)
     .then(loadAiInsights)

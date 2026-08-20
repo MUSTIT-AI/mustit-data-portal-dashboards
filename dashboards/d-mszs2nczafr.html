@@ -81,7 +81,7 @@
   table.sumtbl tr.tot td{background:#f8f7f3;font-weight:700}
   table.sumtbl td.rate.ok{color:#1f8a4c;font-weight:700}
   table.sumtbl td.rate.bad{color:var(--red)}
-  table.sumtbl td.spark{padding:3px 10px}
+  table.sumtbl th[data-nosort]{cursor:default}
   table.sumtbl th.sortasc:after{content:" ▲"}
   table.sumtbl th.sortdesc:after{content:" ▼"}
 </style>
@@ -219,36 +219,36 @@ function populateFilterOptions(){
   }).join("");
 }
 
-// ── 스파크라인: 행마다 ECharts 인스턴스를 만들면 무거워서(최대 196행) 가벼운 inline SVG로 직접 그림 ──
-function sparkline(values){
-  var w=90, h=24;
-  var max = Math.max.apply(null, values.concat([0]));
-  var span = max||1;
-  var n = values.length;
-  var pts = values.map(function(v,i){
-    var x = n<=1 ? w/2 : (i/(n-1))*w;
-    var y = h - (v/span)*h;
-    return x.toFixed(1)+","+y.toFixed(1);
-  }).join(" ");
-  return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="none">'+
-    '<polyline points="'+pts+'" fill="none" stroke="#ee3b52" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>';
+// PostgREST 기본 응답 상한(~1,000행)은 .limit()만으로는 못 넘는다(서버가 그대로 자름) → .range()로 페이지네이션해서 이어붙일 것.
+var PAGE_SIZE = 1000;
+function fetchAllPages(ids, range){
+  var acc = [];
+  function loadPage(offset){
+    return window.MUSTIT.client.from("orders_secure")
+      .select("seller_id,order_datetime,total_purchase")
+      .in("seller_id", ids)
+      .gte("order_datetime", range.start)
+      .lt("order_datetime", range.end)
+      .range(offset, offset+PAGE_SIZE-1)
+      .then(function(res){
+        if(res.error) throw new Error(res.error.message);
+        var rows = res.data||[];
+        acc = acc.concat(rows);
+        if(rows.length===PAGE_SIZE && acc.length<ROW_LIMIT) return loadPage(offset+PAGE_SIZE);
+        return acc;
+      });
+  }
+  return loadPage(0);
 }
 
-// ── 데이터 로드: 매핑된 모든 판매자ID를 당월(월초~오늘)로 좁혀 한 번에 조회 → 클라이언트에서 판매자별 재집계 ──
+// ── 데이터 로드: 매핑된 모든 판매자ID를 선택 월(월초~오늘/말일)로 좁혀 조회(1,000행 단위 페이지네이션) → 클라이언트에서 판매자별 재집계 ──
 function loadData(){
   if(THUMB) return Promise.resolve();  // 썸네일 미리보기에서는 실데이터 조회 스킵
   var ids = MAP.rows.map(function(r){ return r.seller_id; });
   var range = monthRangeFor(SELECTED_MONTH);
   $("loading").classList.add("on"); $("err").textContent="";
-  return window.MUSTIT.client.from("orders_secure")
-    .select("seller_id,order_datetime,total_purchase")
-    .in("seller_id", ids)
-    .gte("order_datetime", range.start)
-    .lt("order_datetime", range.end)
-    .limit(ROW_LIMIT)
-    .then(function(res){
-      if(res.error) throw new Error(res.error.message);
-      var rows = res.data||[];
+  return fetchAllPages(ids, range)
+    .then(function(rows){
       DATA = {};
       rows.forEach(function(r){
         var sid = r.seller_id;
@@ -297,17 +297,24 @@ function sortRows(rows){
   });
 }
 
+var WD = ["일","월","화","수","목","금","토"];
+function dayLabel(dateStr){
+  var d = new Date(dateStr+"T00:00:00");
+  return (d.getMonth()+1)+"/"+d.getDate()+"("+WD[d.getDay()]+")";
+}
+
 var CSV_HEAD=[], CSV_ROWS=[];
 function render(){
   var rows = sortRows(applyFilters());
   var tlabel = monthLabel(MAP.target_month);   // 목표액 기준월(고정, 스냅샷)
   var dlabel = monthLabel(SELECTED_MONTH);     // 조회 월(선택, 누적/달성율/일별 기준)
   var isTargetMonth = SELECTED_MONTH === MAP.target_month;
+  var days = monthRangeFor(SELECTED_MONTH).days;
   $("tblTitle").textContent = "그로스 패키지 판매자 현황 ("+dlabel+" 일별 거래액)";
 
   var tgtSum=0, cumSum=0;
   rows.forEach(function(r){ tgtSum+=r.target; cumSum+=r.cum; });
-  renderTrendChart(monthRangeFor(SELECTED_MONTH).days, rows);
+  renderTrendChart(days, rows);
   $("kpis").innerHTML = [
     {l:"대상 판매자 수", v:won(rows.length)},
     {l:tlabel+" 목표 합계", v:won(tgtSum)},
@@ -317,14 +324,15 @@ function render(){
 
   var head = [
     {k:"package",label:"패키지",txt:1},{k:"md",label:"담당자",txt:1},{k:"seller_id",label:"판매자ID",txt:1},
-    {k:"target",label:tlabel+" 목표액"},{k:"rate",label:dlabel+" 달성율"},{k:"cum",label:dlabel+" 누적 거래액"},{k:"daily",label:dlabel+" 일별 거래액",nosort:1}
-  ];
+    {k:"target",label:tlabel+" 목표액"},{k:"rate",label:dlabel+" 달성율"},{k:"cum",label:dlabel+" 누적 거래액"}
+  ].concat(days.map(function(d,i){ return {k:"d"+i, label:dayLabel(d), nosort:1}; }));
   var thead = "<thead><tr>"+head.map(function(h){
     var cls=(h.txt?"txt ":"")+(!h.nosort && SORT_KEY===h.k ? (SORT_DIR>0?"sortasc":"sortdesc") : "");
-    return '<th class="'+cls.trim()+'" data-k="'+h.k+'">'+h.label+'</th>';
+    return '<th class="'+cls.trim()+'" data-k="'+h.k+'"'+(h.nosort?' data-nosort="1"':'')+'>'+h.label+'</th>';
   }).join("")+"</tr></thead>";
   var tbody = "<tbody>"+rows.map(function(r){
     var rc = r.rate==null ? "" : (r.rate>=1 ? "rate ok" : "rate bad");
+    var dayCells = r.daily.map(function(v){ return "<td>"+won(v)+"</td>"; }).join("");
     return "<tr>"+
       '<td class="txt">'+esc(r.package)+'</td>'+
       '<td class="txt">'+esc(r.md)+'</td>'+
@@ -332,24 +340,29 @@ function render(){
       '<td>'+won(r.target)+'</td>'+
       '<td class="'+rc+'">'+pct(r.rate)+'</td>'+
       '<td>'+won(r.cum)+'</td>'+
-      '<td class="spark">'+sparkline(r.daily)+'</td>'+
+      dayCells+
       "</tr>";
   }).join("")+
-    '<tr class="tot"><td class="txt">합계</td><td class="txt"></td><td class="txt">'+rows.length+'개</td>'+
-    '<td>'+won(tgtSum)+'</td><td>'+(isTargetMonth && tgtSum>0?pct(cumSum/tgtSum):"-")+'</td><td>'+won(cumSum)+'</td><td></td></tr>'+
+    (function(){
+      var dayTot = days.map(function(_,i){ return rows.reduce(function(a,r){ return a+(r.daily[i]||0); }, 0); });
+      return '<tr class="tot"><td class="txt">합계</td><td class="txt"></td><td class="txt">'+rows.length+'개</td>'+
+        '<td>'+won(tgtSum)+'</td><td>'+(isTargetMonth && tgtSum>0?pct(cumSum/tgtSum):"-")+'</td><td>'+won(cumSum)+'</td>'+
+        dayTot.map(function(v){ return "<td>"+won(v)+"</td>"; }).join("")+'</tr>';
+    })()+
     "</tbody>";
   $("piv").innerHTML = thead+tbody;
 
   [].forEach.call(document.querySelectorAll("#piv th[data-k]"), function(th){
+    if(th.getAttribute("data-nosort")) return;
     th.onclick=function(){
-      var k = th.getAttribute("data-k"); if(k==="daily") return;
+      var k = th.getAttribute("data-k");
       if(SORT_KEY===k) SORT_DIR=-SORT_DIR; else { SORT_KEY=k; SORT_DIR=(k==="target"||k==="cum")?-1:1; }
       render();
     };
   });
 
-  CSV_HEAD = ["패키지","담당자","판매자ID",tlabel+" 목표액",dlabel+" 달성율(%)",dlabel+" 누적 거래액"];
-  CSV_ROWS = rows.map(function(r){ return [r.package,r.md,r.seller_id,r.target,(r.rate==null?"":(r.rate*100).toFixed(1)),r.cum]; });
+  CSV_HEAD = ["패키지","담당자","판매자ID",tlabel+" 목표액",dlabel+" 달성율(%)",dlabel+" 누적 거래액"].concat(days.map(dayLabel));
+  CSV_ROWS = rows.map(function(r){ return [r.package,r.md,r.seller_id,r.target,(r.rate==null?"":(r.rate*100).toFixed(1)),r.cum].concat(r.daily); });
   $("csv").disabled = rows.length===0;
   $("pivsub").textContent = "조회 월 "+SELECTED_MONTH+" · "+rows.length+"개 판매자"+(THUMB?" (미리보기)":"");
 }

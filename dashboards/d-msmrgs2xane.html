@@ -129,6 +129,7 @@
 <p class="note">선택한 기간의 거래액(GMV) 기준 상품 Top 100이에요. 판매자를 가리지 않고 상품 단위로 합산해요. 브랜드·카테고리·연령대·성별·판매자ID로 필터링할 수 있어요. 카테고리는 대분류 → 중분류 → 소분류 순으로 좁혀지고, 상위를 고르면 하위 목록이 그에 맞게 줄어들어요(연령대·성별은 구매자 기준이며, 개인정보는 조회되지 않고 필터로만 쓰여요).<br>
 "이전기간 대비"는 선택한 기간과 동일한 길이의 바로 직전 기간과 비교한 순위 변동이에요.<br>
 ※ 표본이 아니라 <b>기간 내 전체 주문</b>을 DB에서 집계해요(`dash_product_rank`). 12개월 조회도 1초 내외예요. 조회 기간은 최대 <b id="maxdaystxt">366</b>일(약 12개월)이에요. 상품 이미지·재고·최대혜택가는 머스트잇 Open API로 실시간 조회해요(판매종료 등으로 없을 수 있어요).<br>
+조회수·장바구니·찜은 선택한 기간의 집계값이에요. 원천 데이터가 95일치만 보관되고 조회 기간이 90일을 넘으면 제공되지 않아 "-"로 표시돼요.<br>
 <span id="statline"></span></p>
 <div class="err" id="err"></div>
 
@@ -138,13 +139,15 @@
       <colgroup>
         <col style="width:44px"><col style="width:70px"><col style="width:56px"><col style="width:90px"><col style="width:300px">
         <col style="width:120px"><col style="width:90px"><col style="width:100px"><col style="width:70px"><col style="width:100px"><col style="width:100px">
-        <col style="width:100px"><col style="width:100px"><col style="width:80px"><col style="width:100px"><col style="width:100px"><col style="width:90px"><col style="width:110px"><col style="width:90px">
+        <col style="width:100px"><col style="width:100px"><col style="width:80px"><col style="width:100px"><col style="width:100px"><col style="width:90px"><col style="width:110px">
+        <col style="width:70px"><col style="width:70px"><col style="width:60px"><col style="width:90px">
       </colgroup>
       <thead><tr>
         <th>순위</th><th>이전기간<br>대비</th><th>이미지</th><th>상품번호</th><th class="l">상품명</th>
         <th class="l">판매자</th><th>카탈로그<br>순위</th><th>카탈로그<br>상품수</th><th>재고</th><th>판매가</th><th>최대<br>혜택가</th>
         <th>M<br>최저가</th><th>시장<br>최저가</th><th>차액율</th>
-        <th>머스트잇<br>할인</th><th>판매자<br>할인</th><th>판매수량</th><th>거래금액</th><th>최근 7일</th>
+        <th>머스트잇<br>할인</th><th>판매자<br>할인</th><th>판매수량</th><th>거래금액</th>
+        <th>조회수</th><th>장바구니</th><th>찜</th><th>최근 7일</th>
       </tr></thead>
       <tbody id="tbody"></tbody>
     </table>
@@ -356,6 +359,9 @@ function renderTable(list){
       '<td>₩'+won(a.seller_discount)+'</td>'+
       '<td class="qty">'+won(a.quantity)+'</td>'+
       '<td class="gmv">₩'+won(a.gmv)+'</td>'+
+      '<td class="view-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="cart-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="like-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
       '<td><button class="recent-btn" data-idx="'+i+'">추이</button></td>'+
     '</tr>';
   }).join("");
@@ -457,6 +463,50 @@ function paintPrices(list){
   });
 }
 
+// ── 조회수·장바구니·찜 (Open API products/stats, Edge Function 프록시) ──
+// 이미지·가격과 달리 "선택한 기간"의 집계값이라 기간이 바뀌면 캐시를 버려야 한다.
+// 원천 테이블 보관기간(95일)·대시보드 조회기간 상한(90일) 중 하나라도 벗어나면
+// 호출 자체를 생략하고 "-"로 표시한다(랭킹 조회는 이 값과 무관하게 항상 성공해야 함).
+function daysAgo(dateStr){ return daysBetweenInclusive(dateStr, ymd(new Date())) - 1; }
+function statsAllowed(from, to){
+  return daysBetweenInclusive(from, to) <= 90 && daysAgo(from) <= 95;
+}
+var STATS_CACHE = {};   // pid -> {viewCount,cartCount,likeCount} | null
+var STATS_PERIOD = null; // "from|to" — 바뀌면 캐시를 비운다(집계값은 기간에 종속적)
+function loadStats(list, from, to){
+  if(!statsAllowed(from, to)){ paintStats(list, null); return; }
+  var period = from+"|"+to;
+  if(period !== STATS_PERIOD){ STATS_CACHE = {}; STATS_PERIOD = period; }
+  var need = [];
+  list.forEach(function(a){ if(!(a.product_id in STATS_CACHE)) need.push(a.product_id); });
+  if(!need.length){ paintStats(list, STATS_CACHE); return; }
+  var chunks = [];
+  for(var i=0;i<need.length;i+=500) chunks.push(need.slice(i,i+500));
+  Promise.all(chunks.map(function(c){
+    return window.MUSTIT.fn("product-stats", {itemNos:c.join(","), statsFrom:from, statsTo:to}).catch(function(e){
+      console.error("[조회수·장바구니·찜] product-stats 함수 호출 실패:", e);
+      return {};
+    });
+  })).then(function(results){
+    results.forEach(function(m){ Object.keys(m||{}).forEach(function(k){ STATS_CACHE[k] = m[k]; }); });
+    need.forEach(function(pid){ if(!(pid in STATS_CACHE)) STATS_CACHE[pid]=null; });
+    paintStats(list, STATS_CACHE);
+  });
+}
+// cache===null 이면 조건 미충족으로 아예 호출하지 않은 경우 — 전부 "-"
+function paintStats(list, cache){
+  list.forEach(function(a){
+    var v = cache ? cache[a.product_id] : null;
+    [["view-ph","viewCount"],["cart-ph","cartCount"],["like-ph","likeCount"]].forEach(function(pair){
+      var el = document.querySelector('.'+pair[0]+'[data-pid="'+CSS.escape(String(a.product_id))+'"]');
+      if(!el) return;
+      var n = v && v[pair[1]];
+      el.textContent = (n==null) ? "-" : won(n);
+      el.classList.remove(pair[0]);
+    });
+  });
+}
+
 var imgPreview = document.getElementById("imgpreview");
 function positionPreview(x,y){
   var margin=14, w=260, h=260;
@@ -530,6 +580,7 @@ function loadRanking(){
         renderTable(cur);
         loadImages(cur);
         loadPrices(cur);
+        loadStats(cur, from, to);
 
         var sec = ((new Date().getTime()-t0)/1000).toFixed(1);
         var msg = "상위 "+won(cur.length)+"개 · 서버 집계 "+sec+"초";

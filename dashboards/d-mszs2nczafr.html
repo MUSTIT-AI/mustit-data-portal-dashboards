@@ -207,7 +207,7 @@ var UNJOINED = null;  // {ref_month, source, rows:[{seller_id,md,ref_target}]} �
 var SELECTED_MONTH = null;  // 조회 월(YYYY-MM). 목표액은 항상 MAP.target_month 기준, 나머지(누적·달성율·일별)는 이 값 기준
 var DATA = {};    // seller_id -> {total, byDate:{date:sum}} — orders_secure 실시간 조회 결과(선택 월 기준)
 var JOINED = [];  // 매핑 + 실적 결합 후 필터/정렬 대상 행
-var SORT_KEY = "rate", SORT_DIR = 1;  // 기본: 당월 달성율 오름차순(미달 판매자 먼저 확인)
+var SORT_KEY = "target", SORT_DIR = -1;  // 기본: 목표액 높은 순(내림차순)
 var THUMB = location.hash.indexOf("thumb") >= 0;  // 홈 갤러리 썸네일: 무거운 조회 스킵(필수 규약)
 var ROW_LIMIT = 20000;  // 매핑된 전체 판매자·당월 라인아이템 상한. 도달 시 경고(실측: 196개 판매자·19일 ≈ 3,600행).
 

@@ -555,7 +555,13 @@ function render(){
     var cls=(h.txt?"txt ":"")+(!h.nosort && SORT_KEY===h.k ? (SORT_DIR>0?"sortasc":"sortdesc") : "");
     return '<th class="'+cls.trim()+'" data-k="'+h.k+'"'+(h.nosort?' data-nosort="1"':'')+'>'+h.label+'</th>';
   }).join("")+"</tr></thead>";
-  var tbody = "<tbody>"+rows.map(function(r){
+  var totRowHtml = (function(){
+    var dayTot = days.map(function(_,i){ return rows.reduce(function(a,r){ return a+(r.daily[i]||0); }, 0); });
+    return '<tr class="tot"><td class="txt">합계</td><td class="txt"></td><td class="txt">'+rows.length+'개</td>'+
+      '<td>'+won(tgtSum)+'</td><td>'+(isTargetMonth && tgtSum>0?pct(cumSum/tgtSum):"-")+'</td><td>'+won(cumSum)+'</td>'+
+      dayTot.map(function(v){ return "<td>"+won(v)+"</td>"; }).join("")+'</tr>';
+  })();
+  var tbody = "<tbody>"+totRowHtml+rows.map(function(r){
     var rc = r.rate==null ? "" : (r.rate>=1 ? "rate ok" : "rate bad");
     var sid = esc(r.seller_id);
     var dayCells = r.daily.map(function(v,i){ return '<td class="clk" data-seller="'+sid+'" data-date="'+days[i]+'">'+won(v)+"</td>"; }).join("");
@@ -569,12 +575,6 @@ function render(){
       dayCells+
       "</tr>";
   }).join("")+
-    (function(){
-      var dayTot = days.map(function(_,i){ return rows.reduce(function(a,r){ return a+(r.daily[i]||0); }, 0); });
-      return '<tr class="tot"><td class="txt">합계</td><td class="txt"></td><td class="txt">'+rows.length+'개</td>'+
-        '<td>'+won(tgtSum)+'</td><td>'+(isTargetMonth && tgtSum>0?pct(cumSum/tgtSum):"-")+'</td><td>'+won(cumSum)+'</td>'+
-        dayTot.map(function(v){ return "<td>"+won(v)+"</td>"; }).join("")+'</tr>';
-    })()+
     "</tbody>";
   $("piv").innerHTML = thead+tbody;
   syncTopScroll();

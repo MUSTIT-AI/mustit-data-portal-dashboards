@@ -49,8 +49,8 @@
   .hint{font-size:11px;color:var(--sub)}
   /* layout */
   .wrap{max-width:100%;padding:14px 20px}
-  .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin-bottom:12px}
-  @media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}}
+  .kpis{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-bottom:12px}
+  @media(max-width:1100px){.kpis{grid-template-columns:repeat(4,1fr)}}
   @media(max-width:640px){.kpis{grid-template-columns:repeat(2,1fr)}}
   .kpi{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:11px 13px}
   .kpi .l{font-size:11px;color:var(--sub);margin-bottom:5px}
@@ -92,15 +92,15 @@
   <div class="fld"><label>종료일</label><input type="date" id="to"></div>
   <button class="btn go" id="go">조회</button>
   <button class="btn reset" id="reset">초기화</button>
-  <span class="hint">AU·결제유저수 = 앰플리튜드(한국·크롤러 제외) · 매출 = 주문DB 순매출(총매출−자사할인) · 날짜로 조인</span>
+  <span class="hint">AU·결제유저수·가입자수 = 앰플리튜드(크롤러 제외) · 매출 = 주문DB 순매출(총매출−자사할인) · 날짜로 조인</span>
 </div>
 
 <div class="wrap">
   <div class="kpis" id="kpis"></div>
 
   <div class="card">
-    <h3>AU · 결제 유저수 추이</h3>
-    <p class="csub">AU = Any Active Event 순유저수(막대) · 결제 유저수 = complete_order 순유저수(선, 우측축)</p>
+    <h3>AU · 획득유저(가입자) · 결제 유저수 추이</h3>
+    <p class="csub">AU = Any Active Event 순유저수(막대, 좌측축) · 획득유저 = complete_signup 순유저수 · 결제 유저수 = complete_order 순유저수 (선, 우측축)</p>
     <div class="chart" id="c_au"></div>
   </div>
 
@@ -131,7 +131,7 @@
     <div class="tblscroll"><table class="dt" id="dt"></table></div>
   </div>
 
-  <p class="note">데이터 소스: <b>dash_daily_conversion</b> (주문DB × 앰플리튜드 amp_daily, 매일 1회 동기화 캐시). AU·결제유저수는 크롤러/봇 트래픽을 제외한 값입니다.</p>
+  <p class="note">데이터 소스: <b>dash_daily_conversion</b> (주문DB × 앰플리튜드 amp_daily, 매일 1회 동기화 캐시) + <b>획득유저(가입자)</b>는 조회 시점에 앰플리튜드 complete_signup 이벤트를 실시간 조회. 모두 크롤러/봇 트래픽을 제외한 값입니다.</p>
 </div>
 
 <!-- 대시보드 설정 모달 (소유자/관리자) -->
@@ -188,17 +188,18 @@ function valAxis(fmt){ return { type:"value", axisLabel:{fontSize:9,color:"#999"
 function kFmt(v){ return v>=10000 ? Math.round(v/1000)+"k" : v; }
 function wonFmt(v){ return "₩"+kFmt(v); }
 
-function barLine(id, dates, barName, barData, lineName, lineData){
+function barLine(id, dates, barName, barData, lines){
+  var names=[barName].concat(lines.map(function(l){return l.name;}));
+  var colors=["#9fb6e8"].concat(lines.map(function(l){return l.color;}));
   chart(id).setOption({
     grid:{left:48,right:52,top:30,bottom:40}, tooltip:TIP,
-    legend:{data:[barName,lineName],top:2,left:2,itemWidth:12,itemHeight:8,itemGap:8,textStyle:{fontSize:10,color:"#555"}},
-    color:["#9fb6e8","#c8102e"],
+    legend:{data:names,top:2,left:2,itemWidth:12,itemHeight:8,itemGap:8,textStyle:{fontSize:10,color:"#555"}},
+    color:colors,
     xAxis:catAxis(dates),
     yAxis:[ valAxis(kFmt), { type:"value", position:"right", axisLabel:{fontSize:9,color:"#999"}, splitLine:{show:false} } ],
-    series:[
-      { name:barName, type:"bar", data:barData, barMaxWidth:16 },
-      { name:lineName, type:"line", data:lineData, yAxisIndex:1, symbol:"none", lineStyle:{width:1.6} }
-    ]
+    series:[{ name:barName, type:"bar", data:barData, barMaxWidth:16 }].concat(lines.map(function(l){
+      return { name:l.name, type:"line", data:l.data, yAxisIndex:1, symbol:"none", lineStyle:{width:1.6} };
+    }))
   }, true);
 }
 function singleBar(id, dates, name, data, fmt){
@@ -209,10 +210,29 @@ function singleBar(id, dates, name, data, fmt){
   }, true);
 }
 
+// ── 앰플리튜드 획득유저(가입자, complete_signup) 조회 ──
+var CRAWLER_SEG = [{prop:"os",op:"does not contain",values:["yeti","bot","headless","bingbot","bingbot2","crawler"]}];
+function amp(endpoint,params){ return window.MUSTIT.fn("amplitude-proxy",{endpoint:endpoint,params:params}).then(function(r){return r.data;}); }
+function toCompact(dstr){ return String(dstr).replace(/-/g,""); }
+function fetchSignups(fromStr,toStr){
+  if(THUMB) return Promise.resolve({});
+  return amp("events/segmentation",{
+    e:[JSON.stringify({event_type:"complete_signup",filters:[]})],
+    m:"uniques", i:1, start:toCompact(fromStr), end:toCompact(toStr),
+    s:[JSON.stringify(CRAWLER_SEG)]
+  }).then(function(d){
+    var xs=(d&&d.data&&d.data.xValues)||[], ss=(d&&d.data&&d.data.series&&d.data.series[0])||[];
+    var map={};
+    xs.forEach(function(x,i){ map[String(x).slice(0,10)] = ss[i]; });
+    return map;
+  }).catch(function(){ return {}; });
+}
+
 // ── KPI ──
 function avg(arr){ var v=arr.filter(function(x){return x!=null;}); return v.length? v.reduce(function(a,b){return a+b;},0)/v.length : 0; }
 function renderKPI(rows){
   var auAvg = avg(rows.map(function(r){return r.dau;}));
+  var signAvg = avg(rows.map(function(r){return r.signups;}));
   var buyAvg = avg(rows.map(function(r){return r.buyers;}));
   var netSum = rows.reduce(function(a,r){return a+(Number(r.net_rev)||0);},0);
   var arpuAvg = avg(rows.map(function(r){return r.arpu;}));
@@ -220,6 +240,7 @@ function renderKPI(rows){
   var convAvg = avg(rows.map(function(r){return r.conv;}));
   var tiles=[
     {l:"평균 AU", v:won(auAvg)},
+    {l:"평균 획득유저(가입자)", v:won(signAvg)},
     {l:"평균 결제 유저수", v:won(buyAvg)},
     {l:"총 순매출", v:"₩"+won(netSum), red:1},
     {l:"평균 ARPU", v:"₩"+won(arpuAvg), red:1},
@@ -233,7 +254,7 @@ function renderKPI(rows){
 
 // ── 일별 테이블 ──
 var DT_COLS = [
-  ["d","날짜"],["dau","AU"],["buyers","결제유저수"],["orders","주문수"],
+  ["d","날짜"],["dau","AU"],["signups","획득유저(가입자)"],["buyers","결제유저수"],["orders","주문수"],
   ["net_rev","순매출"],["arpu","ARPU"],["arppu","ARPPU"],["conv_pct","구매전환율"]
 ];
 function paintTable(rows){
@@ -263,9 +284,13 @@ function downloadCSV(){
 function refresh(){
   $("loading").classList.add("on"); $("err").textContent="";
   var p = { from:$("from").value, to:$("to").value };
-  window.MUSTIT.rpc("dash_daily_conversion", {p:p}).then(function(rows){
-    rows = rows||[];
+  Promise.all([
+    window.MUSTIT.rpc("dash_daily_conversion", {p:p}),
+    fetchSignups(p.from, p.to)
+  ]).then(function(res){
+    var rows = res[0]||[], signMap = res[1]||{};
     rows.forEach(function(r){
+      r.signups = signMap[r.d] != null ? signMap[r.d] : null;
       r.arpu = (r.dau>0) ? Math.round((Number(r.net_rev)||0)/r.dau) : null;
       r.arppu = (r.buyers>0) ? Math.round((Number(r.net_rev)||0)/r.buyers) : null;
       r.conv_pct = pct(r.conv);
@@ -273,7 +298,10 @@ function refresh(){
     ROWS = rows;
     var dates = rows.map(function(r){ return md(r.d); });
     renderKPI(rows);
-    barLine("c_au", dates, "AU", rows.map(function(r){return r.dau;}), "결제 유저수", rows.map(function(r){return r.buyers;}));
+    barLine("c_au", dates, "AU", rows.map(function(r){return r.dau;}), [
+      { name:"획득유저(가입자)", data:rows.map(function(r){return r.signups;}), color:"#2fae8f" },
+      { name:"결제 유저수", data:rows.map(function(r){return r.buyers;}), color:"#c8102e" }
+    ]);
     singleBar("c_arpu", dates, "ARPU", rows.map(function(r){return r.arpu;}), wonFmt);
     singleBar("c_arppu", dates, "ARPPU", rows.map(function(r){return r.arppu;}), wonFmt);
     singleBar("c_rev", dates, "순매출", rows.map(function(r){return r.net_rev;}), wonFmt);

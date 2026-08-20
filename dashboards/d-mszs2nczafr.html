@@ -511,6 +511,9 @@ function wireMirrorScroll(topId, innerId, tblId){
   var top = $(topId), inner = $(innerId), tbl = $(tblId);
   var tableEl = tbl.querySelector("table");
   inner.style.width = (tableEl?tableEl.scrollWidth:0)+"px";
+  // 월말로 갈수록 일별 컬럼이 늘어나 매번 오른쪽으로 스크롤해야 하니, 렌더 후 최신 날짜(맨 오른쪽)가 바로 보이게 기본 스크롤
+  tbl.scrollLeft = tbl.scrollWidth;
+  top.scrollLeft = tbl.scrollWidth;
   if(top.dataset.wired) return;
   top.dataset.wired = "1";
   var syncing = false;

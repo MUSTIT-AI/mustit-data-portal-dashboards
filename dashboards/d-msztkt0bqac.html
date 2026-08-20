@@ -139,7 +139,7 @@
     <div class="tblscroll"><table class="dt" id="dt"></table></div>
   </div>
 
-  <p class="note">데이터 소스: <b>dash_daily_conversion</b> (주문DB × 앰플리튜드 amp_daily, 매일 1회 동기화 캐시) + <b>획득유저(가입자)</b>·<b>WAU</b>·<b>MAU</b>는 조회 시점에 앰플리튜드에서 실시간 조회(각각 complete_signup, Any Active Event 최근 7일/30일 구간). 모두 크롤러/봇 트래픽을 제외한 값입니다.</p>
+  <p class="note">데이터 소스: <b>dash_daily_conversion</b> (주문DB × 앰플리튜드 amp_daily, 매일 1회 동기화 캐시) + <b>획득유저(가입자)</b>·<b>WAU</b>·<b>MAU</b>는 조회 시점에 앰플리튜드에서 실시간 조회. <b>WAU=이번 주(월요일~일요일)</b>, <b>MAU=이번 달(1일~말일)</b> 버킷의 순유저수로, 조회 종료일이 진행 중인 주/달이면 그 시점까지의 부분 집계입니다(마지막 완결 주/달이 아닌 rolling 7·30일이 아님에 유의). 모두 크롤러/봇 트래픽을 제외한 값입니다.</p>
 </div>
 
 <!-- 대시보드 설정 모달 (소유자/관리자) -->
@@ -236,11 +236,13 @@ function fetchSignups(fromStr,toStr){
     return map;
   }).catch(function(){ return {}; });
 }
-// WAU/MAU: 종료일 기준 최근 7일/30일 구간의 순유저수(Any Active Event, 단일 버킷)
-function fetchAUWindow(endStr, days, interval){
+// WAU/MAU: 앰플리튜드의 주(월~일)/월(1일~말일) 버킷은 조회 종료일이 속한 "달력 기준" 구간으로 고정됨
+// (임의 시작일부터의 rolling N일이 아님 — 실측: interval=30 요청 시 7/21~8/19 범위를 줘도 7/1, 8/1 버킷으로 스냅됨).
+// 그래서 지난 구간을 충분히 lookback해 마지막 버킷(=종료일이 속한 진행중인 주/월)만 취한다.
+function fetchAUBucket(endStr, lookbackDays, interval){
   if(THUMB) return Promise.resolve(null);
   var end=new Date(endStr+"T00:00:00");
-  var start=new Date(end.getTime()); start.setDate(start.getDate()-(days-1));
+  var start=new Date(end.getTime()); start.setDate(start.getDate()-lookbackDays);
   return amp("events/segmentation",{
     e:[JSON.stringify({event_type:"_active",filters:[]})],
     m:"uniques", i:interval, start:toCompact(ymd(start)), end:toCompact(endStr),
@@ -280,9 +282,9 @@ function renderKPI(rows, extra){
     {l:"AU (합계, 조회기간 일별 순유저 합)", v:won(auSum), note:range},
     {l:"AU (평균, 합계÷"+days+"일)", v:won(auAvg), note:range},
     {l:"DAU (최근일)", v:won(dauLatest)},
-    {l:"WAU (최근 7일 순유저)", v: wau==null?"—":won(wau)},
-    {l:"MAU (최근 30일 순유저)", v: mau==null?"—":won(mau)},
-    {l:"Stickiness (DAU÷MAU)", v: sticky==null?"—":pct(sticky)},
+    {l:"WAU (이번주, 월~일 기준·진행중)", v: wau==null?"—":won(wau)},
+    {l:"MAU (이번달, 달력 기준·진행중)", v: mau==null?"—":won(mau)},
+    {l:"Stickiness (DAU÷MAU, 이번달)", v: sticky==null?"—":pct(sticky)},
     {l:"평균 획득유저(가입자)", v:won(signAvg)},
     {l:"평균 결제 유저수", v:won(buyAvg)}
   ]);
@@ -328,8 +330,8 @@ function refresh(){
   var p = { from:$("from").value, to:$("to").value };
   // 앰플리튜드 호출은 순차 실행(동시 호출 시 429 위험) — 주문DB RPC와는 병렬
   var ampChain = fetchSignups(p.from, p.to).then(function(signMap){
-    return fetchAUWindow(p.to, 7, 7).then(function(wau){
-      return fetchAUWindow(p.to, 30, 30).then(function(mau){
+    return fetchAUBucket(p.to, 14, 7).then(function(wau){
+      return fetchAUBucket(p.to, 40, 30).then(function(mau){
         return { signMap:signMap, wau:wau, mau:mau };
       });
     });

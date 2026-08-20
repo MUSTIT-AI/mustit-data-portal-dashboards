@@ -227,28 +227,21 @@ function loadFilters(){
   }).catch(function(){});
 }
 
-/* ── orders_secure 페이지네이션 로드 ── */
+/* ── 행단위 로드: dash_raw_all(PII) / dash_raw (SECURITY DEFINER RPC) ──
+   orders_secure 직접 SELECT은 buyer_token() 실행권한 문제로 막혀, definer RPC를 사용한다. */
+var ACCESS=null;
 function fetchRows(from,to){
-  var toPlus=shiftStr(to,1), page=1000, out=[], off=0;
-  function pull(){
-    var q=window.MUSTIT.client.from("orders_secure").select(SELCOLS)
-      .gte("order_datetime",from).lt("order_datetime",toPlus)
-      .order("order_datetime",{ascending:true}).range(off,off+page-1);
-    var os=$("f_order_status").value; if(os) q=q.eq("order_status",os);
-    return q.then(function(res){
-      if(res.error) throw new Error(res.error.message||"조회 실패");
-      var rows=res.data||[]; out=out.concat(rows);
-      if(rows.length===page && out.length<80000){ off+=page; return pull(); }
-      return out;
-    });
-  }
-  return pull();
+  var p={from:from,to:to,filters:{}};
+  var fn=(ACCESS&&ACCESS.pii)?"dash_raw_all":"dash_raw";
+  return window.MUSTIT.rpc(fn,{p:p,p_limit:100000}).then(function(rows){
+    return Array.isArray(rows)?rows:[];
+  });
 }
 
 /* ── 클라이언트 필터 (파생 + 텍스트 + 드롭다운) ── */
 function clientFilter(rows){
   var biz=$("f_biz").value, site=$("f_site").value;
-  var ct=$("f_customer_type").value, so=$("f_ship_origin").value, pf=$("f_platform").value, pm=$("f_payment_method").value, br=$("f_brand").value, cl=$("f_category_l").value;
+  var ct=$("f_customer_type").value, so=$("f_ship_origin").value, pf=$("f_platform").value, pm=$("f_payment_method").value, br=$("f_brand").value, cl=$("f_category_l").value, os=$("f_order_status").value;
   var sellers=$("f_seller_id").value.trim().toLowerCase().split(",").map(function(s){return s.trim();}).filter(Boolean);
   var inflow=$("f_inflow").value.trim().toLowerCase(), scode=$("f_sales_code").value.trim().toLowerCase();
   function isExt(r){return String(r.payment_method||"").indexOf("External")===0;}
@@ -263,6 +256,7 @@ function clientFilter(rows){
     if(pm && r.payment_method!==pm) return false;
     if(br && r.brand!==br) return false;
     if(cl && r.category_l!==cl) return false;
+    if(os && r.order_status!==os) return false;
     if(sellers.length && sellers.indexOf(String(r.seller_id||"").toLowerCase())<0) return false;
     if(inflow && String(r.inflow||"").toLowerCase().indexOf(inflow)<0) return false;
     if(scode && String(r.sales_code||"").toLowerCase().indexOf(scode)<0) return false;
@@ -334,7 +328,7 @@ function renderKPI(cur,cmp){
   $("kpi_bot").innerHTML=
     tile("거래건수", won(cur.tx)+"건",{cmp:cmp&&won(cmp.tx),curNum:cur.tx,cmpNum:cmp&&cmp.tx,bw:'order_detail_no'})+
     tile("주문건수", won(cur.orders)+"건",{cmp:cmp&&won(cmp.orders),curNum:cur.orders,cmpNum:cmp&&cmp.orders,bw:'distinct 주문번호'})+
-    tile("구매자수", won(cur.buyers)+"명",{cmp:cmp&&won(cmp.buyers),curNum:cur.buyers,cmpNum:cmp&&cmp.buyers})+
+    tile("구매자수", (ACCESS&&ACCESS.pii)?(won(cur.buyers)+"명"):"권한 필요",{cmp:(ACCESS&&ACCESS.pii&&cmp)?won(cmp.buyers):null,curNum:cur.buyers,cmpNum:cmp&&cmp.buyers,bw:(ACCESS&&ACCESS.pii)?"distinct 구매자ID":"개인정보 권한 필요"})+
     tile("주문수량", won(cur.qty)+"개",{cmp:cmp&&won(cmp.qty),curNum:cur.qty,cmpNum:cmp&&cmp.qty})+
     tile("활성판매자수", won(cur.sellers)+"명",{cmp:cmp&&won(cmp.sellers),curNum:cur.sellers,cmpNum:cmp&&cmp.sellers,bw:'기간내 판매 seller'})+
     tile("주문단가", won(cur.aovOrder)+"원",{cmp:cmp&&won(cmp.aovOrder)+"원",curNum:cur.aovOrder,cmpNum:cmp&&cmp.aovOrder,bw:'GMV ÷ 주문건수'})+
@@ -451,6 +445,7 @@ function setupTopbar(){
 window.MUSTIT.ready(function(){
   window.MUSTIT.rpc("dash_access",{p_dashboard:FILE}).then(function(a){
     if(!a || a.view===false){$("block").style.display="grid";return;}
+    ACCESS=a;
     setupTopbar(); wire(); markPeriod("7d"); setPeriod("7d"); document.body.classList.remove("rt");
     loadFilters().finally(refresh);
   }).catch(function(){$("block").style.display="grid";});

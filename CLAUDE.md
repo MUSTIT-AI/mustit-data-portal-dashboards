@@ -99,6 +99,10 @@
 8. **메타데이터 필수 기입(색인·검색용)** — 대시보드 생성/등록 시 `dashboards` 행에 항상 채운다: **`title`**(목적별 자유 명칭) · **`short`**(한 줄 설명: 어떤 데이터를 보는지) · **`tags text[]`**(도메인 태그, 예: `{주문,매출}`; 권장 어휘 #주문 #행동 #카탈로그 #상품 #마케팅 #회원 #전환 #매출). 홈은 설명·태그를 카드에 표시하고 **검색 대상**으로 쓴다. 생성/수정은 Edge `admin-users`의 `dash_create`/`dash_meta_set`(파라미터 `short`,`tags`). SQL 직접 등록 시에도 `short`,`tags`를 넣을 것.
 9. **열람 권한·소유권·폴더(홈 기능)** — 열람 권한 부여/회수는 **소유자·관리자**가 홈 카드 **⚙️ 관리·공유** 모달에서 수행(전체 열람 ↔ 지정 계정만, 계정별 열람/수정 즉시 반영). Edge `admin-users`: `acl_list`/`acl_set`/`acl_reset_all`. **소유권 이관**=`dash_transfer_owner`(소유자·관리자). **삭제**=`dash_delete`(소유자·관리자, 홈에서 비밀번호 재확인). **개인 폴더**(계정별, 한 대시보드 여러 폴더)=RPC `dash_folders`/`dash_folder_create`/`dash_folder_rename`/`dash_folder_delete`/`dash_folder_set`. **즐겨찾기**=`dash_favs`/`dash_fav_set`. 홈 카드 일자는 **GitHub 파일 최종 커밋일**(공개 레포 API, 12h 캐시); `dashboards.updated_at`은 메타 변경 시각이라 표시용으로 쓰지 말 것.
 
+10. **표시 시간은 전부 KST(한국시간)** — 대시보드·페이지에서 사용자에게 보이는 모든 시각은 KST로 표기한다. 원본 저장 형태가 두 가지라 구분해서 처리:
+   - **주문·OpenAPI 데이터의 일시**(`order_datetime`, 주문/상품 `created_at` 등)는 이미 **KST(naive timestamp)** → **그대로 표시**(`AT TIME ZONE` 금지, 규칙 1과 동일).
+   - **시스템 `timestamptz`**(`ai_insights.created_at`, `ingested_at`, 계정 생성일 등)는 **UTC 저장** → 표시 시 반드시 KST 변환: `new Date(iso).toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false,...})` 또는 `Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',...})`. 참고 구현: `ai-history.html`의 `fmtKST()`. 라벨에 `KST` 표기 권장.
+
 ## 권한·소유권 (중요)
 계정 관리(admin.html)에서 계정별로 설정: **역할**(viewer/editor/admin), **GitHub 아이디**(`github_id`), **개인정보 열람**(`can_view_pii`), 그리고 **대시보드별 열람/수정**(`dashboard_acl`).
 

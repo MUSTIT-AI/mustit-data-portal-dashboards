@@ -20,8 +20,13 @@
   .badge-prep{position:absolute;top:8px;left:8px;font-size:11px;font-weight:700;color:#b26a00;background:#fff3e0;border-radius:20px;padding:2px 9px;z-index:2}
   .star{position:absolute;top:8px;right:8px;z-index:3;width:30px;height:30px;border-radius:50%;border:0;background:rgba(255,255,255,.92);cursor:pointer;font-size:16px;line-height:30px;text-align:center;box-shadow:0 1px 5px rgba(0,0,0,.18);padding:0}
   .star.on{color:#f5a623}.star.off{color:#c4c2bb}.star:hover{background:#fff}
-  .fldbtn{position:absolute;top:8px;right:44px;z-index:3;width:30px;height:30px;border-radius:50%;border:0;background:rgba(255,255,255,.92);cursor:pointer;font-size:14px;line-height:30px;text-align:center;box-shadow:0 1px 5px rgba(0,0,0,.18);padding:0;color:#7a7770}
-  .fldbtn:hover{background:#fff;color:#c8102e}
+  .fldbtn{position:absolute;top:8px;right:44px;z-index:3;width:30px;height:30px;border-radius:50%;border:0;background:rgba(255,255,255,.92);cursor:pointer;line-height:0;text-align:center;box-shadow:0 1px 5px rgba(0,0,0,.18);padding:0}
+  .fldbtn svg{vertical-align:middle}
+  .fldbtn.on{color:#f5a623}.fldbtn.off{color:#9a978f}.fldbtn:hover{background:#fff}
+  /* 버튼은 마우스 오버 시에만 노출 */
+  .gcard .star,.gcard .fldbtn,.gcard .cog{opacity:0;transition:opacity .12s}
+  .gcard:hover .star,.gcard:hover .fldbtn,.gcard:hover .cog{opacity:1}
+  @media(hover:none){.gcard .star,.gcard .fldbtn,.gcard .cog{opacity:1}}
   .cog{position:absolute;top:8px;left:8px;z-index:3;width:30px;height:30px;border-radius:50%;border:0;background:rgba(255,255,255,.92);cursor:pointer;font-size:14px;line-height:30px;text-align:center;box-shadow:0 1px 5px rgba(0,0,0,.18);padding:0}
   .cog:hover{background:#fff}
   .lock{position:absolute;bottom:8px;left:8px;z-index:2;font-size:10.5px;font-weight:700;color:#8a5a00;background:#fff6e0;border-radius:20px;padding:2px 8px}
@@ -198,8 +203,14 @@
       .catch(function () { return null; });
   }
 
-  var ITEMS = [], FAVS = {}, FOLDERS = [], FILTER = 'all', SEARCH = '', ACCOUNTS = [];
+  var ITEMS = [], FAVS = {}, FOLDERS = [], FILTER = 'all', SEARCH = '', ACCOUNTS = [], FOLDERSET = {};
   function folderById(id) { for (var i = 0; i < FOLDERS.length; i++) if (String(FOLDERS[i].id) === String(id)) return FOLDERS[i]; return null; }
+  function computeFolderSet() { FOLDERSET = {}; FOLDERS.forEach(function (f) { (f.files || []).forEach(function (x) { FOLDERSET[x] = 1; }); }); }
+  function folderSvg(on) {
+    return on
+      ? '<svg viewBox="0 0 24 24" width="15" height="15" fill="currentColor"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg>'
+      : '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="M10 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-8l-2-2z"/></svg>';
+  }
 
   // ── 필터바(전체/즐겨찾기/폴더들) ──
   function renderBar() {
@@ -228,7 +239,8 @@
     var href = built ? ('dashboards/' + encodeURIComponent(d.file)) : ('dashboards/_starter.html?f=' + encodeURIComponent(d.file));
     var on = !!FAVS[d.file];
     var star = '<button class="star act ' + (on ? 'on' : 'off') + '" data-star="' + esc(d.file) + '" title="즐겨찾기">' + (on ? '★' : '☆') + '</button>';
-    var fld = '<button class="fldbtn act" data-folder="' + esc(d.file) + '" title="폴더에 저장">📁</button>';
+    var foldered = !!FOLDERSET[d.file];
+    var fld = '<button class="fldbtn act ' + (foldered ? 'on' : 'off') + '" data-folder="' + esc(d.file) + '" title="폴더에 저장">' + folderSvg(foldered) + '</button>';
     var cog = d.manage ? '<button class="cog act" data-cog="' + esc(d.file) + '" title="관리·공유">⚙️</button>' : '';
     var lock = (d.manage && d.restricted) ? '<span class="lock">🔒 지정 열람</span>' : '';
     var thumb = built
@@ -245,7 +257,7 @@
   function gallery(arr) { return '<div class="gallery">' + arr.map(card).join('') + '</div>'; }
 
   function render() {
-    var el = $('cards'); el.className = '';
+    var el = $('cards'); el.className = ''; computeFolderSet();
     var q = SEARCH.trim().toLowerCase();
     var matches = function (d) {
       if (!q) return true;
@@ -307,7 +319,7 @@
         rpc('dash_folder_set', { p_file: FD_FILE, p_folder_id: Number(fid), p_on: on }).then(function () {
           var f = folderById(fid); if (!f) return; f.files = f.files || [];
           if (on) { if (f.files.indexOf(FD_FILE) < 0) f.files.push(FD_FILE); } else { f.files = f.files.filter(function (x) { return x !== FD_FILE; }); }
-          renderBar();
+          renderBar(); render();
         }).catch(function (e) { $('fd_msg').style.color = '#c8102e'; $('fd_msg').textContent = '실패: ' + (e.message || e); cb.checked = !on; });
       };
     });

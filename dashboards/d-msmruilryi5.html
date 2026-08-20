@@ -234,7 +234,7 @@
 <script>
 (function(){
 "use strict";
-var BUILD="v11";
+var BUILD="v12";
 var OPTIN=null, OPTIN_LOGIN=null, OPTIN_M=null, OPTIN_LOGIN_M=null;
 var $=function(id){return document.getElementById(id);};
 var FILE="d-msmruilryi5.html", AIDASH="커머스 주요 실적";
@@ -530,7 +530,7 @@ function renderProductDim(tc,tm){
   var sg=0,sq=0,sm=0;var body=rows.map(function(r,i){var mv=cmpm&&cmpm[r.k]?cmpm[r.k].gmv:0;sg+=r.gmv;sq+=r.qty;sm+=mv;var h='<tr><td>'+(i+1)+'</td><td class="name">'+esc(trim(r.k,24))+'</td><td>'+won(r.gmv)+'</td><td>'+won(r.qty)+'</td><td>'+pct(total?r.gmv/total:0)+'</td>';if(cmpm){h+='<td>'+won(mv)+'</td><td>'+pct(totM?mv/totM:0)+'</td>'+dcell(r.gmv,mv);}return h+'</tr>';}).join("");
   var foot='<tr style="font-weight:800;background:#faf9f6"><td></td><td>TOP20 합계</td><td>'+won(sg)+'</td><td>'+won(sq)+'</td><td>'+pct(total?sg/total:0)+'</td>'+(cmpm?'<td>'+won(sm)+'</td><td>'+pct(totM?sm/totM:0)+'</td>'+dcell(sg,sm):'')+'</tr>';
   $("t_dim").innerHTML='<thead><tr><th>#</th><th>'+label+'</th><th>GMV</th><th>수량</th><th>비중</th>'+(cmpm?'<th>비교GMV</th><th>비교비중</th><th>증감</th>':'')+'</tr></thead><tbody>'+body+foot+'</tbody>';
-  $("ai_dim").innerHTML='<b>AI</b> '+label+' 상위: '+esc(arr.slice(0,3).map(function(r){return trim(r.k,10)+"("+won(r.gmv)+")";}).join(" · "))+'. 상위3 GMV 비중 '+pct(total?arr.slice(0,3).reduce(function(a,b){return a+b.gmv;},0)/total:0)+'.';
+  $("ai_dim").innerHTML='<b>AI</b> '+label+' 상위: '+esc(arr.slice(0,3).map(function(r){return r.k+"("+won(r.gmv)+")";}).join(" · "))+'. 상위3 GMV 비중 '+pct(total?arr.slice(0,3).reduce(function(a,b){return a+b.gmv;},0)/total:0)+'.';
 }
 function renderDaebun(tc,tm){
   if(DAEDRILL){ // 중분류 = 데이터 테이블(막대 아님) · 차트는 5버킷 유지
@@ -551,7 +551,7 @@ function renderSeller(tc,tm){var total=sumG(tc.seller);stackedSeller("c_seller",
   var body=top.map(function(r,i){var mo=cmpm?cmpm[r.k]:null;var mv=mo?mo.gmv:0;sg+=r.gmv;sq+=r.qty;smg+=mv;var h='<tr><td>'+(i+1)+'</td><td class="name">'+esc(trim(r.k,16))+'</td><td>'+won(r.gmv)+'</td><td>'+won(r.qty)+'</td><td>'+pct(total?r.gmv/total:0)+'</td>';if(cmpm){h+='<td>'+won(mv)+'</td><td>'+pct(totM?mv/totM:0)+'</td>'+dcell(r.gmv,mv);}return h+'</tr>';}).join("");
   var foot='<tr style="font-weight:800;background:#faf9f6"><td></td><td>TOP20 합계</td><td>'+won(sg)+'</td><td>'+won(sq)+'</td><td>'+pct(total?sg/total:0)+'</td>'+(cmpm?'<td>'+won(smg)+'</td><td>'+pct(totM?smg/totM:0)+'</td>'+dcell(sg,smg):'')+'</tr>';
   $("t_seller").innerHTML='<thead><tr><th>#</th><th>판매자</th><th>GMV</th><th>수량</th><th>비중</th>'+(cmpm?'<th>비교GMV</th><th>비교비중</th><th>증감</th>':'')+'</tr></thead><tbody>'+body+foot+'</tbody>';
-  $("ai_seller").innerHTML='<b>AI</b> 상위 판매자: '+esc(tc.seller.slice(0,3).map(function(r){return trim(r.k,12)+"("+won(r.gmv)+")";}).join(" · "))+'. 막대=판매자별 대분류 구성(누적, TOP20).';
+  $("ai_seller").innerHTML='<b>AI</b> 상위 판매자: '+esc(tc.seller.slice(0,3).map(function(r){return r.k+"("+won(r.gmv)+")";}).join(" · "))+'. 막대=판매자별 대분류 구성(누적, TOP20).';
 }
 
 /* ── CRM ── */
@@ -560,7 +560,7 @@ function renderCRMAxis(cid,tid,aid,rows,mrows,label){
   grpBar(cid,top.map(function(s){return trim(s.k,12);}),top.map(function(s){return s.gmv;}),cmp?top.map(function(s){return mm[s.k]?mm[s.k].gmv:0;}):null,true);
   $(tid).innerHTML='<thead><tr><th>'+label+'</th><th>구매자수</th><th>거래건수</th><th>거래단가</th><th>GMV</th><th class="tl">TOP상품</th>'+(cmp?'<th>비교GMV</th><th>증감</th>':'')+'</tr></thead><tbody>'+
     top.map(function(s){var mv=cmp&&mm[s.k]?mm[s.k].gmv:0;return '<tr><td>'+esc(s.k)+'</td><td>'+(s.hasBuyer?won(s.buyers):"–")+'</td><td>'+won(s.tx)+'</td><td>'+won(s.aov)+'</td><td>'+won(s.gmv)+'</td><td class="name">'+(s.top?esc(trim(s.top.k,16)):"–")+'</td>'+(cmp?'<td>'+won(mv)+'</td>'+dcell(s.gmv,mv):'')+'</tr>';}).join("")+'</tbody>';
-  var t=rows[0];if(t)$(aid).innerHTML='<b>AI</b> 최대 = <b>'+esc(t.k)+'</b> (GMV '+won(t.gmv)+', 거래단가 '+won(t.aov)+(t.top?', 대표 '+esc(trim(t.top.k,14)):'')+')'+(cmp?' · 비교기간 대비 변화 확인':'')+'.';
+  var t=rows[0];if(t)$(aid).innerHTML='<b>AI</b> 최대 = <b>'+esc(t.k)+'</b> (GMV '+won(t.gmv)+', 거래단가 '+won(t.aov)+(t.top?', 대표 '+esc(t.top.k):'')+')'+(cmp?' · 비교기간 대비 변화 확인':'')+'.';
 }
 
 /* ── 교차 분석 ── */
@@ -587,7 +587,7 @@ function renderCross(){
   var cmpm=rowsM?idx(grp(rowsM)):null;
   $("t_cross").innerHTML='<thead><tr><th>#</th><th>'+lb+'</th><th>GMV</th><th>수량</th><th>비중</th>'+(cmpm?'<th>비교GMV</th>':'')+'</tr></thead><tbody>'+
     arr.slice(0,20).map(function(r,i){var mv=cmpm&&cmpm[r.k]?cmpm[r.k].gmv:0;return '<tr><td>'+(i+1)+'</td><td class="name">'+esc(trim(r.k,22))+'</td><td>'+won(r.gmv)+'</td><td>'+won(r.qty)+'</td><td>'+pct(total?r.gmv/total:0)+'</td>'+(cmpm?'<td>'+won(mv)+'</td>':'')+'</tr>';}).join("")+'</tbody>';
-  $("ai_cross").innerHTML='<b>AI</b> <b>'+esc(CXSEG)+'</b> 고객('+axl+')이 많이 사는 '+lb+': '+esc(top.slice(0,3).map(function(r){return trim(r.k,10)+"("+pct(total?r.gmv/total:0)+")";}).join(" · "))+'.';
+  $("ai_cross").innerHTML='<b>AI</b> <b>'+esc(CXSEG)+'</b> 고객('+axl+')이 많이 사는 '+lb+': '+esc(top.slice(0,3).map(function(r){return r.k+"("+pct(total?r.gmv/total:0)+")";}).join(" · "))+'.';
 }
 
 /* ── 자동요약 ── */
@@ -597,8 +597,8 @@ function autoSummary(c,m){var li=[],cm=MODE==="cmp"&&m;
   li.push("손익(실거래액): 순매출 "+won(c.netRev)+" · 순이익 <b>"+won(c.netProfit)+"</b> ("+pct(c.realGmv?c.netProfit/c.realGmv:0)+")"+(cm?" · 순이익 "+chg(c.netProfit,m.netProfit).t:""));
   var rc=[["상품쿠폰",c.rel.item.g],["DPS",c.rel.dps.g],["네이버",c.rel.naver.g],["회원",c.rel.member.g]].sort(function(a,b){return b[1]-a[1];})[0];
   li.push("연관거래액 최다 = <b>"+rc[0]+"</b> "+won(rc[1])+"원 (GMV의 "+pct(c.gmv?rc[1]/c.gmv:0)+")");
-  if(c.topProd)li.push("최다 기여 상품 = <b>"+esc(trim(c.topProd.k,30))+"</b> ("+won(c.topProd.v)+"원)");
-  if(c.topCancel)li.push("최다 취소 상품 = "+esc(trim(c.topCancel.k,30))+" ("+won(c.topCancel.v)+"원)");
+  if(c.topProd)li.push("최다 기여 상품 = <b>"+esc(c.topProd.k)+"</b> ("+won(c.topProd.v)+"원)");
+  if(c.topCancel)li.push("최다 취소 상품 = "+esc(c.topCancel.k)+" ("+won(c.topCancel.v)+"원)");
   $("auto_sum").innerHTML=li.map(function(x){return "<li>"+x+"</li>";}).join("");}
 
 /* ── AI 총평 ── */

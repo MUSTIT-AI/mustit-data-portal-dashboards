@@ -136,6 +136,7 @@
 "이전기간 대비"는 선택한 기간과 동일한 길이의 바로 직전 기간과 비교한 순위 변동이에요.<br>
 ※ 표본이 아니라 <b>기간 내 전체 주문</b>을 DB에서 집계해요(`dash_product_rank`). 12개월 조회도 1초 내외예요. 조회 기간은 최대 <b id="maxdaystxt">366</b>일(약 12개월)이에요. 상품 이미지·재고·최대혜택가는 머스트잇 Open API로 실시간 조회해요(판매종료 등으로 없을 수 있어요).<br>
 조회수·장바구니·찜은 선택한 기간의 집계값이에요. 원천 데이터가 95일치만 보관되고 조회 기간이 90일을 넘으면 제공되지 않아 "-"로 표시돼요.<br>
+"(주문)"이 붙은 컬럼(카탈로그순위·머스트잇할인·판매자할인)은 <b>주문 시점 히스토리</b>(orders_v), "(실시간)"이 붙거나 안 붙은 가격·재고·순위류는 <b>지금 이 순간의 값</b>(Open API)이에요 — 같은 이름이라도 값이 다를 수 있어요.<br>
 <span id="statline"></span></p>
 <div class="err" id="err"></div>
 
@@ -144,15 +145,22 @@
     <table class="rank">
       <colgroup>
         <col style="width:44px"><col style="width:70px"><col style="width:56px"><col style="width:90px"><col style="width:300px">
-        <col style="width:120px"><col style="width:90px"><col style="width:100px"><col style="width:70px"><col style="width:100px"><col style="width:100px">
-        <col style="width:100px"><col style="width:100px"><col style="width:80px"><col style="width:100px"><col style="width:100px"><col style="width:90px"><col style="width:110px">
+        <col style="width:120px"><col style="width:100px"><col style="width:100px"><col style="width:70px"><col style="width:70px">
+        <col style="width:100px"><col style="width:100px"><col style="width:100px">
+        <col style="width:100px"><col style="width:100px"><col style="width:100px"><col style="width:80px">
+        <col style="width:90px"><col style="width:100px"><col style="width:100px"><col style="width:100px"><col style="width:100px">
+        <col style="width:110px"><col style="width:110px"><col style="width:110px"><col style="width:110px">
+        <col style="width:90px"><col style="width:110px">
         <col style="width:70px"><col style="width:70px"><col style="width:60px"><col style="width:90px">
       </colgroup>
       <thead><tr>
         <th>순위</th><th>이전기간<br>대비</th><th>이미지</th><th>상품번호</th><th class="l">상품명</th>
-        <th class="l">판매자</th><th>카탈로그<br>순위</th><th>카탈로그<br>상품수</th><th>재고</th><th>판매가</th><th>최대<br>혜택가</th>
-        <th>M<br>최저가</th><th>시장<br>최저가</th><th>차액율</th>
-        <th>머스트잇<br>할인</th><th>판매자<br>할인</th><th>판매수량</th><th>거래금액</th>
+        <th class="l">판매자</th><th>카탈로그<br>순위(주문)</th><th>카탈로그<br>상품수</th><th>재고</th><th>판매<br>상태</th>
+        <th>판매가</th><th>정가</th><th>판매가<br>(실시간)</th>
+        <th>최대<br>혜택가</th><th>M<br>최저가</th><th>시장<br>최저가</th><th>차액율</th>
+        <th>최대혜택가<br>순위</th><th>판매자<br>할인가</th><th>판매자할인가<br>순위</th><th>카탈로그<br>순위(실시간)</th><th>최저가<br>상품</th>
+        <th>머스트잇<br>할인(주문)</th><th>판매자<br>할인(주문)</th><th>머스트잇<br>할인(실시간)</th><th>판매자<br>할인(실시간)</th>
+        <th>판매수량</th><th>거래금액</th>
         <th>조회수</th><th>장바구니</th><th>찜</th><th>최근 7일</th>
       </tr></thead>
       <tbody id="tbody"></tbody>
@@ -366,13 +374,23 @@ function renderTable(list){
       '<td>'+won(a.catalog_rank)+'</td>'+
       '<td>'+won(a.catalog_item_count)+'</td>'+
       '<td class="stock-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="pstat-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
       '<td>₩'+won(unit)+'</td>'+
+      '<td class="normal-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="sell-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
       '<td class="price-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
       '<td class="mlow-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
       '<td class="mktlow-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
       '<td class="gap-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="mbprank-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="sdprice-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="sdprank-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="catrank2-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="lowitem-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
       '<td>₩'+won(a.own_discount)+'</td>'+
       '<td>₩'+won(a.seller_discount)+'</td>'+
+      '<td class="mdisc-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="sdisc-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
       '<td class="qty">'+won(a.quantity)+'</td>'+
       '<td class="gmv">₩'+won(a.gmv)+'</td>'+
       '<td class="view-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
@@ -439,42 +457,45 @@ function loadPrices(list){
     paintPrices(list);
   });
 }
-// 최저가류는 0이 "정보 없음"을 뜻함(참고: ax_open_api/mustit-dashboard 관례) — "-"로 표시
+// 최저가·정가류는 0이 "정보 없음"을 뜻함(참고: ax_open_api/mustit-dashboard 관례) — "-"로 표시
 function priceOrDash(n){ return (n==null || n===0) ? "-" : ("₩"+won(n)); }
+// 할인액은 0이 "할인 없음"이라는 실제 값이라 위와 다르게 그대로 ₩0으로 보여준다.
+function amtOrDash(n){ return (n==null) ? "-" : ("₩"+won(n)); }
+function rankOrDash(n){ return (n==null) ? "-" : won(n); }
+var PRODUCT_STATUS_LABEL = { IN_STOCK:"판매중", OUT_OF_STOCK:"품절", SUSPENDED:"판매중단" };
 function paintPrices(list){
   list.forEach(function(a){
     var v = PRICE_CACHE[a.product_id];
-    var priceEl = document.querySelector('.price-ph[data-pid="'+CSS.escape(String(a.product_id))+'"]');
-    if(priceEl){
-      priceEl.textContent = (v && v.maxBenefitPrice!=null) ? ("₩"+won(v.maxBenefitPrice)) : "-";
-      priceEl.classList.remove("price-ph");
+    var pid = CSS.escape(String(a.product_id));
+    function set(cls, html){
+      var el = document.querySelector('.'+cls+'[data-pid="'+pid+'"]');
+      if(!el) return;
+      el.innerHTML = html;
+      el.classList.remove(cls);
     }
-    var stockEl = document.querySelector('.stock-ph[data-pid="'+CSS.escape(String(a.product_id))+'"]');
-    if(stockEl){
-      stockEl.textContent = (v && v.stock!=null) ? won(v.stock) : "-";
-      stockEl.classList.remove("stock-ph");
-    }
-    var mlowEl = document.querySelector('.mlow-ph[data-pid="'+CSS.escape(String(a.product_id))+'"]');
-    if(mlowEl){
-      mlowEl.textContent = v ? priceOrDash(v.mustitLowestPrice) : "-";
-      mlowEl.classList.remove("mlow-ph");
-    }
-    var mktlowEl = document.querySelector('.mktlow-ph[data-pid="'+CSS.escape(String(a.product_id))+'"]');
-    if(mktlowEl){
-      mktlowEl.textContent = v ? priceOrDash(v.marketLowestPrice) : "-";
-      mktlowEl.classList.remove("mktlow-ph");
-    }
+    set("price-ph", (v && v.maxBenefitPrice!=null) ? ("₩"+won(v.maxBenefitPrice)) : "-");
+    set("stock-ph", (v && v.stock!=null) ? won(v.stock) : "-");
+    set("pstat-ph", (v && v.productStats && PRODUCT_STATUS_LABEL[v.productStats]) || "-");
+    set("mlow-ph", v ? priceOrDash(v.mustitLowestPrice) : "-");
+    set("mktlow-ph", v ? priceOrDash(v.marketLowestPrice) : "-");
+    set("normal-ph", v ? priceOrDash(v.normalPrice) : "-");
+    set("sell-ph", v ? priceOrDash(v.sellingPrice) : "-");
+    set("sdprice-ph", v ? priceOrDash(v.sellerDiscountPrice) : "-");
+    set("mbprank-ph", v ? rankOrDash(v.maxBenefitPriceRanking) : "-");
+    set("sdprank-ph", v ? rankOrDash(v.sellerDiscountPriceRanking) : "-");
+    set("catrank2-ph", v ? rankOrDash(v.catalogRanking) : "-");
+    set("mdisc-ph", v ? amtOrDash(v.mustitDiscountAmount) : "-");
+    set("sdisc-ph", v ? amtOrDash(v.sellerDiscountAmount) : "-");
+    set("lowitem-ph", (v && v.lowestPriceItemNo!=null)
+      ? ('<a class="plain" href="'+detailUrl(v.lowestPriceItemNo)+'" target="_blank" rel="noopener">'+esc(v.lowestPriceItemNo)+'</a>')
+      : "-");
     // 차액율 = (최대혜택가 − 시장최저가) / 시장최저가 × 100, 양수 빨강(비쌈) / 음수 파랑(더 저렴)
-    var gapEl = document.querySelector('.gap-ph[data-pid="'+CSS.escape(String(a.product_id))+'"]');
-    if(gapEl){
-      gapEl.classList.remove("gap-ph");
-      var mbp = v && v.maxBenefitPrice, mkt = v && v.marketLowestPrice;
-      if(mbp!=null && mkt){
-        var pct = ((mbp-mkt)/mkt*100);
-        gapEl.innerHTML = '<span class="'+(pct>0?"rank-up":pct<0?"rank-down":"rank-flat")+'">'+(pct>0?"+":"")+pct.toFixed(1)+"%</span>";
-      } else {
-        gapEl.textContent = "-";
-      }
+    var mbp = v && v.maxBenefitPrice, mkt = v && v.marketLowestPrice;
+    if(mbp!=null && mkt){
+      var pct = ((mbp-mkt)/mkt*100);
+      set("gap-ph", '<span class="'+(pct>0?"rank-up":pct<0?"rank-down":"rank-flat")+'">'+(pct>0?"+":"")+pct.toFixed(1)+"%</span>");
+    } else {
+      set("gap-ph", "-");
     }
   });
 }

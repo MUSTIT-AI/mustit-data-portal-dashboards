@@ -253,10 +253,11 @@ window.addEventListener("resize", function(){ Object.keys(CH).forEach(function(k
 function fmtM(v){ return (Math.round((Number(v)||0)/1e6)).toLocaleString("ko-KR")+"M"; }
 function renderTrendChart(days, rows){
   var sums = days.map(function(_,i){ return rows.reduce(function(a,r){ return a+(r.daily[i]||0); }, 0); });
+  var dayLabels = days.map(dayLabel);  // "8/1(토)" 형태로 요일 표시
   chart("c_trend").setOption({
     grid:{ left:52, right:20, top:16, bottom:38 },
     tooltip:{ trigger:"axis", confine:true, textStyle:{fontSize:11}, formatter:function(p){ return p[0].axisValue+"<br/>거래액 "+won(p[0].value); } },
-    xAxis:{ type:"category", data:days, axisLabel:{fontSize:9,color:"#999",rotate:38}, axisTick:{show:false}, axisLine:{lineStyle:{color:"#ddd"}} },
+    xAxis:{ type:"category", data:dayLabels, axisLabel:{fontSize:9,color:"#999",rotate:38}, axisTick:{show:false}, axisLine:{lineStyle:{color:"#ddd"}} },
     yAxis:{ type:"value", axisLabel:{formatter:fmtM,fontSize:9,color:"#999"}, splitLine:{lineStyle:{color:"#eee"}} },
     series:[{ type:"line", data:sums, symbol:"circle", symbolSize:4, areaStyle:{color:"rgba(238,59,82,.12)"}, lineStyle:{width:1.8,color:"#ee3b52"}, itemStyle:{color:"#ee3b52"} }]
   }, true);

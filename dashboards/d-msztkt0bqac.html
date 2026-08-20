@@ -75,10 +75,28 @@
   table.dt td{padding:5px 8px;border-bottom:1px solid #f0efe9;font-variant-numeric:tabular-nums;text-align:right}
   table.dt td:first-child{text-align:left}
   table.dt tr:hover td{background:#fafaf7}
-  /* DAU/WAU/MAU 컴포넌트 */
-  .auc{border-left:3px solid #7b9ff2}
+  /* DAU/WAU/MAU 위젯 */
+  .auc{border-left:3px solid #7b9ff2;cursor:default}
+  .auc.dragging{opacity:.4}
+  .achdr{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}
+  .achdr .dragh{cursor:grab;color:#aaa;font-size:15px;user-select:none}
+  .achdr .ac_title{font-size:14px;font-weight:700;border:1px solid transparent;border-radius:6px;padding:4px 6px;flex:1;min-width:120px;background:transparent}
+  .achdr .ac_title:hover,.achdr .ac_title:focus{border-color:#d6d4ce;background:#fff}
+  .achdr select{border:1px solid #d6d4ce;border-radius:6px;padding:4px 6px;font-size:11.5px;height:27px;background:#fff}
+  .achdr .ac_revlbl{font-size:11px;color:var(--sub);display:flex;align-items:center;gap:4px;white-space:nowrap}
+  .achdr .btn.del{background:#fff;border:1px solid #c8102e;color:#c8102e;padding:4px 10px}
+  .achdr .btn.del:hover{background:#c8102e;color:#fff}
+  .ac_note{width:100%;border:1px solid transparent;border-radius:6px;padding:4px 6px;font-size:11.5px;color:var(--sub);margin-bottom:8px;background:transparent}
+  .ac_note:hover,.ac_note:focus{border-color:#d6d4ce;background:#fff}
   .auc .acfilters{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin:8px 0}
   .auc .acfilters select{border:1px solid #d6d4ce;border-radius:6px;padding:5px 7px;font-size:12px;height:29px;background:#fff;max-width:170px}
+  .acgbwrap{margin-bottom:10px}
+  .acgb{display:flex;flex-direction:column;gap:6px;margin:6px 0}
+  .acgbrow{display:flex;gap:6px;align-items:center}
+  .acgbrow select{border:1px solid #d6d4ce;border-radius:6px;padding:4px 6px;font-size:11.5px;height:27px}
+  .acgbrow .acgb_op{width:64px;font-weight:700;color:var(--red)}
+  .acgbrow .acgb_lbl{width:64px;text-align:center;color:#ccc}
+  .acgbrow .acgb_dim{flex:1;max-width:220px}
   .acfrow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:8px;background:#f7f6f2;border-radius:8px}
   .acf{display:flex;gap:4px;align-items:center}
   .acf select,.acf input{border:1px solid #d6d4ce;border-radius:6px;padding:4px 6px;font-size:11.5px;height:26px}
@@ -87,6 +105,9 @@
   .achead{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
   .achead .kpi{flex:1;min-width:150px}
   .acgrp{margin-bottom:8px}
+  .delta{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700;vertical-align:middle}
+  .delta.up{background:#e3f6ea;color:#1f8a4c}
+  .delta.down{background:#fdeaea;color:#c8102e}
   .loading{position:fixed;inset:0;background:rgba(255,255,255,.55);display:none;align-items:center;justify-content:center;z-index:80;font-weight:700;color:var(--red)}
   .loading.on{display:flex}
   .block{display:none;position:fixed;inset:0;background:var(--bg);z-index:80;place-items:center;text-align:center;color:var(--sub);font-family:system-ui}
@@ -120,6 +141,8 @@
 
   <div class="sechead">DAU / WAU / MAU 분석 컴포넌트 <span style="font-weight:400">(각자 독립된 기간·그룹바이·필터)</span></div>
   <div id="au_components"></div>
+  <button class="btn go" id="ac_add" type="button" style="margin-bottom:14px">+ 위젯 추가</button>
+  <p class="note">위젯 구성(제목·차트종류·필터·그룹바이·순서 등)은 <b>이 브라우저에만</b> 저장됩니다(localStorage) — 다른 사람에게는 공유되지 않고, 캐시를 지우면 초기화됩니다.</p>
 
   <div class="card">
     <h3>AU · 획득유저(가입자) · 결제 유저수 추이 (전체 요약)</h3>
@@ -300,34 +323,88 @@ function queryAURange(eventType, from, to, filters, groupBy, interval){
   }).catch(function(e){ return { error:(e&&e.message)||String(e) }; });
 }
 
-// ── 컴포넌트 UI 생성 ──
-var AUC = {}; // id -> {cfg, chart}
-function componentHTML(cfg){
-  var gbOpts = DIMS.map(function(d){ return '<option value="'+esc(d.key)+'">'+esc(d.label)+'</option>'; }).join("");
+// ── 위젯 시스템(추가·삭제·수정·순서변경·차트종류·비교기간) — 개인 브라우저에만 저장(localStorage), 공유 안 됨 ──
+var EVENT_OPTS = [
+  ["_active","AU (Any Active Event)"],
+  ["complete_order","결제유저 (complete_order)"],
+  ["complete_signup","획득유저 (complete_signup)"]
+];
+var VIS_OPTS = [["bar","막대"],["line","꺾은선"],["area","영역"]];
+var GRAN_OPTS = [["1","일별"],["7","주별"],["30","월별"]];
+var COMPARE_OPTS = [["none","비교 없음"],["prev_period","이전 기간"],["prev_year","전년 동기"]];
+function granLabel(g){ return g===30?"월별":g===7?"주별":"일별"; }
+var WKEY = "auc_widgets_"+FILE;
+var WIDGETS = [];
+function defaultWidgets(){
+  return [
+    {id:"w_dau", title:"DAU", note:"일 단위 Any Active Event 순유저(기본 1일)", event:"_active", vis:"bar", days:1, gran:1, compare:"prev_period", groupBy:[{op:"AND",key:""}], filters:[null,null,null], showRevenue:false},
+    {id:"w_wau", title:"WAU", note:"주 단위 Any Active Event 순유저(기본 7일)", event:"_active", vis:"bar", days:7, gran:1, compare:"prev_period", groupBy:[{op:"AND",key:""}], filters:[null,null,null], showRevenue:false},
+    {id:"w_mau", title:"MAU (+ARPU·ARPPU)", note:"월 단위 Any Active Event 순유저(기본 30일) · 매출은 주문DB 순매출", event:"_active", vis:"bar", days:30, gran:1, compare:"prev_period", groupBy:[{op:"AND",key:""}], filters:[null,null,null], showRevenue:true}
+  ];
+}
+function loadWidgets(){
+  try{
+    var raw = localStorage.getItem(WKEY);
+    if(raw){
+      var arr=JSON.parse(raw);
+      if(Array.isArray(arr) && arr.length){
+        // 구버전(gb1/gb2) 저장분 호환
+        arr.forEach(function(w){
+          if(!w.groupBy){ w.groupBy=[{op:"AND",key:w.gb1||""}]; if(w.gb2) w.groupBy.push({op:"AND",key:w.gb2}); delete w.gb1; delete w.gb2; }
+          if(!w.compare) w.compare="none";
+        });
+        return arr;
+      }
+    }
+  }catch(e){}
+  return defaultWidgets();
+}
+function saveWidgets(){ try{ localStorage.setItem(WKEY, JSON.stringify(WIDGETS.map(function(w){
+  // 함수·DOM 참조 없이 순수 데이터만 저장(_xs/_ys 등 런타임 캐시 제외)
+  return {id:w.id,title:w.title,note:w.note,event:w.event,vis:w.vis,days:w.days,from:w.from,to:w.to,gran:w.gran,compare:w.compare,groupBy:w.groupBy,filters:w.filters,showRevenue:w.showRevenue};
+}))); }catch(e){} }
+function newWidgetId(){ return "w_"+Date.now()+"_"+Math.floor(Math.random()*1000); }
+
+function widgetHTML(w){
   function filterRow(i){
+    var gbOpts = DIMS.map(function(d){ return '<option value="'+esc(d.key)+'">'+esc(d.label)+'</option>'; }).join("");
     return '<div class="acf">'+
       '<select class="acf_dim" data-i="'+i+'">'+gbOpts+'</select>'+
       '<select class="acf_op" data-i="'+i+'"></select>'+
       '<input class="acf_val" data-i="'+i+'" type="text" placeholder="값(쉼표로 여러개)">'+
       '</div>';
   }
+  var evOpts = EVENT_OPTS.map(function(o){return '<option value="'+o[0]+'">'+esc(o[1])+'</option>';}).join("");
+  var visOpts = VIS_OPTS.map(function(o){return '<option value="'+o[0]+'">'+esc(o[1])+'</option>';}).join("");
+  var granOpts = GRAN_OPTS.map(function(o){return '<option value="'+o[0]+'">'+esc(o[1])+'</option>';}).join("");
+  var cmpOpts = COMPARE_OPTS.map(function(o){return '<option value="'+o[0]+'">'+esc(o[1])+'</option>';}).join("");
   return ''+
-  '<div class="card auc" id="auc_'+cfg.id+'">'+
-    '<div class="tblwrap"><h3 style="margin:0">'+esc(cfg.title)+'</h3>'+
-      '<span class="hint">'+esc(cfg.hint)+'</span></div>'+
+  '<div class="card auc" id="auc_'+w.id+'" draggable="true">'+
+    '<div class="achdr">'+
+      '<span class="dragh" title="드래그해서 순서 변경">⠿</span>'+
+      '<input type="text" class="ac_title" value="'+esc(w.title)+'">'+
+      '<select class="ac_event">'+evOpts+'</select>'+
+      '<select class="ac_vis">'+visOpts+'</select>'+
+      '<label class="ac_revlbl"><input type="checkbox" class="ac_rev"> ARPU·ARPPU</label>'+
+      '<button class="btn del ac_del" type="button">🗑 삭제</button>'+
+    '</div>'+
+    '<input type="text" class="ac_note" placeholder="설명(주석)" value="'+esc(w.note||"")+'">'+
     '<div class="acfilters">'+
       '<div class="fld"><label>시작일</label><input type="date" class="ac_from"></div>'+
       '<div class="fld"><label>종료일</label><input type="date" class="ac_to"></div>'+
-      '<div class="fld"><label>추이 단위</label><select class="ac_gran"><option value="1">일별</option><option value="30">월별</option></select></div>'+
-      '<div class="fld"><label>그룹바이 1</label><select class="ac_gb1">'+gbOpts+'</select></div>'+
-      '<div class="fld"><label>그룹바이 2</label><select class="ac_gb2">'+gbOpts+'</select></div>'+
+      '<div class="fld"><label>추이 단위</label><select class="ac_gran">'+granOpts+'</select></div>'+
+      '<div class="fld"><label>비교</label><select class="ac_compare">'+cmpOpts+'</select></div>'+
       '<button class="btn go ac_go">조회</button>'+
     '</div>'+
+    '<div class="fld acgbwrap"><label>그룹바이 (AND/OR, 최대 10개) <span class="hint">※ 실제 조회 시엔 선택된 모든 항목이 함께(교차표) 적용됩니다</span></label>'+
+      '<div class="acgb"></div>'+
+      '<button class="btn reset ac_gbadd" type="button">+ 그룹바이 추가</button>'+
+    '</div>'+
     '<div class="acfrow">'+filterRow(0)+filterRow(1)+filterRow(2)+'</div>'+
-    '<div class="achead" id="auc_'+cfg.id+'_kpis"></div>'+
-    '<div class="chart" id="auc_'+cfg.id+'_chart" style="height:240px"></div>'+
-    '<div class="acgrp" id="auc_'+cfg.id+'_grp"></div>'+
-    '<p class="note" id="auc_'+cfg.id+'_note"></p>'+
+    '<div class="achead" id="auc_'+w.id+'_kpis"></div>'+
+    '<div class="chart" id="auc_'+w.id+'_chart" style="height:240px"></div>'+
+    '<div class="acgrp" id="auc_'+w.id+'_grp"></div>'+
+    '<p class="note" id="auc_'+w.id+'_note"></p>'+
   '</div>';
 }
 function setupFilterOps(root){
@@ -338,7 +415,7 @@ function setupFilterOps(root){
       var ops = dim.type==="number" ? NUMBER_OPS : STRING_OPS;
       opSel.innerHTML = ops.map(function(o){return '<option value="'+o[0]+'">'+o[1]+'</option>';}).join("");
     }
-    dimSel.value=""; refreshOps();
+    refreshOps();
     dimSel.addEventListener("change", refreshOps);
   });
 }
@@ -346,103 +423,242 @@ function readFilters(root){
   var out=[];
   [].forEach.call(root.querySelectorAll(".acf"), function(row){
     var key=row.querySelector(".acf_dim").value;
-    if(!key) return;
+    if(!key){ out.push(null); return; }
     var op=row.querySelector(".acf_op").value;
     var raw=row.querySelector(".acf_val").value.trim();
-    if(!raw) return;
+    if(!raw){ out.push(null); return; }
     var dim=dimByKey(key);
     var values = dim.type==="number" ? [Number(raw)] : raw.split(",").map(function(s){return s.trim();}).filter(Boolean);
     out.push({key:key, op:op, values:values});
   });
   return out;
 }
-function acDefaultDates(root, days){
+function applyFilters(root, filters){
+  var rows = root.querySelectorAll(".acf");
+  (filters||[]).forEach(function(f,i){
+    var row = rows[i]; if(!row || !f || !f.key) return;
+    row.querySelector(".acf_dim").value = f.key;
+    row.querySelector(".acf_dim").dispatchEvent(new Event("change"));
+    row.querySelector(".acf_op").value = f.op;
+    row.querySelector(".acf_val").value = (f.values||[]).join(",");
+  });
+}
+// 그룹바이: 세로 목록(최대 10개), 2번째 행부터 AND/OR 표시. w.groupBy 배열을 직접 참조/변경한다.
+function renderGroupByRows(root, w){
+  var gbOpts = DIMS.map(function(d){ return '<option value="'+esc(d.key)+'">'+esc(d.label)+'</option>'; }).join("");
+  var box = root.querySelector(".acgb");
+  box.innerHTML = w.groupBy.map(function(entry,i){
+    return '<div class="acgbrow">'+
+      (i>0 ? '<select class="acgb_op"><option value="AND">AND</option><option value="OR">OR</option></select>' : '<span class="acgb_lbl">└</span>')+
+      '<select class="acgb_dim">'+gbOpts+'</select>'+
+      '<button class="btn del acgb_del" type="button">✕</button>'+
+    '</div>';
+  }).join("");
+  [].forEach.call(box.querySelectorAll(".acgbrow"), function(row,i){
+    var entry = w.groupBy[i];
+    var dimSel = row.querySelector(".acgb_dim");
+    dimSel.value = entry.key||"";
+    dimSel.addEventListener("change", function(){ entry.key=dimSel.value; saveWidgets(); });
+    var opSel = row.querySelector(".acgb_op");
+    if(opSel){ opSel.value = entry.op||"AND"; opSel.addEventListener("change", function(){ entry.op=opSel.value; saveWidgets(); }); }
+    row.querySelector(".acgb_del").onclick = function(){
+      w.groupBy.splice(i,1);
+      saveWidgets();
+      renderGroupByRows(root, w);
+    };
+  });
+  root.querySelector(".ac_gbadd").disabled = w.groupBy.length>=10;
+}
+function acDefaultDates(days){
   var y=new Date(); y.setDate(y.getDate()-1);
   var f=new Date(y.getTime()); f.setDate(f.getDate()-(days-1));
-  root.querySelector(".ac_from").value=ymd(f);
-  root.querySelector(".ac_to").value=ymd(y);
+  return { from:ymd(f), to:ymd(y) };
+}
+// 비교 기간(이전 기간 = 직전 동일 길이 / 전년 동기 = 1년 전 같은 날짜)
+function compareRange(from, to, mode){
+  if(!mode || mode==="none") return null;
+  var f=new Date(from+"T00:00:00"), t=new Date(to+"T00:00:00");
+  if(mode==="prev_period"){
+    var days = Math.round((t-f)/86400000)+1;
+    var cf=new Date(f.getTime()); cf.setDate(cf.getDate()-days);
+    var ct=new Date(f.getTime()); ct.setDate(ct.getDate()-1);
+    return { from:ymd(cf), to:ymd(ct) };
+  }
+  if(mode==="prev_year"){
+    var cf2=new Date(f.getTime()); cf2.setFullYear(cf2.getFullYear()-1);
+    var ct2=new Date(t.getTime()); ct2.setFullYear(ct2.getFullYear()-1);
+    return { from:ymd(cf2), to:ymd(ct2) };
+  }
+  return null;
+}
+function deltaBadge(cur, prev){
+  if(cur==null || prev==null || !prev) return "";
+  var pct = ((cur-prev)/prev*100);
+  var sign = pct>=0 ? "+" : "";
+  return '<span class="delta '+(pct>=0?"up":"down")+'">'+sign+pct.toFixed(1)+'%</span>';
 }
 function paintAcKpis(elId, tiles){
   $(elId).innerHTML = tiles.map(function(t){
-    return '<div class="kpi"><div class="l">'+t.l+'</div><div class="v'+(t.red?" red":"")+'">'+t.v+'</div></div>';
+    return '<div class="kpi"><div class="l">'+t.l+'</div><div class="v'+(t.red?" red":"")+'">'+t.v+(t.badge||"")+'</div></div>';
   }).join("");
 }
-function refreshComponent(cfg){
-  var root = $("auc_"+cfg.id);
+function renderTrendChart(chartId, name, xs, ys, vis){
+  var seriesType = vis==="bar" ? "bar" : "line";
+  var s = { name:name, type:seriesType, data:ys };
+  if(seriesType==="bar"){ s.itemStyle={color:"#7b9ff2"}; s.barMaxWidth=20; }
+  else { s.symbol="none"; s.lineStyle={width:1.8,color:"#7b9ff2"}; if(vis==="area") s.areaStyle={color:"#c9d9f7"}; }
+  chart(chartId).setOption({
+    grid:{left:52,right:16,top:20,bottom:40},
+    tooltip:{trigger:"axis",confine:true},
+    xAxis:catAxis(xs), yAxis:valAxis(kFmt),
+    series:[s]
+  }, true);
+}
+function refreshWidget(w){
+  var root = $("auc_"+w.id);
+  if(!root) return Promise.resolve();
   var from=root.querySelector(".ac_from").value, to=root.querySelector(".ac_to").value;
   var gran = Number(root.querySelector(".ac_gran").value);
-  var gb1 = root.querySelector(".ac_gb1").value, gb2 = root.querySelector(".ac_gb2").value;
+  var cmpMode = root.querySelector(".ac_compare").value;
+  var gbKeys = w.groupBy.map(function(e){return e.key;}).filter(Boolean);
   var filters = readFilters(root);
-  $("auc_"+cfg.id+"_note").textContent = "불러오는 중…";
-  // 앰플리튜드 호출 순차 실행(429 방지): AU유니크 → (MAU만) 결제유저유니크 → (MAU만) 매출 RPC
-  return queryAURange(cfg.event, from, to, filters, [gb1,gb2], gran).then(function(res){
-    if(res.error){ $("auc_"+cfg.id+"_note").textContent = "오류: "+res.error; return; }
-    var hasGroup = !!(gb1||gb2);
+  w.from=from; w.to=to; w.gran=gran; w.compare=cmpMode; w.filters=filters; saveWidgets();
+  $("auc_"+w.id+"_note").textContent = "불러오는 중…";
+  // 앰플리튜드 호출 순차 실행(429 방지): 위젯 이벤트 유니크 → (비교기간) → (ARPU·ARPPU 표시 시) 결제유저 유니크 → 매출 RPC
+  return queryAURange(w.event, from, to, filters, gbKeys, gran).then(function(res){
+    if(res.error){ $("auc_"+w.id+"_note").textContent = "오류: "+res.error; return; }
+    var hasGroup = gbKeys.length>0;
     var overall = res.overall||[];
-    var chartId = "auc_"+cfg.id+"_chart";
+    var chartId = "auc_"+w.id+"_chart";
     if(hasGroup){
-      // 그룹바이 활성: 그룹별 breakdown 표로 표시 (헤드라인 단일값 대신)
       var labels = res.labels||[];
-      $("auc_"+cfg.id+"_grp").innerHTML = '<table class="mtbl"><thead><tr><th>그룹</th><th style="text-align:right">순유저(구간 전체)</th></tr></thead><tbody>'+
+      $("auc_"+w.id+"_grp").innerHTML = '<table class="mtbl"><thead><tr><th>그룹</th><th style="text-align:right">순유저(구간 전체)</th></tr></thead><tbody>'+
         labels.map(function(lb,i){ return '<tr><td>'+esc(String(lb))+'</td><td style="text-align:right">'+(overall[i]==null?'—':won(overall[i]))+'</td></tr>'; }).join("")+
         '</tbody></table>';
-      paintAcKpis("auc_"+cfg.id+"_kpis", [{l:cfg.title+" (그룹 수)", v:won(labels.length)}]);
-      chart(chartId).clear();
-      $(chartId).innerHTML = "";
+      paintAcKpis("auc_"+w.id+"_kpis", [{l:w.title+" (그룹 수)", v:won(labels.length)}]);
+      if(CH[chartId]){ CH[chartId].clear(); }
+      $("auc_"+w.id+"_note").textContent = "그룹바이가 켜져 있어 헤드라인 대신 그룹별 표로 표시됩니다(비교 기간은 그룹바이 없을 때만 지원).";
     } else {
-      $("auc_"+cfg.id+"_grp").innerHTML = "";
+      $("auc_"+w.id+"_grp").innerHTML = "";
       var headline = overall.length ? overall[0] : null;
-      var tiles = [{l:cfg.title+" ("+from+" ~ "+to+", 구간 전체 순유저·유니크)", v: headline==null?"—":won(headline), red:1}];
+      var cmp = compareRange(from, to, cmpMode);
+      var tiles = [{l:w.title+" ("+from+" ~ "+to+", 구간 전체 순유저·유니크)", v: headline==null?"—":won(headline), red:1}];
       var chainP = Promise.resolve();
-      if(cfg.showRevenue){
-        chainP = queryAURange("complete_order", from, to, filters, [], gran).then(function(payRes){
-          var payingUnique = (payRes.overall&&payRes.overall.length) ? payRes.overall[0] : null;
-          return window.MUSTIT.rpc("dash_daily_conversion", {p:{from:from,to:to}}).then(function(drows){
-            var netSum = (drows||[]).reduce(function(a,r){return a+(Number(r.net_rev)||0);},0);
-            var arpu = (headline>0) ? Math.round(netSum/headline) : null;
-            var arppu = (payingUnique>0) ? Math.round(netSum/payingUnique) : null;
-            tiles.push({l:"결제유저(구간 전체 순유저·유니크)", v: payingUnique==null?"—":won(payingUnique)});
-            tiles.push({l:"순매출(구간 합계)", v:"₩"+won(netSum), red:1});
-            tiles.push({l:"ARPU (순매출÷AU)", v: arpu==null?"—":"₩"+won(arpu), red:1});
-            tiles.push({l:"ARPPU (순매출÷결제유저)", v: arppu==null?"—":"₩"+won(arppu), red:1});
-          }).catch(function(e){ tiles.push({l:"매출 조회 오류", v:e.message}); });
-        }).catch(function(e){ tiles.push({l:"결제유저 조회 오류", v:e.message}); });
+      if(cmp){
+        chainP = chainP.then(function(){
+          return queryAURange(w.event, cmp.from, cmp.to, filters, [], gran).then(function(cres){
+            var prevVal = (cres.overall&&cres.overall.length) ? cres.overall[0] : null;
+            if(headline!=null && prevVal!=null){ tiles[0].badge = deltaBadge(headline, prevVal); }
+            tiles.push({l:"비교기간("+cmp.from+"~"+cmp.to+")", v: prevVal==null?"—":won(prevVal)});
+          }).catch(function(){});
+        });
+      }
+      if(w.showRevenue){
+        chainP = chainP.then(function(){
+          return queryAURange("complete_order", from, to, filters, [], gran).then(function(payRes){
+            var payingUnique = (payRes.overall&&payRes.overall.length) ? payRes.overall[0] : null;
+            return window.MUSTIT.rpc("dash_daily_conversion", {p:{from:from,to:to}}).then(function(drows){
+              var netSum = (drows||[]).reduce(function(a,r){return a+(Number(r.net_rev)||0);},0);
+              var arpu = (headline>0) ? Math.round(netSum/headline) : null;
+              var arppu = (payingUnique>0) ? Math.round(netSum/payingUnique) : null;
+              tiles.push({l:"결제유저(구간 전체 순유저·유니크)", v: payingUnique==null?"—":won(payingUnique)});
+              tiles.push({l:"순매출(구간 합계)", v:"₩"+won(netSum), red:1});
+              tiles.push({l:"ARPU (순매출÷AU)", v: arpu==null?"—":"₩"+won(arpu), red:1});
+              tiles.push({l:"ARPPU (순매출÷결제유저)", v: arppu==null?"—":"₩"+won(arppu), red:1});
+            }).catch(function(e){ tiles.push({l:"매출 조회 오류", v:e.message}); });
+          }).catch(function(e){ tiles.push({l:"결제유저 조회 오류", v:e.message}); });
+        });
       }
       return chainP.then(function(){
-        paintAcKpis("auc_"+cfg.id+"_kpis", tiles);
-        var xs=res.xValues.map(function(x){return md(x);});
-        var ys=(res.series&&res.series[0])||[];
-        chart(chartId).setOption({
-          grid:{left:52,right:16,top:20,bottom:40},
-          tooltip:{trigger:"axis",confine:true},
-          xAxis:catAxis(xs), yAxis:valAxis(kFmt),
-          series:[{name:cfg.title,type:"bar",data:ys,itemStyle:{color:"#7b9ff2"},barMaxWidth:20}]
-        }, true);
-        $("auc_"+cfg.id+"_note").textContent = headline==null
-          ? "⚠ 서버 응답에 구간 전체 유니크(overallSeries)가 없어 헤드라인을 표시할 수 없습니다. 아래 차트는 "+(gran===30?"월별":"일별")+" 버킷별 값입니다(합산 시 중복 발생 — 참고용)."
-          : "차트는 참고용 "+(gran===30?"월별":"일별")+" 추이(버킷 간 중복 있을 수 있음) · 위 헤드라인 숫자만 구간 전체 순유저(유니크)입니다.";
+        paintAcKpis("auc_"+w.id+"_kpis", tiles);
+        w._xs = res.xValues.map(function(x){return md(x);});
+        w._ys = (res.series&&res.series[0])||[];
+        renderTrendChart(chartId, w.title, w._xs, w._ys, w.vis||"bar");
+        $("auc_"+w.id+"_note").textContent = headline==null
+          ? "⚠ 서버 응답에 구간 전체 유니크(overallSeries)가 없어 헤드라인을 표시할 수 없습니다. 아래 차트는 "+granLabel(gran)+" 버킷별 값입니다(합산 시 중복 발생 — 참고용)."
+          : "차트는 참고용 "+granLabel(gran)+" 추이(버킷 간 중복 있을 수 있음) · 위 헤드라인 숫자만 구간 전체 순유저(유니크)입니다.";
       });
     }
-  }).catch(function(e){ $("auc_"+cfg.id+"_note").textContent = "오류: "+e.message; });
+  }).catch(function(e){ $("auc_"+w.id+"_note").textContent = "오류: "+e.message; });
 }
-var AUC_CONFIGS = [
-  {id:"dau", title:"DAU", hint:"일 단위 Any Active Event 순유저(기본 1일)", event:"_active", defaultDays:1, showRevenue:false},
-  {id:"wau", title:"WAU", hint:"주 단위 Any Active Event 순유저(기본 7일)", event:"_active", defaultDays:7, showRevenue:false},
-  {id:"mau", title:"MAU (+ARPU·ARPPU)", hint:"월 단위 Any Active Event 순유저(기본 30일) · 매출은 주문DB 순매출", event:"_active", defaultDays:30, showRevenue:true}
-];
-function buildAUComponents(){
-  $("au_components").innerHTML = AUC_CONFIGS.map(componentHTML).join("");
-  AUC_CONFIGS.forEach(function(cfg){
-    var root = $("auc_"+cfg.id);
-    setupFilterOps(root);
-    acDefaultDates(root, cfg.defaultDays);
-    root.querySelector(".ac_go").onclick = function(){ refreshComponent(cfg); };
+function wireWidget(w){
+  var root = $("auc_"+w.id);
+  setupFilterOps(root);
+  var d = (w.from && w.to) ? {from:w.from,to:w.to} : acDefaultDates(w.days||7);
+  root.querySelector(".ac_from").value = d.from;
+  root.querySelector(".ac_to").value = d.to;
+  root.querySelector(".ac_gran").value = String(w.gran||1);
+  root.querySelector(".ac_compare").value = w.compare||"none";
+  if(!w.groupBy || !w.groupBy.length) w.groupBy=[{op:"AND",key:""}];
+  renderGroupByRows(root, w);
+  applyFilters(root, w.filters);
+  root.querySelector(".ac_event").value = w.event||"_active";
+  root.querySelector(".ac_vis").value = w.vis||"bar";
+  root.querySelector(".ac_rev").checked = !!w.showRevenue;
+
+  root.querySelector(".ac_title").addEventListener("change", function(e){ w.title=e.target.value; saveWidgets(); });
+  root.querySelector(".ac_note").addEventListener("change", function(e){ w.note=e.target.value; saveWidgets(); });
+  root.querySelector(".ac_event").addEventListener("change", function(e){ w.event=e.target.value; saveWidgets(); refreshWidget(w); });
+  root.querySelector(".ac_vis").addEventListener("change", function(e){
+    w.vis=e.target.value; saveWidgets();
+    if(w._xs && w._ys) renderTrendChart("auc_"+w.id+"_chart", w.title, w._xs, w._ys, w.vis);
+  });
+  root.querySelector(".ac_rev").addEventListener("change", function(e){ w.showRevenue=e.target.checked; saveWidgets(); refreshWidget(w); });
+  root.querySelector(".ac_gbadd").onclick = function(){
+    if(w.groupBy.length>=10){ alert("그룹바이는 최대 10개까지 추가할 수 있습니다."); return; }
+    w.groupBy.push({op:"AND",key:""});
+    saveWidgets();
+    renderGroupByRows(root, w);
+  };
+  root.querySelector(".ac_del").onclick = function(){
+    if(!confirm('"'+w.title+'" 위젯을 삭제할까요? (이 브라우저에서만 사라집니다)')) return;
+    WIDGETS = WIDGETS.filter(function(x){ return x.id!==w.id; });
+    delete CH["auc_"+w.id+"_chart"];
+    saveWidgets();
+    renderWidgets();
+  };
+  root.querySelector(".ac_go").onclick = function(){ refreshWidget(w); };
+}
+function wireDragReorder(){
+  var container = $("au_components");
+  var dragEl = null;
+  [].forEach.call(container.querySelectorAll(".auc"), function(card){
+    card.addEventListener("dragstart", function(){ dragEl=card; card.classList.add("dragging"); });
+    card.addEventListener("dragend", function(){ card.classList.remove("dragging"); dragEl=null; syncWidgetOrderFromDOM(); });
+    card.addEventListener("dragover", function(e){
+      e.preventDefault();
+      if(!dragEl || dragEl===card) return;
+      var rect=card.getBoundingClientRect();
+      var after = (e.clientY - rect.top) > rect.height/2;
+      container.insertBefore(dragEl, after ? card.nextSibling : card);
+    });
   });
 }
+function syncWidgetOrderFromDOM(){
+  var ids = [].map.call($("au_components").querySelectorAll(".auc"), function(c){ return c.id.replace(/^auc_/,""); });
+  WIDGETS.sort(function(a,b){ return ids.indexOf(a.id)-ids.indexOf(b.id); });
+  saveWidgets();
+}
+function renderWidgets(){
+  $("au_components").innerHTML = WIDGETS.map(widgetHTML).join("");
+  WIDGETS.forEach(wireWidget);
+  wireDragReorder();
+}
+function addWidget(){
+  var w = {id:newWidgetId(), title:"새 위젯", note:"", event:"_active", vis:"bar", days:7, gran:1, compare:"none", groupBy:[{op:"AND",key:""}], filters:[null,null,null], showRevenue:false};
+  WIDGETS.push(w);
+  saveWidgets();
+  renderWidgets();
+  refreshWidget(w);
+}
+function buildAUComponents(){
+  WIDGETS = loadWidgets();
+  renderWidgets();
+}
 function refreshAllAUComponents(){
-  // 컴포넌트 3개의 앰플리튜드 호출도 순차 실행(429 방지)
-  return AUC_CONFIGS.reduce(function(p, cfg){
-    return p.then(function(){ return refreshComponent(cfg); });
+  // 위젯들의 앰플리튜드 호출도 순차 실행(429 방지)
+  return WIDGETS.reduce(function(p, w){
+    return p.then(function(){ return refreshWidget(w); });
   }, Promise.resolve());
 }
 
@@ -625,6 +841,7 @@ function deleteDash(name){
 
 $("go").onclick=refresh;
 $("csv").onclick=downloadCSV;
+$("ac_add").onclick=addWidget;
 $("editdash").onclick=openEditModal;
 $("m_close").onclick=function(){ $("editmodal").style.display="none"; };
 $("m_save").onclick=saveMeta;

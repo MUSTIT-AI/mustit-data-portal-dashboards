@@ -133,7 +133,7 @@
 
 <!-- 사유별 · 판매자별 -->
 <div class="grid2">
-  <div class="card"><h3>사유별 취소 건 <span class="h-sub" style="display:inline">(취소유형 · 취소구분 상위 15)</span></h3><div id="c_reason" class="chart tall"></div></div>
+  <div class="card"><h3>사유별 취소 건 <span class="h-sub" style="display:inline">(취소구분 상위 15)</span></h3><div id="c_reason" class="chart tall"></div></div>
   <div class="card"><h3>판매자별 취소 건 <span class="h-sub" style="display:inline">(전체 판매자 · 상위 20)</span></h3><div id="c_seller" class="chart tall"></div></div>
 </div>
 
@@ -185,13 +185,21 @@ function dateOf(ts){ return String(ts||"").slice(0,10); }
 // 홈 갤러리 썸네일(iframe #thumb)에서는 무거운 orders_secure 조회를 가볍게: 최근 7일만, 1페이지만
 var THUMB = location.hash.indexOf("thumb") >= 0;
 
-// 필터 정의 (label ↔ orders_secure 컬럼)
+// 필터 정의 (label ↔ orders_secure 컬럼). cancel_type/cancel_reason은 dash_filters()
+// 화이트리스트에 없어 옵션 목록을 직접 조회한 취소건에서 뽑는다(refresh 때마다 갱신).
 var FDEFS = [
   {key:"payment_method",   label:"결제수단"},
-  {key:"ship_origin",      label:"배송구분"}
+  {key:"ship_origin",      label:"배송구분"},
+  {key:"cancel_type",      label:"취소유형"},
+  {key:"cancel_reason",    label:"취소구분"}
 ];
 function optionsFor(def){ return OPTS[def.key]||[]; }
-var OPTS = {};   // key -> [values] (dash_filters 결과)
+var OPTS = {};   // key -> [값들] (payment_method/ship_origin은 dash_filters 결과, cancel_type/cancel_reason은 조회 결과에서 파생)
+function uniqueVals(rows, key){
+  var seen={}; var out=[];
+  rows.forEach(function(r){ var v=r[key]; if(v && !seen[v]){ seen[v]=1; out.push(v); } });
+  return out.sort();
+}
 var SEL  = {};   // key -> Set(선택값)
 
 function buildDropdowns(){
@@ -436,6 +444,8 @@ function refresh(){
     RAW_TRUNC = stat.truncated;
     rows = withCancelDays(rows);
     renderKPI(rows);
+    OPTS.cancel_type = uniqueVals(rows, "cancel_type");
+    OPTS.cancel_reason = uniqueVals(rows, "cancel_reason");
 
     // 결제완료일 기준 일별 취소건수·취소총액
     var byDate = {};
@@ -443,11 +453,8 @@ function refresh(){
     var dates = Object.keys(byDate).sort();
     renderTrend(dates, dates.map(function(d){return byDate[d].cnt;}), dates.map(function(d){return byDate[d].amt;}));
 
-    // 사유별 (취소유형 + 취소구분 조합 — cancel_reason_detail은 자유서술 안내문이라 제외)
-    var reasonRows = rows.map(function(r){
-      return { reason_label:(r.cancel_type||"기타")+" · "+(r.cancel_reason||"미기재"), total_purchase:r.total_purchase };
-    });
-    var byReason = groupCount(reasonRows, "reason_label", "기타 · 미기재");
+    // 사유별 (취소구분 — cancel_reason_detail은 자유서술 안내문이라 제외. 취소유형은 필터로 별도 제공)
+    var byReason = groupCount(rows, "cancel_reason", "미기재");
     renderBarRank("c_reason", byReason.slice(0,15), "name", "cnt", "#7b9ff2");
 
     // 판매자별(전체 판매자 랭킹)

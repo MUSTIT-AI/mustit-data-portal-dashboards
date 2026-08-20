@@ -56,6 +56,7 @@
   .kpi .l{font-size:11px;color:var(--sub);margin-bottom:5px}
   .kpi .v{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
   .kpi .v.red{color:var(--red)}
+  .kpi .note2{font-size:10px;color:var(--sub);margin-top:4px}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
   @media(max-width:900px){.grid2{grid-template-columns:1fr}}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px}
@@ -169,7 +170,8 @@ var THUMB = location.hash.indexOf("thumb") >= 0;
 function won(n){ return (Math.round(Number(n)||0)).toLocaleString("ko-KR"); }
 function pct(n){ return n==null ? "—" : ((Number(n)||0)*100).toFixed(2)+"%"; }
 function ymd(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
-function md(s){ return String(s).slice(5).replace("-","/"); }
+function d10(s){ return String(s).slice(0,10); }               // dash_daily_conversion의 d는 timestamptz 텍스트("2026-08-15 00:00:00+00")라 날짜만 자름
+function md(s){ return d10(s).slice(5).replace("-","/"); }
 
 function setDefaultDates(){
   var y=new Date(); y.setDate(y.getDate()-1);                 // 종료일 = 어제
@@ -238,8 +240,9 @@ function renderKPI(rows){
   var arpuAvg = avg(rows.map(function(r){return r.arpu;}));
   var arppuAvg = avg(rows.map(function(r){return r.arppu;}));
   var convAvg = avg(rows.map(function(r){return r.conv;}));
+  var range = rows.length ? (d10(rows[0].d)+" ~ "+d10(rows[rows.length-1].d)) : "";
   var tiles=[
-    {l:"평균 AU", v:won(auAvg)},
+    {l:"평균 AU", v:won(auAvg), note:range},
     {l:"평균 획득유저(가입자)", v:won(signAvg)},
     {l:"평균 결제 유저수", v:won(buyAvg)},
     {l:"총 순매출", v:"₩"+won(netSum), red:1},
@@ -248,7 +251,8 @@ function renderKPI(rows){
     {l:"평균 구매전환율", v:pct(convAvg)}
   ];
   $("kpis").innerHTML = tiles.map(function(t){
-    return '<div class="kpi"><div class="l">'+t.l+'</div><div class="v'+(t.red?" red":"")+'">'+t.v+'</div></div>';
+    return '<div class="kpi"><div class="l">'+t.l+'</div><div class="v'+(t.red?" red":"")+'">'+t.v+'</div>'+
+      (t.note?'<div class="note2">'+esc(t.note)+'</div>':'')+'</div>';
   }).join("");
 }
 
@@ -290,6 +294,7 @@ function refresh(){
   ]).then(function(res){
     var rows = res[0]||[], signMap = res[1]||{};
     rows.forEach(function(r){
+      r.d = d10(r.d);                                          // "2026-08-15 00:00:00+00" → "2026-08-15" (signMap 키와 맞춤)
       r.signups = signMap[r.d] != null ? signMap[r.d] : null;
       r.arpu = (r.dau>0) ? Math.round((Number(r.net_rev)||0)/r.dau) : null;
       r.arppu = (r.buyers>0) ? Math.round((Number(r.net_rev)||0)/r.buyers) : null;

@@ -366,15 +366,15 @@ function refresh(){
   $("loading").classList.add("on"); $("err").textContent="";
 
   var calls = [
-    rpc("catalog_matching_weekly", {p_from: ymd(from), p_to: ymd(to)}),
-    THUMB ? Promise.resolve([]) : rpc("catalog_matching_by_seller", {p_from: ymd(from), p_to: ymd(to), p_limit: 1000}),
+    rpc("catalog_matching_report", {p_from: ymd(from), p_to: ymd(to), p_seller_limit: 1000}),
     THUMB ? Promise.resolve(null) : fetchAmpWeekly(from, to).catch(function(e){ return null; }),
     THUMB ? Promise.resolve(null) : fetchAmpBreakdown("brand_name", from, to).catch(function(e){ return null; }),
     THUMB ? Promise.resolve(null) : fetchAmpBreakdown("category_2_name", from, to).catch(function(e){ return null; })
   ];
 
   Promise.all(calls).then(function(res){
-    var weekly = res[0]||[], sellers = res[1]||[], amp = res[2], brandRows = res[3], categoryRows = res[4];
+    var report = res[0]||{}, weekly = report.weekly||[], sellers = report.sellers||[],
+        amp = res[1], brandRows = res[2], categoryRows = res[3];
     SELLERS = sellers; sortSellers(); PAGE=0;
     renderKPI(weekly, sellers);
     renderWeeklyChart(weekly);

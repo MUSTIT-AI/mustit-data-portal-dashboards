@@ -32,7 +32,9 @@
   .btn.go{background:var(--red);color:#fff}
   .btn.go:disabled{background:#e3a6b1;cursor:default}
   .btn.reset{background:#e9e7e1;color:#333}
-  .btns{display:flex;gap:6px}
+  .btn.ai{background:#111;color:#fff}
+  .btn.aihist{background:#555;color:#fff}
+  .btns{display:flex;gap:6px;flex-wrap:wrap}
   .note{color:var(--sub);font-size:11.5px;margin:8px 16px}
 
   /* 다중선택 드롭다운(브랜드/카테고리) */
@@ -124,6 +126,10 @@
   <div class="btns">
     <button class="btn go" id="go">조회</button>
     <button class="btn reset" id="reset">초기화</button>
+    <button class="btn ai" id="ai_analyze" title="현재 조회 결과를 AI로 분석">🔍 분석</button>
+    <button class="btn ai" id="ai_summary" title="현재 조회 결과를 AI로 요약">📝 요약</button>
+    <button class="btn ai" id="ai_anomaly" title="현재 조회 결과에서 AI로 이상 징후 탐지">⚠️ 이상탐지</button>
+    <button class="btn aihist" id="ai_hist" title="과거 AI 인사이트 이력">📜 이력</button>
   </div>
 </div>
 <p class="note">선택한 기간의 거래액(GMV) 기준 상품 Top 100이에요. 판매자를 가리지 않고 상품 단위로 합산해요. 브랜드·카테고리·연령대·성별·판매자ID로 필터링할 수 있어요. 카테고리는 대분류 → 중분류 → 소분류 순으로 좁혀지고, 상위를 고르면 하위 목록이 그에 맞게 줄어들어요(연령대·성별은 구매자 기준이며, 개인정보는 조회되지 않고 필터로만 쓰여요).<br>
@@ -162,6 +168,16 @@
       <button class="mclose" id="popclose">✕</button>
     </div>
     <div id="popbody"></div>
+  </div>
+</div>
+
+<div class="modal" id="aimodal">
+  <div class="modalbox" style="width:640px">
+    <div class="mhead">
+      <div><h2>🤖 AI 인사이트 <span style="font-size:11px;color:var(--sub);font-weight:400">gpt-5.5</span></h2></div>
+      <button class="mclose" id="aiclose">✕</button>
+    </div>
+    <div id="aibody" style="font-size:14px;line-height:1.75;color:var(--ink)"></div>
   </div>
 </div>
 
@@ -793,7 +809,85 @@ $("tbody").addEventListener("click", function(e){
 });
 $("popclose").onclick = closePopup;
 $("popmodal").addEventListener("click", function(e){ if(e.target===$("popmodal")) closePopup(); });
-document.addEventListener("keydown", function(e){ if(e.key==="Escape" && $("popmodal").classList.contains("open")) closePopup(); });
+document.addEventListener("keydown", function(e){
+  if(e.key!=="Escape") return;
+  if($("popmodal").classList.contains("open")) closePopup();
+  if($("aimodal").classList.contains("open")) closeAi();
+});
+
+// ── AI 인사이트(분석/요약/이상탐지) — ai-insight Edge Function 재사용(gpt-5.5) ──
+// openapi-live-orders.html 이 이미 쓰고 있는 것과 같은 함수·이력 저장 방식을 그대로 쓴다.
+function mdLite(s){ return esc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/^\s*[-*] /gm,'• ').replace(/\n/g,'<br>'); }
+function showAi(html){ $("aibody").innerHTML=html; $("aimodal").classList.add("open"); }
+function closeAi(){ $("aimodal").classList.remove("open"); }
+$("aiclose").onclick = closeAi;
+$("aimodal").addEventListener("click", function(e){ if(e.target===$("aimodal")) closeAi(); });
+
+// 표에 보이는 컬럼을 그대로 AI에 넘긴다 — 이미지/가격/조회수 캐시는 비동기라
+// 조회 직후 바로 누르면 일부가 비어 있을 수 있다(그 값은 null로 간다).
+function aiData(){
+  var rows = LAST_LIST.map(function(a){
+    var pv = PRICE_CACHE[a.product_id] || {};
+    var st = STATS_CACHE[a.product_id] || {};
+    return {
+      순위:a.rank, 이전기간대비:a.rank_change, 상품번호:a.product_id, 상품명:a.product_name,
+      브랜드:a.brand, 카테고리:renderCategory(a), 판매자:a.seller_id,
+      카탈로그순위:a.catalog_rank, 카탈로그상품수:a.catalog_item_count,
+      재고:pv.stock!=null?pv.stock:null, 최대혜택가:pv.maxBenefitPrice, M최저가:pv.mustitLowestPrice, 시장최저가:pv.marketLowestPrice,
+      머스트잇할인:a.own_discount, 판매자할인:a.seller_discount,
+      판매수량:a.quantity, 거래금액:a.gmv,
+      조회수:st.viewCount, 장바구니:st.cartCount, 찜:st.likeCount
+    };
+  });
+  return { 조회기간:$("from").value+"~"+$("to").value, 필터:currentFilters(), 표시상품수:rows.length, 상품목록:rows };
+}
+function aiRun(btnId, question, label){
+  if(!LAST_LIST.length){ alert("먼저 [조회]로 데이터를 불러오세요."); return; }
+  var btn=$(btnId), ot=btn.textContent; btn.disabled=true; btn.textContent=label+" 중…";
+  showAi('<div style="color:var(--sub)">gpt-5.5로 '+label+' 중입니다… (약 15초)</div>');
+  var from=$("from").value, to=$("to").value;
+  window.MUSTIT.fn("ai-insight", {
+    context:"머스트잇 상품 랭킹 대시보드(기간 내 거래액 기준 상품 Top "+LAST_LIST.length+", 판매자 무관 상품단위 합산). 조회기간 "+from+"~"+to,
+    data:aiData(),
+    question:question,
+    dashboard:"d-msmrgs2xane",
+    params:{조회기간:from+"~"+to, filters:currentFilters()}
+  }).then(function(r){
+    if(r.error) throw new Error(r.error);
+    var sh = r.id ? (' · <a href="../ai-history.html?id='+r.id+'" target="_blank" style="color:var(--red);text-decoration:none">🔗 공유 링크</a>') : "";
+    showAi(mdLite(r.insight||"(빈 응답)")+'<div style="margin-top:14px;font-size:11px;color:var(--sub)">모델 '+esc(r.model||"")+' · '+Math.round((r.ms||0)/1000)+'초 · '+(r.saved?"이력 저장됨":"저장 안됨")+sh+'</div>');
+  }).catch(function(e){ showAi('<div style="color:#c0392b">오류: '+esc(e.message)+'</div>'); })
+    .finally(function(){ btn.disabled=false; btn.textContent=ot; });
+}
+function fmtAiParams(p){
+  if(!p) return "";
+  var a=[];
+  if(p.조회기간) a.push("조회 "+p.조회기간);
+  var f=p.filters||{};
+  Object.keys(f).forEach(function(k){ var v=f[k]; if(v && v.length) a.push(k+":"+(Array.isArray(v)?v.join(","):v)); });
+  return a.join(" · ");
+}
+function aiHistory(){
+  showAi('<div style="color:var(--sub)">이력 불러오는 중…</div>');
+  window.MUSTIT.fn("ai-insight",{history:true,dashboard:"d-msmrgs2xane",limit:20}).then(function(r){
+    var list=r.history||[];
+    var top='<div style="font-size:12px;margin-bottom:10px"><a href="../ai-history.html" target="_blank" style="color:var(--red);font-weight:700;text-decoration:none">🔗 전체 이력·공유 링크 페이지 →</a></div>';
+    if(!list.length){ showAi(top+'<div style="color:var(--sub)">저장된 인사이트가 없습니다. 위 버튼([분석]/[요약]/[이상탐지])으로 먼저 생성하세요.</div>'); return; }
+    var html=list.map(function(x){
+      var dt=(x.created_at||"").replace("T"," ").slice(0,16);
+      return '<details style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px">'+
+        '<summary style="cursor:pointer;font-size:13px"><b>'+dt+'</b> · '+esc(x.author||"-")+'</summary>'+
+        '<div style="font-size:11.5px;color:var(--sub);margin:6px 0">'+esc(fmtAiParams(x.params))+'</div>'+
+        '<div style="margin-top:4px;font-size:13.5px;line-height:1.7">'+mdLite(x.insight||"")+'</div>'+
+        '<div style="margin-top:6px;font-size:11px;color:var(--sub)">모델 '+esc(x.model||"")+' · id '+x.id+'</div></details>';
+    }).join("");
+    showAi(top+'<div style="font-size:13px;color:var(--sub);margin-bottom:8px">최근 인사이트 '+list.length+'건</div>'+html);
+  }).catch(function(e){ showAi('<div style="color:#c0392b">오류: '+esc(e.message)+'</div>'); });
+}
+$("ai_analyze").onclick = function(){ aiRun("ai_analyze","이 상품 랭킹 데이터를 분석해서 핵심 특징(브랜드·카테고리 쏠림, 가격대 분포, 판매자 집중도, 재고 상황 등)과 시사점을 정리해줘.","분석"); };
+$("ai_summary").onclick  = function(){ aiRun("ai_summary","이 상품 랭킹 데이터를 한눈에 파악할 수 있게 핵심 숫자 위주로 간단히 요약해줘(불릿 5개 이내).","요약"); };
+$("ai_anomaly").onclick  = function(){ aiRun("ai_anomaly","이 데이터에서 이상 징후(순위 급변, 재고 소진 임박, 시장최저가 대비 비정상적인 가격차, 특정 판매자·브랜드 편중 등)를 찾아 근거와 함께 알려줘. 특별한 이상이 없으면 없다고 말해줘.","이상탐지"); };
+$("ai_hist").onclick = aiHistory;
 
 // ── 상단바 / 접근권한 ──
 var ACCESS=null;

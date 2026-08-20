@@ -1,0 +1,749 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<title>신규유저 첫구매 전환 (Growth/AX) · MUST IT</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../auth.js"></script>
+<style>
+  :root{
+    --red:#c8102e; --ink:#1c1b19; --sub:#6b6a66; --bg:#eef0f2; --panel:#fff; --border:#e2e0da;
+    --up:#c8102e; --down:#2f6fe8; --warn:#e8a33d; --ok:#2fae8f; --mock:#9b8cf2;
+  }
+  *{box-sizing:border-box}
+  body{font-family:'Pretendard','Malgun Gothic',system-ui,sans-serif;margin:0;background:var(--bg);color:var(--ink);font-size:13px}
+  a{color:inherit}
+  .topbar{display:flex;align-items:center;gap:14px;background:#fbfbfc;border-bottom:1px solid var(--border);padding:8px 16px;position:sticky;top:0;z-index:40}
+  .topbar .logo{font-weight:800;color:#232a33;text-decoration:none}
+  .topbar .logo:hover{color:var(--red)}
+  .topbar .right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .topbar .owner{font-size:12.5px;font-weight:700;white-space:nowrap}
+  .topbar #dashnav{border:1px solid #d6d4ce;border-radius:7px;padding:5px 9px;font-size:12.5px;background:#fff;max-width:230px}
+  .live{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--sub)}
+  .live .dot{width:7px;height:7px;border-radius:50%;background:var(--ok);animation:pulse 1.6s infinite}
+  @keyframes pulse{0%{opacity:1}50%{opacity:.35}100%{opacity:1}}
+
+  .ctrlbar{display:flex;align-items:flex-end;gap:12px;background:#fff;border-bottom:1px solid var(--border);padding:9px 16px;flex-wrap:wrap;position:sticky;top:39px;z-index:35}
+  .fld{display:flex;flex-direction:column;gap:3px}
+  .fld label{font-size:10.5px;color:var(--sub);font-weight:600}
+  .fld input[type=date]{border:1px solid #d6d4ce;border-radius:6px;padding:5px 7px;font-size:12px;height:29px}
+  .ntoggle{display:flex;border:1px solid #d6d4ce;border-radius:7px;overflow:hidden;height:29px}
+  .ntoggle button{border:0;background:#fff;padding:0 12px;font-size:12px;font-weight:700;cursor:pointer;color:#555}
+  .ntoggle button.on{background:var(--red);color:#fff}
+  .ms{position:relative}
+  .ms>button{display:flex;align-items:center;justify-content:space-between;gap:6px;border:1px solid #d6d4ce;border-radius:6px;background:#fff;height:29px;padding:0 9px;font-size:12px;cursor:pointer;min-width:110px;max-width:170px}
+  .ms>button .v{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ms .panel{position:absolute;top:32px;left:0;z-index:60;background:#fff;border:1px solid #cfcdc7;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.14);min-width:170px;max-height:260px;overflow:auto;padding:6px;display:none}
+  .ms.open .panel{display:block}
+  .ms .opt{display:flex;align-items:center;gap:7px;padding:5px 7px;border-radius:5px;cursor:pointer;font-size:12.5px}
+  .ms .opt:hover{background:#f3f2ee}
+  .gobtn{background:var(--red);color:#fff;border:0;border-radius:7px;padding:0 18px;height:29px;font-size:12.5px;font-weight:700;cursor:pointer}
+  .txt{font-size:11px;color:var(--sub)}
+
+  .wrap{max-width:100%;margin:0;padding:14px 20px 60px}
+  .sechd{display:flex;align-items:center;gap:8px;margin:26px 0 8px;font-size:15px;font-weight:800}
+  .sechd .n{color:var(--sub);font-weight:600;font-size:11.5px}
+  .badge{font-size:10px;font-weight:800;border-radius:5px;padding:2px 6px;letter-spacing:.02em}
+  .badge.mock{background:#efe9fd;color:var(--mock)}
+  .badge.real{background:#e7f6f0;color:var(--ok)}
+  .badge.est{background:#fff3e0;color:var(--warn)}
+
+  /* AX strip */
+  .axstrip{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  @media(max-width:1100px){.axstrip{grid-template-columns:1fr}}
+  .axcard{background:#17181c;color:#f2f1ee;border-radius:12px;padding:14px 16px;position:relative;overflow:hidden}
+  .axcard.anomaly{border-left:4px solid var(--warn)}
+  .axcard.insight{border-left:4px solid #7b9ff2}
+  .axcard.opportunity{border-left:4px solid var(--ok)}
+  .axcard .kind{font-size:10.5px;letter-spacing:.06em;color:#9aa0a6;font-weight:800;margin-bottom:6px;text-transform:uppercase}
+  .axcard .body{font-size:13px;line-height:1.6}
+  .axcard .body b{color:#fff}
+
+  .grid4{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  @media(max-width:1100px){.grid4{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:640px){.grid4{grid-template-columns:1fr}}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:900px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+  .card h3{margin:0 0 2px;font-size:13.5px;display:flex;align-items:center;gap:6px}
+  .card .csub{color:var(--sub);font-size:11px;margin:0 0 8px}
+  .chart{width:100%;height:260px}
+
+  /* north star */
+  .nskpi{display:grid;grid-template-columns:1.2fr repeat(5,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+  @media(max-width:1100px){.nskpi{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:640px){.nskpi{grid-template-columns:repeat(2,1fr)}}
+  .nskpi .cell{background:#fff;padding:14px 16px}
+  .nskpi .big .v{font-size:34px;font-weight:800;color:var(--red);line-height:1}
+  .nskpi .big .l{font-size:11.5px;color:var(--sub);margin-bottom:6px}
+  .nskpi .cell .l{font-size:11px;color:var(--sub);margin-bottom:6px}
+  .nskpi .cell .v{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}
+  .chg{font-size:12px;font-weight:800}
+  .chg.up{color:var(--up)}.chg.down{color:var(--down)}.chg.flat{color:var(--sub)}
+  .progress{height:6px;background:#eee;border-radius:4px;overflow:hidden;margin-top:6px}
+  .progress i{display:block;height:100%;background:var(--ok)}
+
+  /* funnel */
+  .funnelrow{display:flex;gap:6px;align-items:stretch}
+  .fstep{flex:1;background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 12px;position:relative}
+  .fstep.hot{border-color:var(--warn);box-shadow:0 0 0 2px rgba(232,163,61,.25)}
+  .fstep .l{font-size:11.5px;color:var(--sub)}
+  .fstep .v{font-size:19px;font-weight:800}
+  .fstep .cvr{font-size:11px;color:var(--ok);font-weight:700}
+  .fstep .drop{font-size:11px;color:var(--red);font-weight:700}
+  .farrow{align-self:center;color:#ccc;font-size:16px;padding:0 2px}
+
+  .hypocard{background:#fff7ed;border:1px solid #f4c78a;border-radius:10px;padding:10px 12px;font-size:12.5px;line-height:1.7;color:#7a4a12;margin-bottom:8px}
+  .hypocard b{color:#5a3400}
+  .hypocard .ev{font-size:11px;color:#9a7a4a;margin-top:4px}
+
+  /* table */
+  table.chtbl{width:100%;border-collapse:collapse;font-size:12.5px}
+  table.chtbl th{background:#f4f3ef;text-align:right;padding:7px 9px;border-bottom:1px solid #e2e0da;font-size:11px;cursor:pointer;white-space:nowrap}
+  table.chtbl th:first-child,table.chtbl td:first-child{text-align:left}
+  table.chtbl td{padding:7px 9px;border-bottom:1px solid #f0efe9;text-align:right;font-variant-numeric:tabular-nums}
+  table.chtbl tr.good td.cvr{color:var(--ok);font-weight:700}
+  table.chtbl tr.bad td.cvr{color:var(--red);font-weight:700}
+
+  /* action cards */
+  .actioncard{background:#fff;border:1px solid var(--border);border-left:4px solid var(--red);border-radius:10px;padding:12px 14px;margin-bottom:10px}
+  .actioncard h4{margin:0 0 6px;font-size:13.5px}
+  .actioncard .conf{float:right;font-size:10.5px;font-weight:800;border-radius:5px;padding:2px 7px}
+  .actioncard .conf.high{background:#e7f6f0;color:var(--ok)}
+  .actioncard .conf.mid{background:#fff3e0;color:var(--warn)}
+  .actioncard .conf.low{background:#f1f1f1;color:#888}
+  .actioncard p{margin:4px 0;font-size:12.5px;line-height:1.65}
+  .actioncard .k{color:var(--sub);font-weight:700}
+
+  .defbox{background:#f7f6f2;border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:11.5px;color:var(--sub);line-height:1.8;margin-top:6px}
+  .defbox b{color:var(--ink)}
+  .lasttbl{width:100%;font-size:12.5px;border-collapse:collapse}
+  .lasttbl td{padding:6px 4px;border-bottom:1px solid #f0efe9}
+  .lasttbl td.bar{width:55%}
+  .lasttbl .barin{height:8px;border-radius:4px;background:#e6e4de}
+  .lasttbl .barin i{display:block;height:100%;border-radius:4px;background:#9b8cf2}
+
+  .loading{position:fixed;inset:0;background:rgba(255,255,255,.55);display:none;align-items:center;justify-content:center;z-index:80;font-weight:700;color:var(--red)}
+  .loading.on{display:flex}
+  .block{display:none;position:fixed;inset:0;background:var(--bg);z-index:80;place-items:center;text-align:center;color:var(--sub);font-family:system-ui}
+  .secload{font-size:11.5px;color:var(--sub);padding:6px 2px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a class="logo" href="../index.html">🛍️ Data Portal</a>
+  <div class="right">
+    <span class="live"><span class="dot"></span><span id="lastupdate">Last updated: -</span></span>
+    <span class="owner" id="dashowner"></span>
+    <select id="dashnav" title="대시보드 이동"></select>
+  </div>
+</div>
+
+<div class="ctrlbar">
+  <div class="fld"><label>가입 코호트 기간</label>
+    <div style="display:flex;gap:6px;align-items:center">
+      <input type="date" id="from"><span style="color:#aaa">~</span><input type="date" id="to">
+    </div>
+  </div>
+  <div class="fld"><label>첫구매 인정기간 (N일)</label>
+    <div class="ntoggle" id="ntoggle">
+      <button data-n="7">7일</button><button data-n="14">14일</button><button data-n="30" class="on">30일</button>
+    </div>
+  </div>
+  <div class="fld"><label>채널</label><div id="chanfilter"></div></div>
+  <button class="gobtn" id="go">조회</button>
+  <span class="txt" style="margin-left:auto;max-width:360px">신규유저=complete_signup(Amplitude) 기준·첫구매=가입후 최초 complete_order 이벤트. 취소/환불은 이벤트 발생 자체엔 반영되지 않음(아래 정의 참고).</span>
+</div>
+
+<div class="wrap">
+
+  <!-- ⓪ 유저 볼륨 개관 (전체/신규/매체유입) -->
+  <div class="sechd">유저 볼륨 추이 <span class="badge real">실데이터</span> <span class="n">신규유저 볼륨의 크기를 전체 유입 대비로 보기 위한 기준선</span></div>
+  <div class="card"><p class="csub">전체 유저(일별 활성유저) · 신규 유저(당일 가입) · 매체유입 유저(채널·캠페인 유입이 식별된 활성유저) — 이 중 신규유저가 얼마나 되는 볼륨인지 보는 용도입니다.</p><div class="chart" id="c_volume" style="height:280px"></div></div>
+
+  <!-- ① AX Highlight Strip -->
+  <div class="sechd">🤖 AX 하이라이트 <span class="badge real">AI 생성 · gpt-5.5</span></div>
+  <div class="axstrip" id="axstrip">
+    <div class="axcard anomaly"><div class="kind">불러오는 중</div><div class="body">데이터를 모으고 있습니다…</div></div>
+    <div class="axcard insight"><div class="kind">불러오는 중</div><div class="body">데이터를 모으고 있습니다…</div></div>
+    <div class="axcard opportunity"><div class="kind">불러오는 중</div><div class="body">데이터를 모으고 있습니다…</div></div>
+  </div>
+
+  <!-- ② North Star -->
+  <div class="sechd">가입 후 첫구매 전환율 <span class="n" id="ns_period"></span></div>
+  <div class="nskpi" id="nskpi">
+    <div class="cell big"><div class="l">현재 전환율</div><div class="v" id="ns_cur">-</div><div class="progress"><i id="ns_bar" style="width:0%"></i></div><div class="txt" id="ns_goal"></div></div>
+    <div class="cell"><div class="l">전주 대비</div><div class="v" id="ns_wow">-</div></div>
+    <div class="cell"><div class="l">전월 대비</div><div class="v" id="ns_mom">-</div></div>
+    <div class="cell"><div class="l">전년 대비</div><div class="v" id="ns_yoy">-</div></div>
+    <div class="cell"><div class="l">신규가입자</div><div class="v" id="ns_signup">-</div></div>
+    <div class="cell"><div class="l">첫구매자</div><div class="v" id="ns_buyer">-</div></div>
+  </div>
+  <div class="defbox">
+    <b>정의 검증</b> · 신규유저=<b>complete_signup</b> 이벤트 발생 유저(가입일=이벤트일 KST) · 첫구매=가입 이후 최초 <b>complete_order</b> 이벤트(N일 이내) · 이 전환율은 <b>결제완료 이벤트 발생 여부</b> 기준이라 이후 취소/환불되어도 반영되지 않음(주문DB의 실거래액·정산 기준과 다름 — 주문DB에선 취소 제외 시 실거래액이 낮아질 수 있음) · <b>광고비(매체비) 데이터가 연결되어 있지 않아 CAC·예산배분 관련 지표는 이 대시보드에서 제외</b>했습니다(전환율·볼륨 기준으로만 판단).
+    <div id="ns_crosscheck" style="margin-top:6px;color:#8a8780">주문DB 대조: 불러오는 중…</div>
+  </div>
+
+  <!-- ③ Funnel -->
+  <div class="sechd">첫구매 퍼널 <span class="badge real">실데이터 · Amplitude</span></div>
+  <div class="grid2" style="margin-bottom:8px">
+    <div class="fld"><label>세그먼트</label>
+      <select id="funnelseg" style="border:1px solid #d6d4ce;border-radius:6px;padding:5px 8px;font-size:12px;height:29px">
+        <option value="0">전체</option><option value="1">APP</option><option value="2">MO-Web</option><option value="3">PC</option>
+      </select>
+    </div>
+    <div></div>
+  </div>
+  <div class="funnelrow" id="funnelrow"><div class="secload">불러오는 중…</div></div>
+  <div id="hypowrap" style="margin-top:12px"></div>
+
+  <!-- ④ Channel -->
+  <div class="sechd">채널 성과 <span class="badge real">실데이터 · Amplitude</span></div>
+  <div class="grid2">
+    <div class="card">
+      <div class="tblscroll" style="overflow-x:auto"><table class="chtbl" id="chtbl"><tbody><tr><td class="secload" colspan="8">불러오는 중…</td></tr></tbody></table></div>
+    </div>
+    <div class="card"><h3>채널별 신규가입 추이(주간) <span class="badge real">실데이터</span></h3><p class="csub">가입 코호트 기간 내 채널별 주간 신규가입자 수</p><div class="chart" id="c_chantrend"></div></div>
+  </div>
+
+  <!-- ⑤ Cohort Trend -->
+  <div class="sechd">가입 주차별 코호트 전환 추이 <span class="badge real">실데이터</span></div>
+  <div class="card"><p class="csub">점선/옅은색 = 아직 N일이 지나지 않은 미성숙 코호트(참고용, 추세 비교 제외)</p><div class="chart" id="c_cohort" style="height:300px"></div></div>
+
+  <!-- ⑥ Behavioral -->
+  <div class="sechd">행동 인사이트</div>
+  <div class="grid2">
+    <div class="card">
+      <h3>첫구매까지 걸린 시간 <span class="badge real">실데이터·추정</span></h3>
+      <p class="csub" id="ttfp_sub">불러오는 중…</p>
+      <div class="chart" id="c_ttfp"></div>
+    </div>
+    <div class="card">
+      <h3>미전환 신규유저 마지막 행동 Top5 <span class="badge mock">Mock/Sample</span></h3>
+      <p class="csub">앰플리튜드에 "가입O·구매X" 코호트를 사전 정의해야 정확히 집계됩니다. 아래는 예시 형태입니다.</p>
+      <table class="lasttbl" id="lastevt"></table>
+    </div>
+  </div>
+
+  <!-- ⑦ Weekly Actions -->
+  <div class="sechd">액션안 <span class="badge real">AI 생성 · gpt-5.5</span></div>
+  <div id="actions"><div class="secload">데이터 종합 후 생성됩니다…</div></div>
+
+</div>
+
+<div class="loading" id="loading">불러오는 중…</div>
+<div class="block" id="block">이 대시보드를 볼 권한이 없습니다. <a href="../index.html" style="color:var(--red);margin-left:6px">← 목록</a></div>
+
+<script>
+(function(){
+"use strict";
+var $=function(id){return document.getElementById(id);};
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+var FILE="d-msztl4gqh03.html";
+function pct(n){return ((Number(n)||0)*100).toFixed(2)+"%";}
+function pct1(n){return ((Number(n)||0)*100).toFixed(1)+"%";}
+function won(v){return (Math.round(Number(v)||0)).toLocaleString("ko-KR");}
+function ymd(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
+function fmtDT(d){return ymd(d)+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");}
+function ymdCompact(d){return ""+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');}
+function addDays(d,n){return new Date(d.getTime()+n*86400000);}
+function chgTxt(cur,prev){
+  if(prev==null||!isFinite(prev)||prev===0) return {t:"–",c:"flat"};
+  var r=(cur-prev)/Math.abs(prev)*100;
+  return {t:(r>=0?"▲ ":"▼ ")+Math.abs(r).toFixed(1)+"%p".replace("%p","%"), c:(r>=0?"up":"down")};
+}
+// THUMB(홈 썸네일)일 땐 무거운 앰플리튜드 순차호출을 건너뛴다
+var THUMB = location.hash.indexOf("thumb") >= 0;
+
+// ── amplitude-proxy 순차 호출 (429 방지) ──
+function amp(endpoint,params){
+  return window.MUSTIT.fn("amplitude-proxy",{endpoint:endpoint,params:params}).then(function(r){ return r.data; });
+}
+var CRAWLER=[{prop:"os",op:"does not contain",values:["yeti","bot","headless","bingbot","bingbot2","crawler"]},
+             {prop:"country",op:"is",values:["South Korea"]}];
+function ev(t,extra){ return {event_type:t, filters: extra?CRAWLER.concat(extra):CRAWLER}; }
+
+// 실제 확인된 initial_utm_source 분포(최근30일) 기반 채널 그룹 — Amplitude 실데이터
+var CHANNELS=[
+  {n:"네이버", v:["naver"]},
+  {n:"Meta(페이스북/인스타)", v:["facebookads"]},
+  {n:"다음", v:["daum"]},
+  {n:"구글", v:["google"]},
+  {n:"가격비교/제휴", v:["danawa","enuri","coocha","couponmoa","linkprice"]},
+  {n:"AI검색(챗GPT 등)", v:["chatgpt.com"]},
+  {n:"다이렉트/미확인", v:["(none)","EMPTY"]}
+];
+var _MOWEB={prop:"device",op:"contains",values:["Android","iOS","Apple iPhone","Samsung Phone"]};
+var DEVSEG=[
+  {n:"전체", c:[]},
+  {n:"APP", c:[{prop:"platform",op:"is",values:["iOS","Android"]}]},
+  {n:"MO-Web", c:[{prop:"platform",op:"is",values:["Web"]},_MOWEB]},
+  {n:"PC", c:[{prop:"platform",op:"is",values:["Web"]},{prop:"os",op:"does not contain",values:["iOS","Android","Mobile","apple","samsung"]},{prop:"device",op:"does not contain",values:["Apple iPhone","Samsung Phone","iOS","Android","samsung","apple"]}]}
+];
+var FUNNEL_EVENTS=["complete_signup","_active","add_to_cart","complete_order"];
+var FUNNEL_LABELS=["가입","첫 세션(재방문)","장바구니 담기","첫 결제"];
+
+// ── state ──
+var N=30;
+var STATE={cur:null, wow:null, mom:null, yoy:null, funnel:null, channel:null, cohort:{}, ttfp:null, siteDaily:null};
+
+function setDefaults(){
+  var y=new Date(); y.setDate(y.getDate()-N-1); // 성숙(N일 경과)한 코호트가 되도록 종료일을 N일만큼 당김
+  var s=new Date(y.getTime()); s.setDate(s.getDate()-55); // 8주 코호트 확보
+  $("to").value=ymd(y); $("from").value=ymd(s);
+}
+function curRange(){ return {from:$("from").value, to:$("to").value}; }
+function shiftRange(r,days){
+  var f=new Date(r.from+"T00:00:00"), t=new Date(r.to+"T00:00:00");
+  return {from:ymd(addDays(f,-days)), to:ymd(addDays(t,-days))};
+}
+function selectedChannelVals(){
+  var boxes=[].slice.call(document.querySelectorAll("#chanfilter input:checked"));
+  if(!boxes.length) return null; // 전체
+  var vals=[]; boxes.forEach(function(b){ vals=vals.concat(JSON.parse(b.value)); });
+  return vals;
+}
+function buildChanFilter(){
+  var host=$("chanfilter");
+  var ms=document.createElement("div"); ms.className="ms";
+  ms.innerHTML='<button type="button"><span class="v">전체</span><span>▾</span></button><div class="panel"></div>';
+  var panel=ms.querySelector(".panel");
+  CHANNELS.forEach(function(c){
+    var row=document.createElement("label"); row.className="opt";
+    row.innerHTML='<input type="checkbox" value=\'' + JSON.stringify(c.v) + '\'><span>'+esc(c.n)+'</span>';
+    panel.appendChild(row);
+  });
+  ms.querySelector("button").onclick=function(e){ e.stopPropagation(); ms.classList.toggle("open"); };
+  panel.onclick=function(e){ e.stopPropagation(); };
+  panel.addEventListener("change",function(){
+    var n=document.querySelectorAll("#chanfilter input:checked").length;
+    ms.querySelector(".v").textContent = n? n+"개 선택" : "전체";
+  });
+  host.appendChild(ms);
+  document.addEventListener("click",function(){ ms.classList.remove("open"); });
+}
+
+// ── ECharts helpers ──
+var CH={};
+function chart(id){ if(!CH[id]) CH[id]=echarts.init($(id)); return CH[id]; }
+window.addEventListener("resize",function(){ Object.keys(CH).forEach(function(k){ CH[k].resize(); }); });
+
+// ═══════════════════════ ① 가입후 첫구매 전환율 ═══════════════════════
+function loadNorthStar(){
+  var cur=curRange();
+  var wowR=shiftRange(cur,7), momR=shiftRange(cur,30), yoyR=shiftRange(cur,365);
+  var chanVals=selectedChannelVals();
+  var extra=chanVals?[{prop:"gp:initial_utm_source",op:"is",values:chanVals}]:null;
+  function callFor(r){ return amp("funnels",{e:[JSON.stringify(ev("complete_signup",extra)),JSON.stringify(ev("complete_order",extra))],cs:N*86400,start:r.from,end:r.to}); }
+  return callFor(cur).then(function(d){ STATE.cur=d&&d.data&&d.data[0]?d.data[0]:null; return callFor(wowR); })
+    .then(function(d){ STATE.wow=d&&d.data&&d.data[0]?d.data[0]:null; return callFor(momR); })
+    .then(function(d){ STATE.mom=d&&d.data&&d.data[0]?d.data[0]:null; return callFor(yoyR); })
+    .then(function(d){ STATE.yoy=d&&d.data&&d.data[0]?d.data[0]:null; renderNorthStar(); })
+    .catch(function(e){ $("ns_cur").textContent="오류"; console.error(e); });
+}
+function cumAt(row,i){ return row && row.cumulative ? (Number(row.cumulative[i])||0) : null; }
+function cntAt(row,i){
+  if(!row) return null;
+  if(row.events && row.events[i]!=null) return Number(row.events[i])||0;
+  if(row.count!=null && row.cumulative) return Math.round((Number(row.count)||0)*(Number(row.cumulative[i])||0));
+  return null;
+}
+function renderNorthStar(){
+  var c=STATE.cur;
+  var curCvr=cumAt(c,1);
+  $("ns_period").textContent = "("+$("from").value+" ~ "+$("to").value+" 가입 코호트 · N="+N+"일)";
+  $("ns_cur").textContent = curCvr==null?"-":pct(curCvr);
+  var GOAL=0.12; // 목표 전환율(마케팅팀 협의 전 임시 목표치 — 실제 목표로 교체 필요)
+  $("ns_goal").textContent = curCvr==null?"":("목표 "+pct(GOAL)+" 대비 "+Math.round((curCvr/GOAL)*100)+"% 달성");
+  $("ns_bar").style.width = curCvr==null?"0%":Math.min(100,Math.round((curCvr/GOAL)*100))+"%";
+  function put(id,cmpRow){
+    var cmpCvr=cumAt(cmpRow,1);
+    var c2=chgTxt(curCvr,cmpCvr);
+    $(id).innerHTML = cmpCvr==null ? '<span class="chg flat">데이터 없음</span>' : '<span class="chg '+c2.c+'">'+c2.t+'</span>';
+  }
+  put("ns_wow", STATE.wow);
+  put("ns_mom", STATE.mom);
+  put("ns_yoy", STATE.yoy);
+  var signupCnt=cntAt(c,0), buyerCnt=cntAt(c,1);
+  $("ns_signup").textContent = signupCnt==null?"-":won(signupCnt)+" 명";
+  $("ns_buyer").textContent = buyerCnt==null?"-":won(buyerCnt)+" 명";
+}
+
+// ═══════════════════════ 주문DB 대조(RPC, 정의 충돌 표시) ═══════════════════════
+// dash_daily_conversion = amp_daily(전체 방문자) ⨝ orders_v(전체 유저, 재구매 포함) 날짜조인 RPC.
+// 위 노스스타(신규유저·앰플리튜드 단독)와 모집단 정의가 다르므로 임의로 하나를 택하지 않고 나란히 표시.
+function loadCrossCheck(){
+  var cur=curRange();
+  return window.MUSTIT.rpc("dash_daily_conversion",{p:{from:cur.from,to:cur.to}}).then(function(rows){
+    rows=rows||[];
+    STATE.siteDaily=rows; // 유저 볼륨 개관 차트에서 재사용(전체 유저=DAU)
+    var dau=0,ord=0,net=0,n=0;
+    rows.forEach(function(r){ if(r.dau){dau+=Number(r.dau)||0;n++;} ord+=Number(r.orders)||0; net+=Number(r.net_rev)||0; });
+    var conv = dau? ord/dau : null;
+    $("ns_crosscheck").innerHTML = conv==null ? "데이터 없음"
+      : "전체 사이트(전체 유저·재구매 포함, 주문DB+앰플리튜드 DAU) 기간 평균 방문자→주문 전환율 <b>"+pct(conv)+"</b> — 위 노스스타(신규유저만·"+N+"일 이내)와 모집단 정의가 다르니 직접 비교하지 말고 참고만 하세요.";
+  }).catch(function(e){ $("ns_crosscheck").textContent="주문DB 대조 로드 실패: "+e.message; });
+}
+
+// ═══════════════════════ ⓪ 유저 볼륨 개관(전체·신규·매체유입) ═══════════════════════
+function loadVolumeOverview(){
+  var cur=curRange();
+  var mediaFilter=[{prop:"gp:initial_utm_source",op:"is not",values:["(none)","EMPTY"]}];
+  return amp("events/segmentation",{e:[JSON.stringify(ev("complete_signup"))], m:"uniques", i:1, start:cur.from, end:cur.to})
+    .then(function(dSignup){
+      return amp("events/segmentation",{e:[JSON.stringify(ev("_active",mediaFilter))], m:"uniques", i:1, start:cur.from, end:cur.to})
+        .then(function(dMedia){ renderVolumeOverview(dSignup, dMedia); });
+    }).catch(function(e){ $("c_volume").innerHTML='<p style="color:#c8102e;font-size:12px">로드 실패: '+esc(e.message)+'</p>'; });
+}
+function renderVolumeOverview(dSignup, dMedia){
+  var site=STATE.siteDaily||[]; // {d, dau, orders, net_rev, ...}
+  var xv=(dSignup&&dSignup.xValues)||[];
+  var labels=xv.map(function(s){return String(s).slice(5,10);});
+  var siteByDate={}; site.forEach(function(r){ siteByDate[String(r.d).slice(0,10)]=Number(r.dau)||0; });
+  var totalArr = xv.map(function(s){ return siteByDate[String(s).slice(0,10)] || null; });
+  function seriesVals(d){ var s=(d&&d.series&&d.series[0])||[]; return s.map(function(v){return typeof v==="object"?Number(v.value)||0:Number(v)||0;}); }
+  var signupArr=seriesVals(dSignup), mediaArr=seriesVals(dMedia);
+  chart("c_volume").setOption({
+    grid:{left:46,right:14,top:26,bottom:36},
+    tooltip:{trigger:"axis"},
+    legend:{top:0,textStyle:{fontSize:10}},
+    xAxis:{type:"category",data:labels,axisLabel:{fontSize:9,color:"#999"}},
+    yAxis:[{type:"value",name:"전체유저",axisLabel:{fontSize:9,color:"#999"}},{type:"value",name:"신규·매체유입",position:"right",axisLabel:{fontSize:9,color:"#999"}}],
+    series:[
+      {name:"전체 유저(DAU)",type:"line",yAxisIndex:0,data:totalArr,symbol:"none",lineStyle:{width:2,color:"#9aa0a6"},itemStyle:{color:"#9aa0a6"}},
+      {name:"신규 유저(가입)",type:"line",yAxisIndex:1,data:signupArr,symbol:"none",lineStyle:{width:2,color:"#c8102e"},itemStyle:{color:"#c8102e"}},
+      {name:"매체유입 유저",type:"line",yAxisIndex:1,data:mediaArr,symbol:"none",lineStyle:{width:2,color:"#2f80ed"},itemStyle:{color:"#2f80ed"}}
+    ]
+  },true);
+}
+
+// ═══════════════════════ ③ 퍼널 ═══════════════════════
+function loadFunnel(){
+  var cur=curRange();
+  var s=DEVSEG.map(function(g){ return JSON.stringify(g.c); });
+  var p={e:FUNNEL_EVENTS.map(function(t){return JSON.stringify(ev(t));}), cs:N*86400, start:cur.from, end:cur.to, s:s};
+  return amp("funnels",p).then(function(d){
+    STATE.funnel = (d&&d.data)||[];
+    renderFunnel();
+  }).catch(function(e){ $("funnelrow").innerHTML='<div class="secload" style="color:#c8102e">퍼널 로드 실패: '+esc(e.message)+'</div>'; });
+}
+function renderFunnel(){
+  var idx=Number($("funnelseg").value)||0;
+  var row=STATE.funnel[idx];
+  if(!row){ $("funnelrow").innerHTML='<div class="secload">데이터 없음</div>'; return; }
+  var cum=row.cumulative||[1,0,0,0];
+  var html="";
+  var maxDropIdx=1, maxDrop=-1;
+  for(var i=1;i<cum.length;i++){ var d=cum[i-1]-cum[i]; if(d>maxDrop){maxDrop=d;maxDropIdx=i;} }
+  for(i=0;i<FUNNEL_EVENTS.length;i++){
+    var v = cntAt(row,i);
+    var cvr = i===0? 1 : cum[i];
+    var drop = i===0? 0 : (cum[i-1]-cum[i]);
+    html += '<div class="fstep'+(i===maxDropIdx?' hot':'')+'"><div class="l">'+FUNNEL_LABELS[i]+'</div>'+
+      '<div class="v">'+(v==null?pct(cvr):won(v)+"명")+'</div>'+
+      (i===0? '<div class="cvr">기준(100%)</div>' : '<div class="cvr">누적전환 '+pct(cvr)+'</div><div class="drop">이탈 '+pct(drop)+'</div>')+
+      '</div>';
+    if(i<FUNNEL_EVENTS.length-1) html+='<div class="farrow">→</div>';
+  }
+  $("funnelrow").innerHTML = html;
+  renderHypotheses(cum, maxDropIdx);
+}
+function renderHypotheses(cum, dropIdx){
+  // 기기별 세그먼트 비교로 "추정 원인" 카드 구성(실데이터 상관관계 · 인과 단정 아님)
+  var rows=STATE.funnel;
+  var app=rows[1], mo=rows[2], pc=rows[3];
+  var stepName=FUNNEL_LABELS[dropIdx];
+  var cards=[];
+  if(app&&mo&&pc){
+    var vApp=cumAt(app,dropIdx), vMo=cumAt(mo,dropIdx), vPc=cumAt(pc,dropIdx);
+    var arr=[["APP",vApp],["MO-Web",vMo],["PC",vPc]].filter(function(x){return x[1]!=null;}).sort(function(a,b){return a[1]-b[1];});
+    if(arr.length>=2){
+      cards.push('<div class="hypocard"><b>추정 원인 후보 1</b> — "'+esc(stepName)+'" 구간에서 <b>'+arr[0][0]+'</b> 전환이 <b>'+arr[arr.length-1][0]+'</b> 대비 낮게 관찰됩니다('+pct(arr[0][1])+' vs '+pct(arr[arr.length-1][1])+'). 인과관계 단정 아님 — 연관성이 관찰됨.<div class="ev">근거: 기기별 세그먼트 누적전환율(Amplitude funnels, cs='+N+'일)</div></div>');
+    }
+  }
+  cards.push('<div class="hypocard"><b>추정 원인 후보 2</b> — 전체 퍼널에서 가장 큰 이탈은 "'+esc(stepName)+'" 앞 단계입니다. 온보딩/탐색 UX 점검이 유입량 확대보다 우선일 가능성이 높음(가설 · 추가 검증 필요).<div class="ev">근거: 단계별 누적전환율 비교(Amplitude funnels)</div></div>');
+  cards.push('<div class="hypocard badge est" style="display:block"><b>추정 원인 후보 3</b> <span class="badge mock" style="margin-left:6px">Mock</span> — 쿠폰/프로모션 노출 여부와의 상관은 이 버전에서 미검증입니다(코호트 사전정의 필요). 참고용 가설로만 표시.</div>');
+  $("hypowrap").innerHTML = cards.join("");
+}
+$("funnelseg").onchange = renderFunnel;
+
+// ═══════════════════════ ④ 채널·캠페인 ═══════════════════════
+function loadChannel(){
+  var cur=curRange();
+  var s=CHANNELS.map(function(c){ return JSON.stringify([{prop:"gp:initial_utm_source",op:"is",values:c.v}]); });
+  var pF={e:[JSON.stringify(ev("complete_signup")),JSON.stringify(ev("complete_order"))],cs:N*86400,start:cur.from,end:cur.to,s:s};
+  return amp("funnels",pF).then(function(d){
+    var rows=(d&&d.data)||[];
+    STATE.channel = CHANNELS.map(function(c,i){
+      var r=rows[i];
+      return { name:c.n, signup:cntAt(r,0), buyer:cntAt(r,1), cvr:cumAt(r,1) };
+    });
+    // 첫구매 매출 합계(채널별, 실데이터) — AOV 계산용. 광고비 미연동이라 CAC는 계산하지 않음.
+    return amp("events/segmentation", {e:[JSON.stringify(ev("complete_order"))], m:"totals", start:cur.from, end:cur.to, s:s});
+  }).then(function(d2){
+    var series=(d2&&d2.series)||(d2&&d2.data&&d2.data.series)||[];
+    STATE.channel.forEach(function(row,i){
+      var arr=series[i]||[];
+      var sum=0; arr.forEach(function(v){ sum+= (typeof v==="object"? Number(v.value)||0 : Number(v)||0); });
+      row.revenue=sum;
+      row.aov = row.buyer? sum/row.buyer : null;
+    });
+    renderChannelTable();
+  }).catch(function(e){ $("chtbl").innerHTML='<tbody><tr><td colspan="6" class="secload" style="color:#c8102e">채널 데이터 로드 실패: '+esc(e.message)+'</td></tr></tbody>'; });
+}
+function renderChannelTable(){
+  var rows=STATE.channel||[];
+  var thead='<thead><tr><th>채널</th><th>신규가입자</th><th>첫구매자</th><th>CVR</th><th>첫구매AOV</th><th>WoW</th></tr></thead>';
+  var body=rows.map(function(r){
+    var cls = r.cvr!=null && r.cvr>=0.10 ? "good" : (r.cvr!=null && r.cvr<0.05 ? "bad" : "");
+    return '<tr class="'+cls+'"><td>'+esc(r.name)+'</td><td>'+(r.signup==null?"-":won(r.signup))+'</td><td>'+(r.buyer==null?"-":won(r.buyer))+
+      '</td><td class="cvr">'+(r.cvr==null?"-":pct(r.cvr))+'</td><td>'+(r.aov==null?"-":won(r.aov)+"원")+'</td><td>–</td></tr>';
+  }).join("");
+  $("chtbl").innerHTML = thead+'<tbody>'+(body||'<tr><td colspan="6" class="secload">데이터 없음</td></tr>')+'</tbody>';
+}
+// 채널별 주간 신규가입 추이(실데이터) — 캠페인/소재 단위 없이 채널 단위로만 단순하게
+function loadChannelTrend(){
+  var cur=curRange();
+  var s=CHANNELS.map(function(c){ return JSON.stringify([{prop:"gp:initial_utm_source",op:"is",values:c.v}]); });
+  return amp("events/segmentation",{e:[JSON.stringify(ev("complete_signup"))], m:"uniques", i:7, start:cur.from, end:cur.to, s:s})
+    .then(function(d){
+      var series=(d&&d.series)||[]; var xv=(d&&d.xValues)||[];
+      var labels=xv.map(function(s2){return String(s2).slice(5,10);});
+      var PAL=["#c8102e","#7b9ff2","#2fae8f","#e8a33d","#9b8cf2","#2f6fe8","#bbbbbb"];
+      chart("c_chantrend").setOption({
+        grid:{left:40,right:14,top:14,bottom:36},
+        tooltip:{trigger:"axis"},
+        legend:{type:"scroll",bottom:0,itemWidth:10,itemHeight:8,textStyle:{fontSize:9.5}},
+        xAxis:{type:"category",data:labels,axisLabel:{fontSize:9,color:"#999"}},
+        yAxis:{type:"value",axisLabel:{fontSize:9,color:"#999"}},
+        series:CHANNELS.map(function(c,i){
+          return {name:c.n,type:"line",data:(series[i]||[]).map(function(v){return typeof v==="object"?v.value:v;}),
+            symbol:"none",lineStyle:{width:1.6,color:PAL[i%PAL.length]},itemStyle:{color:PAL[i%PAL.length]}};
+        })
+      },true);
+    }).catch(function(e){ $("c_chantrend").innerHTML='<p style="color:#c8102e;font-size:12px">로드 실패: '+esc(e.message)+'</p>'; });
+}
+// ═══════════════════════ ⑤ 코호트 트렌드(D7/D14/D30) ═══════════════════════
+function weekRanges(anchorTo, weeks){
+  var out=[]; var end=new Date(anchorTo+"T00:00:00");
+  for(var i=0;i<weeks;i++){
+    var wEnd=addDays(end,-7*i), wStart=addDays(wEnd,-6);
+    out.unshift({from:ymd(wStart), to:ymd(wEnd), label:ymd(wStart).slice(5)+"~"+ymd(wEnd).slice(5)});
+  }
+  return out;
+}
+function loadCohort(){
+  var cur=curRange();
+  var weeks=weekRanges(cur.to,8);
+  var today=new Date();
+  function seqFor(days){
+    var chain=Promise.resolve([]);
+    weeks.forEach(function(w){
+      chain = chain.then(function(acc){
+        var mature = addDays(new Date(w.to+"T00:00:00"), days) <= today;
+        return amp("funnels",{e:[JSON.stringify(ev("complete_signup")),JSON.stringify(ev("complete_order"))],cs:days*86400,start:w.from,end:w.to})
+          .then(function(d){
+            var r=d&&d.data&&d.data[0];
+            acc.push({label:w.label, v:cumAt(r,1), mature:mature});
+            return acc;
+          }).catch(function(){ acc.push({label:w.label,v:null,mature:mature}); return acc; });
+      });
+    });
+    return chain;
+  }
+  return seqFor(7).then(function(d7){ STATE.cohort.d7=d7; return seqFor(14); })
+    .then(function(d14){ STATE.cohort.d14=d14; return seqFor(30); })
+    .then(function(d30){ STATE.cohort.d30=d30; renderCohort(); })
+    .catch(function(e){ console.error(e); });
+}
+function renderCohort(){
+  var labels=(STATE.cohort.d30||[]).map(function(x){return x.label;});
+  function seriesOf(rows,name,color){
+    return { name:name, type:"line", data:(rows||[]).map(function(r){return r.v==null?null:+(r.v*100).toFixed(2);}),
+      lineStyle:{width:2,color:color}, itemStyle:{color:color},
+      symbol:"circle", symbolSize:6,
+      markPoint:{data:[]},
+      // 미성숙 구간은 점선으로
+      lineStyle:{width:2,color:color} };
+  }
+  var s7=seriesOf(STATE.cohort.d7,"D7 전환율","#2f80ed");
+  var s14=seriesOf(STATE.cohort.d14,"D14 전환율","#2fae8f");
+  var s30=seriesOf(STATE.cohort.d30,"D30 전환율","#c8102e");
+  [ [s7,STATE.cohort.d7], [s14,STATE.cohort.d14], [s30,STATE.cohort.d30] ].forEach(function(pair){
+    var s=pair[0], rows=pair[1]||[];
+    s.data = rows.map(function(r,i){
+      var v = r.v==null?null:+(r.v*100).toFixed(2);
+      return r.mature ? v : { value:v, itemStyle:{color:"#ccc"}, symbol:"emptyCircle" };
+    });
+  });
+  chart("c_cohort").setOption({
+    grid:{left:46,right:20,top:30,bottom:36},
+    tooltip:{trigger:"axis"},
+    legend:{top:0,textStyle:{fontSize:10}},
+    xAxis:{type:"category",data:labels,axisLabel:{fontSize:9,color:"#999"}},
+    yAxis:{type:"value",axisLabel:{fontSize:9,color:"#999",formatter:"{value}%"},splitLine:{lineStyle:{color:"#eee"}}},
+    series:[s7,s14,s30]
+  },true);
+}
+
+// ═══════════════════════ ⑥ 행동 인사이트 ═══════════════════════
+function loadTTFP(){
+  var cur=curRange();
+  var pts=[1,2,3,5,7,10,14,21,30].filter(function(d){return d<=N;});
+  if(!pts.length) pts=[Math.max(1,N)];
+  var chain=Promise.resolve({});
+  pts.forEach(function(d){
+    chain=chain.then(function(acc){
+      return amp("funnels",{e:[JSON.stringify(ev("complete_signup")),JSON.stringify(ev("complete_order"))],cs:d*86400,start:cur.from,end:cur.to})
+        .then(function(res){ var r=res&&res.data&&res.data[0]; acc[d]=cumAt(r,1); return acc; })
+        .catch(function(){ acc[d]=null; return acc; });
+    });
+  });
+  return chain.then(function(acc){ STATE.ttfp={pts:pts, cum:acc}; renderTTFP(); });
+}
+function renderTTFP(){
+  var pts=STATE.ttfp.pts, cum=STATE.ttfp.cum;
+  var bars=[], labels=[];
+  var prev=0;
+  pts.forEach(function(d,i){
+    var c = cum[d]==null?null:cum[d];
+    var marginal = c==null?null: Math.max(0, c-prev);
+    labels.push(d+"일");
+    bars.push(marginal==null?0:+(marginal*100).toFixed(3));
+    if(c!=null) prev=c;
+  });
+  chart("c_ttfp").setOption({
+    grid:{left:40,right:14,top:14,bottom:32},
+    tooltip:{trigger:"axis",valueFormatter:function(v){return v+"%p (구간 신규전환)";}},
+    xAxis:{type:"category",data:labels,axisLabel:{fontSize:9,color:"#999"}},
+    yAxis:{type:"value",axisLabel:{fontSize:9,color:"#999",formatter:"{value}%"}},
+    series:[{type:"bar",data:bars,itemStyle:{color:"#7b9ff2"},barMaxWidth:34}]
+  },true);
+  var last=pts[pts.length-1];
+  $("ttfp_sub").textContent = "가입~"+last+"일 누적전환 구간별 증분(추정) · 최종("+last+"일) 누적전환 "+(cum[last]==null?"-":pct(cum[last]));
+}
+function renderLastEvents(){
+  // Mock/Sample — 실제 "가입O·구매X" 코호트 사전정의 전까지 예시 형태로만 표시
+  var sample=[
+    {l:"상품상세 조회 후 이탈", v:34}, {l:"검색결과 조회 후 이탈", v:22},
+    {l:"장바구니 담기 후 이탈", v:18}, {l:"쿠폰/혜택 페이지 조회 후 이탈", v:14},
+    {l:"로그인 후 추가 행동 없음", v:12}
+  ];
+  var max=Math.max.apply(null, sample.map(function(s){return s.v;}));
+  $("lastevt").innerHTML = sample.map(function(s){
+    return '<tr><td>'+esc(s.l)+'</td><td class="bar"><div class="barin"><i style="width:'+Math.round(s.v/max*100)+'%"></i></div></td><td style="text-align:right">'+s.v+'%</td></tr>';
+  }).join("");
+}
+
+// ═══════════════════════ AI 인사이트 / 액션 (ai-insight 실호출) ═══════════════════════
+function buildAiContext(){
+  return {
+    기간:$("from").value+"~"+$("to").value, N일기준:N,
+    노스스타: STATE.cur? {현재전환율:cumAt(STATE.cur,1), 신규가입자:cntAt(STATE.cur,0), 첫구매자:cntAt(STATE.cur,1)} : null,
+    전주전환율: STATE.wow? cumAt(STATE.wow,1) : null,
+    전월전환율: STATE.mom? cumAt(STATE.mom,1) : null,
+    전년전환율: STATE.yoy? cumAt(STATE.yoy,1) : null,
+    퍼널_전체: STATE.funnel && STATE.funnel[0] ? STATE.funnel[0].cumulative : null,
+    퍼널_기기별: STATE.funnel ? DEVSEG.map(function(s,i){ return {seg:s.n, cumulative: STATE.funnel[i]&&STATE.funnel[i].cumulative}; }) : null,
+    채널표: STATE.channel,
+    코호트_D30추이: STATE.cohort.d30
+  };
+}
+function renderAxStrip(text){
+  // 모델 응답을 "구분자 ---" 3개 섹션으로 기대. 실패 시 통짜 표기.
+  var parts = String(text||"").split(/\n?---\n?/).map(function(s){return s.trim();}).filter(Boolean);
+  var kinds=[["anomaly","이상탐지"],["insight","AI 인사이트"],["opportunity","기회 포착"]];
+  var html = kinds.map(function(k,i){
+    var body = parts[i] || "데이터가 충분하지 않아 생성하지 못했습니다.";
+    return '<div class="axcard '+k[0]+'"><div class="kind">'+k[1]+'</div><div class="body">'+body.replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\n/g,'<br>')+'</div></div>';
+  }).join("");
+  $("axstrip").innerHTML = html;
+}
+function renderActions(text){
+  var parts = String(text||"").split(/\n?---\n?/).map(function(s){return s.trim();}).filter(Boolean);
+  if(!parts.length){ $("actions").innerHTML='<div class="secload">생성된 액션이 없습니다.</div>'; return; }
+  $("actions").innerHTML = parts.slice(0,3).map(function(p){
+    var conf = /신뢰도\s*[:：]?\s*High/i.test(p) ? "high" : (/신뢰도\s*[:：]?\s*Low/i.test(p) ? "low" : "mid");
+    return '<div class="actioncard"><span class="conf '+conf+'">신뢰도 '+(conf==="high"?"High":conf==="low"?"Low":"Mid")+'</span>'+
+      '<div>'+esc(p).replace(/\n/g,'<br>').replace(/&quot;/g,'"')+'</div></div>';
+  }).join("");
+}
+function loadAiInsights(){
+  var ctx = buildAiContext();
+  return window.MUSTIT.fn("ai-insight",{
+    context:"신규유저 첫구매 전환 성장(Growth/AX) 대시보드. 노스스타=가입후 N일 이내 첫구매전환율.",
+    data: ctx,
+    question:"3개 섹션을 '---'로 구분해서 작성해줘. 1) 이상신호(데이터 기반 이상신호), 2) 인사이트(원인 가설과 우선순위), 3) 기회(전환율·볼륨 기준으로 우선 점검/확대할 채널·구간 후보 — 광고비 데이터가 없으니 CAC나 예산 배분 금액은 절대 언급하지 말고 전환율·신규가입자수·이탈구간 근거로만 말해줘). "+
+      "톤 주의: 보고서나 과제 제출문처럼 딱딱하게 쓰지 말고, 같은 팀 그로스 마케터한테 슬랙으로 캐주얼하게 알려주는 느낌으로 짧고 담백하게 써줘. '~로 판단됩니다', '~라고 사료됩니다', '~것으로 보여집니다' 같은 상투적인 보고체·번역체 문장은 쓰지 말고, 실제 사람이 메모하듯 자연스러운 구어체로. 인과관계를 확신할 수 없으면 '~일 가능성 높음'/'~는 연관성만 보임, 더 봐야 함' 정도로 가볍게 표현하고, 무슨 데이터를 봤는지도 짧게 붙여줘. 각 섹션 2~3문장, 불필요한 격식체·수식어 빼고 핵심만.",
+    dashboard:"d-msztl4gqh03", params:{from:$("from").value,to:$("to").value,N:N}
+  }).then(function(r){ renderAxStrip(r.insight); })
+    .catch(function(e){ renderAxStrip(""); console.error(e); })
+    .then(function(){
+      return window.MUSTIT.fn("ai-insight",{
+        context:"신규유저 첫구매 전환 성장(Growth/AX) 대시보드 — 액션안",
+        data: ctx,
+        question:"위 데이터를 근거로 '액션안' 정확히 3개를, 각각 '---'로 구분해서 작성해줘. 각 제안은 반드시 [발견]→[근거]→[추천 액션]→[예상 영향]→[신뢰도: High/Mid/Low] 구조로. 광고비 데이터가 없으니 CAC나 예산 배분 금액(예: '20% 감액')은 절대 언급하지 말고, 전환율·이탈구간·신규가입자수 등 이 대시보드에 실제로 있는 지표만 근거로 써줘. 데이터로 정량적 예상 영향을 계산할 근거가 부족하면 숫자를 지어내지 말고 정성적으로 표현해줘. "+
+          "톤 주의: 딱딱한 보고서체 말고 팀 동료한테 캐주얼하게 공유하듯 짧고 자연스럽게. '~로 사료됩니다' 같은 번역체 금지.",
+        dashboard:"d-msztl4gqh03", params:{from:$("from").value,to:$("to").value,N:N}
+      });
+    }).then(function(r2){ if(r2) renderActions(r2.insight); })
+    .catch(function(e){ $("actions").innerHTML='<div class="secload" style="color:#c8102e">AI 인사이트 생성 실패: '+esc(e.message)+'</div>'; });
+}
+
+// ── refresh (순차 호출) ──
+function refresh(){
+  if(THUMB) return; // 홈 썸네일은 무거운 앰플리튜드 순차호출을 건너뜀
+  $("loading").classList.add("on");
+  $("lastupdate").textContent = "Last updated: "+fmtDT(new Date());
+  buildChanFilterOnce();
+  renderLastEvents();
+  loadNorthStar()
+    .then(loadCrossCheck)
+    .then(loadVolumeOverview)
+    .then(loadFunnel)
+    .then(loadChannel)
+    .then(loadChannelTrend)
+    .then(loadCohort)
+    .then(loadTTFP)
+    .then(loadAiInsights)
+    .catch(function(e){ console.error(e); })
+    .finally(function(){ $("loading").classList.remove("on"); });
+}
+var _chanBuilt=false;
+function buildChanFilterOnce(){ if(_chanBuilt) return; _chanBuilt=true; buildChanFilter(); }
+
+$("go").onclick=refresh;
+$("ntoggle").addEventListener("click",function(e){
+  var b=e.target.closest("button"); if(!b) return;
+  [].forEach.call($("ntoggle").querySelectorAll("button"),function(x){x.classList.remove("on");});
+  b.classList.add("on"); N=Number(b.getAttribute("data-n"));
+  setDefaults(); refresh();
+});
+
+// ── topbar / access gate (공통 패턴) ──
+function setupTopbar(){
+  window.MUSTIT.rpc("dash_list",{}).then(function(list){
+    list=list||[];
+    var cur=list.filter(function(d){return d.file===FILE;})[0];
+    if(cur){ $("dashowner").textContent=(cur.title||"")+(cur.owner_name?(" · "+cur.owner_name):""); document.title="Data Portal - "+(cur.title||FILE); }
+    var sel=$("dashnav");
+    sel.innerHTML=list.map(function(d){return '<option value="_starter.html?f='+encodeURIComponent(d.file)+'" data-file="'+esc(d.file)+'"'+(d.file===FILE?' selected':'')+'>'+esc(d.title||d.file)+'</option>';}).join("");
+    sel.onchange=function(){var o=sel.options[sel.selectedIndex];if(o&&o.getAttribute('data-file')!==FILE)location.href=o.value;};
+  }).catch(function(){});
+}
+window.MUSTIT.ready(function(){
+  window.MUSTIT.rpc("dash_access",{p_dashboard:FILE}).then(function(a){
+    if(!a || a.view===false){ $("block").style.display="grid"; return; }
+    setupTopbar();
+    setDefaults();
+    if(THUMB){ renderLastEvents(); return; } // 썸네일: 무거운 조회 스킵, 정적 골격만
+    refresh();
+  }).catch(function(e){ $("block").style.display="grid"; });
+});
+})();
+</script>
+</body>
+</html>

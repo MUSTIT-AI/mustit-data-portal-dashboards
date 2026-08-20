@@ -106,6 +106,7 @@
   table.mini th{background:var(--wash);color:var(--sub);font-size:11px;font-weight:700;text-align:right;position:sticky;top:0}
   table.mini th:first-child,table.mini td:first-child{text-align:left}
   table.mini td.name{text-align:left;max-width:300px;overflow:hidden;text-overflow:ellipsis}
+  table.mini th.tl{text-align:left}
   table.mini tr:hover td{background:#fafaf7}
   .tblscroll{overflow:auto;max-height:520px;border:1px solid #f0efe9;border-radius:9px}
   .aihint{font-size:12px;color:#4a4843;background:var(--wash);border:1px solid #efece7;border-radius:9px;padding:9px 12px;margin-top:11px;line-height:1.65}
@@ -233,8 +234,8 @@
 <script>
 (function(){
 "use strict";
-var BUILD="v10";
-var OPTIN=null, OPTIN_LOGIN=null;
+var BUILD="v11";
+var OPTIN=null, OPTIN_LOGIN=null, OPTIN_M=null, OPTIN_LOGIN_M=null;
 var $=function(id){return document.getElementById(id);};
 var FILE="d-msmruilryi5.html", AIDASH="커머스 주요 실적";
 var THUMB=/(?:^|[#&])thumb/.test(location.hash);
@@ -444,19 +445,24 @@ function renderPerfDetail(){var d=$("perf_detail");if(!LAST||d.style.display==="
   d.innerHTML='<div class="perfgrid">'+miniList("BEST · 기여 상품(실거래)",entries5(c.byProd))+miniList("BEST · 브랜드",tc.brand.slice(0,5).map(function(r){return{k:r.k,v:r.gmv};}))+miniList("BEST · 판매자",tc.seller.slice(0,5).map(function(r){return{k:r.k,v:r.gmv};}))+miniList("WORST · 취소 상품",entries5(c.cancelByProd))+'</div>';}
 
 /* ── 주요실적 3줄(회원·구매자) ── */
-function segBuyers(name){var a=(LAST&&LAST.crm&&LAST.crm.ct)||[];for(var i=0;i<a.length;i++)if(a[i].k===name)return a[i].buyers;return 0;}
-function optCnt(f){if(!OPTIN||!OPTIN.items)return null;return OPTIN.items.filter(function(mm){return agree(mm[f]);}).length;}
+function segB(arr,name){if(!arr)return null;for(var i=0;i<arr.length;i++)if(arr[i].k===name)return arr[i].buyers;return 0;}
+function optC(o,f){if(!o||!o.items)return null;return o.items.filter(function(mm){return agree(mm[f]);}).length;}
+function optTot(o){return o?(o.totalCount||(o.items?o.items.length:0)):null;}
 function renderKpi3(){
-  var join=OPTIN?(OPTIN.totalCount||(OPTIN.items?OPTIN.items.length:0)):null;
-  var login=OPTIN_LOGIN?(OPTIN_LOGIN.totalCount||(OPTIN_LOGIN.items?OPTIN_LOGIN.items.length:0)):null;
-  var push=optCnt("pushConsent"),night=optCnt("nightPushConsent");
-  function nn(v){return v==null?'<span style="color:#a7a49c;font-size:13px">…</span>':won(v);}
-  function t(l,v,bw){return '<div class="kpi"><div class="l">'+l+'</div><div class="v">'+v+'</div>'+(bw?'<div class="bw">'+bw+'</div>':'')+'</div>';}
+  var ct=(LAST&&LAST.crm)?LAST.crm.ct:null, ctM=(LAST&&LAST.crmM)?LAST.crmM.ct:null, cmp=(MODE==="cmp");
+  function T(l,cur,cmpv){
+    if(cur==null)return '<div class="kpi"><div class="l">'+esc(l)+'</div><div class="v"><span style="color:#a7a49c;font-size:13px">…</span></div></div>';
+    return tile(l,won(cur),{cmp:(cmp&&cmpv!=null)?won(cmpv):null,curNum:cur,cmpNum:cmpv});
+  }
   $("kpi_bot3").innerHTML=
-    t("전체 유저수",'<span style="color:#a7a49c;font-size:13px">–</span>','D-1·RPC 필요')+
-    t("기간 가입자수",nn(join))+t("기간 로그인수",nn(login))+
-    t("기존 재구매자수",won(segBuyers("기존(재구매)")))+t("기존 첫구매자수",won(segBuyers("기존(첫구매)")))+t("신규 구매자수",won(segBuyers("신규")))+
-    t("APP PUSH 동의",nn(push))+t("야간 수신동의",nn(night));
+    '<div class="kpi"><div class="l">전체 유저수</div><div class="v"><span style="color:#a7a49c;font-size:13px">–</span></div><div class="bw">D-1·RPC 필요</div></div>'+
+    T("기간 가입자수",optTot(OPTIN),optTot(OPTIN_M))+
+    T("기간 로그인수",optTot(OPTIN_LOGIN),optTot(OPTIN_LOGIN_M))+
+    T("기존 재구매자수",segB(ct,"기존(재구매)"),cmp?segB(ctM,"기존(재구매)"):null)+
+    T("기존 첫구매자수",segB(ct,"기존(첫구매)"),cmp?segB(ctM,"기존(첫구매)"):null)+
+    T("신규 구매자수",segB(ct,"신규"),cmp?segB(ctM,"신규"):null)+
+    T("APP PUSH 동의",optC(OPTIN,"pushConsent"),cmp?optC(OPTIN_M,"pushConsent"):null)+
+    T("야간 수신동의",optC(OPTIN,"nightPushConsent"),cmp?optC(OPTIN_M,"nightPushConsent"):null);
 }
 /* ── GMV 증감 분해(워터폴) ── */
 function renderWaterfall(c,m){
@@ -476,7 +482,7 @@ function renderWaterfall(c,m){
 /* ── 집중도 ── */
 function renderConcentration(c,tc){
   var tot=c.gmv,s=tc.seller;var s1=s[0]?s[0].gmv:0,s5=s.slice(0,5).reduce(function(a,b){return a+b.gmv;},0),s20=s.slice(0,20).reduce(function(a,b){return a+b.gmv;},0);var tp=c.topProd;
-  $("t_conc").innerHTML='<thead><tr><th>지표</th><th>값</th><th>GMV 비중</th></tr></thead><tbody>'+
+  $("t_conc").innerHTML='<thead><tr><th>지표</th><th class="tl">값</th><th>GMV 비중</th></tr></thead><tbody>'+
     '<tr><td>판매자 TOP1</td><td class="name">'+(s[0]?esc(trim(s[0].k,18)):"-")+'</td><td>'+pct(tot?s1/tot:0)+'</td></tr>'+
     '<tr><td>판매자 TOP5</td><td class="name">'+won(s5)+'원</td><td>'+pct(tot?s5/tot:0)+'</td></tr>'+
     '<tr><td>판매자 TOP20</td><td class="name">'+won(s20)+'원</td><td>'+pct(tot?s20/tot:0)+'</td></tr>'+
@@ -507,12 +513,12 @@ function renderTrend(c,m){
 function renderCatalog(tc,tm){
   var rows=tc.catalog.slice().sort(CATSORT==="qty"?byQty:byGmv).slice(0,20);var cmp=MODE==="cmp"&&tm;var cm=cmp?idx(tm.catalog):null;
   var tot=sumG(tc.catalog),totM=cmp?sumG(tm.catalog):0;
-  $("t_catalog").innerHTML='<thead><tr><th>#</th><th>브랜드</th><th>대분류</th><th>카탈로그명</th><th>GMV</th><th>수량</th><th>비중</th>'+(cmp?'<th>비교GMV</th><th>비교수량</th><th>비교비중</th><th>증감</th>':'')+'</tr></thead><tbody>'+
+  $("t_catalog").innerHTML='<thead><tr><th>#</th><th class="tl">브랜드</th><th class="tl">대분류</th><th class="tl">카탈로그명</th><th>GMV</th><th>수량</th><th>비중</th>'+(cmp?'<th>비교GMV</th><th>비교수량</th><th>비교비중</th><th>증감</th>':'')+'</tr></thead><tbody>'+
     rows.map(function(r,i){var h='<tr><td>'+(i+1)+'</td><td class="name">'+esc(trim(r.brand||"",12))+'</td><td class="name">'+esc(r.cl||"")+'</td><td class="name">'+esc(trim(r.name,30))+'</td><td>'+won(r.gmv)+'</td><td>'+won(r.qty)+'</td><td>'+pct(tot?r.gmv/tot:0)+'</td>';
       if(cmp){var mo=cm[r.k];var mg=mo?mo.gmv:0,mq=mo?mo.qty:0;h+='<td>'+won(mg)+'</td><td>'+won(mq)+'</td><td>'+pct(totM?mg/totM:0)+'</td>'+dcell(r.gmv,mg);}return h+'</tr>';}).join("")+'</tbody>';
   var g=tc.catalog.slice().sort(byGmv).slice(0,20).map(function(r){return r.k;}),q=tc.catalog.slice().sort(byQty).slice(0,20).map(function(r){return r.k;});
   var common=g.filter(function(k){return q.indexOf(k)>=0;});var cmm=idx(tc.catalog);
-  $("ai_catalog").innerHTML='<b>AI</b> GMV·수량 <b>동시 상위</b> 카탈로그 '+common.length+'개'+(common.length?' (예: '+esc(common.slice(0,3).map(function(k){return trim(cmm[k].name,16);}).join(", "))+')':'')+' — 판매액·판매량이 함께 높은 핵심 상품군.';
+  $("ai_catalog").innerHTML='<b>AI</b> GMV·수량 <b>동시 상위</b> 카탈로그 '+common.length+'개 — 판매액·판매량이 함께 높은 핵심 상품군.';
 }
 function dimArr(tc){return DIM==="brand"?tc.brand:(DIM==="catg"?tc.catg:tc.daebun);}
 function renderProductDim(tc,tm){
@@ -552,7 +558,7 @@ function renderSeller(tc,tm){var total=sumG(tc.seller);stackedSeller("c_seller",
 function renderCRMAxis(cid,tid,aid,rows,mrows,label){
   var cmp=MODE==="cmp"&&mrows;var mm=cmp?idx(mrows):null;var top=rows.slice(0,12);
   grpBar(cid,top.map(function(s){return trim(s.k,12);}),top.map(function(s){return s.gmv;}),cmp?top.map(function(s){return mm[s.k]?mm[s.k].gmv:0;}):null,true);
-  $(tid).innerHTML='<thead><tr><th>'+label+'</th><th>구매자수</th><th>거래건수</th><th>거래단가</th><th>GMV</th><th>TOP상품</th>'+(cmp?'<th>비교GMV</th><th>증감</th>':'')+'</tr></thead><tbody>'+
+  $(tid).innerHTML='<thead><tr><th>'+label+'</th><th>구매자수</th><th>거래건수</th><th>거래단가</th><th>GMV</th><th class="tl">TOP상품</th>'+(cmp?'<th>비교GMV</th><th>증감</th>':'')+'</tr></thead><tbody>'+
     top.map(function(s){var mv=cmp&&mm[s.k]?mm[s.k].gmv:0;return '<tr><td>'+esc(s.k)+'</td><td>'+(s.hasBuyer?won(s.buyers):"–")+'</td><td>'+won(s.tx)+'</td><td>'+won(s.aov)+'</td><td>'+won(s.gmv)+'</td><td class="name">'+(s.top?esc(trim(s.top.k,16)):"–")+'</td>'+(cmp?'<td>'+won(mv)+'</td>'+dcell(s.gmv,mv):'')+'</tr>';}).join("")+'</tbody>';
   var t=rows[0];if(t)$(aid).innerHTML='<b>AI</b> 최대 = <b>'+esc(t.k)+'</b> (GMV '+won(t.gmv)+', 거래단가 '+won(t.aov)+(t.top?', 대표 '+esc(trim(t.top.k,14)):'')+')'+(cmp?' · 비교기간 대비 변화 확인':'')+'.';
 }
@@ -659,12 +665,17 @@ function renderOptin(){
   $("ai_optin").innerHTML='<b>AI</b> 가입 회원 동의율 — 마케팅 '+pct(tot?mk/tot:0)+' · 앱푸시 '+pct(tot?pu/tot:0)+' · 야간푸시 '+pct(tot?np/tot:0)+'. (전체 회원 상시 기준은 member_status_daily 읽기 RPC 추가 시 확장 가능)';
 }
 function fetchExtras(from,to){
+  OPTIN_M=null;OPTIN_LOGIN_M=null;
   $("ai_optin").textContent="회원 데이터 불러오는 중… (수 초)";
   window.MUSTIT.fn("member-list",{joinedFrom:from,joinedTo:to,withPurchases:false}).then(function(r){
     if(r&&r.error){OPTIN=null;$("ai_optin").innerHTML='<b style="color:#c8102e">옵트인 조회 오류:</b> '+esc(r.error);}else OPTIN=r||null;
     renderOptin();renderKpi3();
   }).catch(function(e){OPTIN=null;$("ai_optin").innerHTML='<b style="color:#c8102e">옵트인 조회 실패:</b> '+esc(e&&e.message||e);renderOptin();renderKpi3();});
   window.MUSTIT.fn("member-list",{lastLoginFrom:from,lastLoginTo:to,withPurchases:false}).then(function(r){OPTIN_LOGIN=(r&&!r.error)?r:null;renderKpi3();}).catch(function(){OPTIN_LOGIN=null;renderKpi3();});
+  if(MODE==="cmp"){var cf=$("cfrom").value,cto=$("cto").value;
+    window.MUSTIT.fn("member-list",{joinedFrom:cf,joinedTo:cto,withPurchases:false}).then(function(r){OPTIN_M=(r&&!r.error)?r:null;renderKpi3();}).catch(function(){OPTIN_M=null;renderKpi3();});
+    window.MUSTIT.fn("member-list",{lastLoginFrom:cf,lastLoginTo:cto,withPurchases:false}).then(function(r){OPTIN_LOGIN_M=(r&&!r.error)?r:null;renderKpi3();}).catch(function(){OPTIN_LOGIN_M=null;renderKpi3();});
+  }
 }
 
 /* ── URL 상태(공유 링크) ── */

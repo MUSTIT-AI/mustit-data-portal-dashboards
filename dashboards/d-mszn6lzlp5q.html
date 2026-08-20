@@ -286,11 +286,16 @@ function applyFilters(q, filters){
   return q;
 }
 function queryPage(from, toExcl, filters, productName, offset, limit){
+  // order_datetime(인덱스 有)은 항상 paid_at 이전이므로 넉넉한 버퍼로 같이 좁혀서
+  // paid_at만 필터할 때 발생하는 전체 스캔(8초 타임아웃, 57014)을 피한다.
+  var odFrom = addDays(from, -30);
   var q = window.MUSTIT.client.from("orders_secure")
     .select(SELECT_COLS)
     .not("cancel_done_at","is",null)
     .gte("paid_at", from)
     .lt("paid_at", toExcl)
+    .gte("order_datetime", odFrom)
+    .lt("order_datetime", toExcl)
     .order("paid_at", {ascending:false})
     .range(offset, offset+limit-1);
   q = applyFilters(q, filters);

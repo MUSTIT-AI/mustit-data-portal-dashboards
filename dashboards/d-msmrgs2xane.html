@@ -32,7 +32,9 @@
   .btn.go{background:var(--red);color:#fff}
   .btn.go:disabled{background:#e3a6b1;cursor:default}
   .btn.reset{background:#e9e7e1;color:#333}
-  .btns{display:flex;gap:6px}
+  .btn.ai{background:#111;color:#fff}
+  .btn.aihist{background:#555;color:#fff}
+  .btns{display:flex;gap:6px;flex-wrap:wrap}
   .note{color:var(--sub);font-size:11.5px;margin:8px 16px}
 
   /* 다중선택 드롭다운(브랜드/카테고리) */
@@ -124,11 +126,17 @@
   <div class="btns">
     <button class="btn go" id="go">조회</button>
     <button class="btn reset" id="reset">초기화</button>
+    <button class="btn ai" id="ai_analyze" title="현재 조회 결과를 AI로 분석">🔍 분석</button>
+    <button class="btn ai" id="ai_summary" title="현재 조회 결과를 AI로 요약">📝 요약</button>
+    <button class="btn ai" id="ai_anomaly" title="현재 조회 결과에서 AI로 이상 징후 탐지">⚠️ 이상탐지</button>
+    <button class="btn aihist" id="ai_hist" title="과거 AI 인사이트 이력">📜 이력</button>
   </div>
 </div>
 <p class="note">선택한 기간의 거래액(GMV) 기준 상품 Top 100이에요. 판매자를 가리지 않고 상품 단위로 합산해요. 브랜드·카테고리·연령대·성별·판매자ID로 필터링할 수 있어요. 카테고리는 대분류 → 중분류 → 소분류 순으로 좁혀지고, 상위를 고르면 하위 목록이 그에 맞게 줄어들어요(연령대·성별은 구매자 기준이며, 개인정보는 조회되지 않고 필터로만 쓰여요).<br>
 "이전기간 대비"는 선택한 기간과 동일한 길이의 바로 직전 기간과 비교한 순위 변동이에요.<br>
 ※ 표본이 아니라 <b>기간 내 전체 주문</b>을 DB에서 집계해요(`dash_product_rank`). 12개월 조회도 1초 내외예요. 조회 기간은 최대 <b id="maxdaystxt">366</b>일(약 12개월)이에요. 상품 이미지·재고·최대혜택가는 머스트잇 Open API로 실시간 조회해요(판매종료 등으로 없을 수 있어요).<br>
+조회수·장바구니·찜은 선택한 기간의 집계값이에요. 원천 데이터가 95일치만 보관되고 조회 기간이 90일을 넘으면 제공되지 않아 "-"로 표시돼요.<br>
+"(주문)"이 붙은 컬럼(카탈로그순위·머스트잇할인·판매자할인)은 <b>주문 시점 히스토리</b>(orders_v), "(실시간)"이 붙거나 안 붙은 가격·재고·순위류는 <b>지금 이 순간의 값</b>(Open API)이에요 — 같은 이름이라도 값이 다를 수 있어요.<br>
 <span id="statline"></span></p>
 <div class="err" id="err"></div>
 
@@ -137,14 +145,23 @@
     <table class="rank">
       <colgroup>
         <col style="width:44px"><col style="width:70px"><col style="width:56px"><col style="width:90px"><col style="width:300px">
-        <col style="width:120px"><col style="width:90px"><col style="width:100px"><col style="width:70px"><col style="width:100px"><col style="width:100px">
-        <col style="width:100px"><col style="width:100px"><col style="width:80px"><col style="width:100px"><col style="width:100px"><col style="width:90px"><col style="width:110px"><col style="width:90px">
+        <col style="width:120px"><col style="width:100px"><col style="width:100px"><col style="width:70px"><col style="width:70px">
+        <col style="width:100px"><col style="width:100px"><col style="width:100px">
+        <col style="width:100px"><col style="width:100px"><col style="width:100px"><col style="width:80px">
+        <col style="width:90px"><col style="width:100px"><col style="width:100px"><col style="width:100px"><col style="width:100px">
+        <col style="width:110px"><col style="width:110px"><col style="width:110px"><col style="width:110px">
+        <col style="width:90px"><col style="width:110px">
+        <col style="width:70px"><col style="width:70px"><col style="width:60px"><col style="width:90px">
       </colgroup>
       <thead><tr>
         <th>순위</th><th>이전기간<br>대비</th><th>이미지</th><th>상품번호</th><th class="l">상품명</th>
-        <th class="l">판매자</th><th>카탈로그<br>순위</th><th>카탈로그<br>상품수</th><th>재고</th><th>판매가</th><th>최대<br>혜택가</th>
-        <th>M<br>최저가</th><th>시장<br>최저가</th><th>차액율</th>
-        <th>머스트잇<br>할인</th><th>판매자<br>할인</th><th>판매수량</th><th>거래금액</th><th>최근 7일</th>
+        <th class="l">판매자</th><th>카탈로그<br>순위(주문)</th><th>카탈로그<br>상품수</th><th>재고</th><th>판매<br>상태</th>
+        <th>판매가</th><th>정가</th><th>판매가<br>(실시간)</th>
+        <th>최대<br>혜택가</th><th>M<br>최저가</th><th>시장<br>최저가</th><th>차액율</th>
+        <th>최대혜택가<br>순위</th><th>판매자<br>할인가</th><th>판매자할인가<br>순위</th><th>카탈로그<br>순위(실시간)</th><th>최저가<br>상품</th>
+        <th>머스트잇<br>할인(주문)</th><th>판매자<br>할인(주문)</th><th>머스트잇<br>할인(실시간)</th><th>판매자<br>할인(실시간)</th>
+        <th>판매수량</th><th>거래금액</th>
+        <th>조회수</th><th>장바구니</th><th>찜</th><th>최근 7일</th>
       </tr></thead>
       <tbody id="tbody"></tbody>
     </table>
@@ -159,6 +176,16 @@
       <button class="mclose" id="popclose">✕</button>
     </div>
     <div id="popbody"></div>
+  </div>
+</div>
+
+<div class="modal" id="aimodal">
+  <div class="modalbox" style="width:640px">
+    <div class="mhead">
+      <div><h2>🤖 AI 인사이트 <span style="font-size:11px;color:var(--sub);font-weight:400">gpt-5.5</span></h2></div>
+      <button class="mclose" id="aiclose">✕</button>
+    </div>
+    <div id="aibody" style="font-size:14px;line-height:1.75;color:var(--ink)"></div>
   </div>
 </div>
 
@@ -347,15 +374,28 @@ function renderTable(list){
       '<td>'+won(a.catalog_rank)+'</td>'+
       '<td>'+won(a.catalog_item_count)+'</td>'+
       '<td class="stock-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="pstat-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
       '<td>₩'+won(unit)+'</td>'+
+      '<td class="normal-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="sell-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
       '<td class="price-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
       '<td class="mlow-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
       '<td class="mktlow-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
       '<td class="gap-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="mbprank-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="sdprice-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="sdprank-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="catrank2-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="lowitem-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
       '<td>₩'+won(a.own_discount)+'</td>'+
       '<td>₩'+won(a.seller_discount)+'</td>'+
+      '<td class="mdisc-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="sdisc-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
       '<td class="qty">'+won(a.quantity)+'</td>'+
       '<td class="gmv">₩'+won(a.gmv)+'</td>'+
+      '<td class="view-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="cart-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="like-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
       '<td><button class="recent-btn" data-idx="'+i+'">추이</button></td>'+
     '</tr>';
   }).join("");
@@ -417,43 +457,90 @@ function loadPrices(list){
     paintPrices(list);
   });
 }
-// 최저가류는 0이 "정보 없음"을 뜻함(참고: ax_open_api/mustit-dashboard 관례) — "-"로 표시
+// 최저가·정가류는 0이 "정보 없음"을 뜻함(참고: ax_open_api/mustit-dashboard 관례) — "-"로 표시
 function priceOrDash(n){ return (n==null || n===0) ? "-" : ("₩"+won(n)); }
+// 할인액은 0이 "할인 없음"이라는 실제 값이라 위와 다르게 그대로 ₩0으로 보여준다.
+function amtOrDash(n){ return (n==null) ? "-" : ("₩"+won(n)); }
+function rankOrDash(n){ return (n==null) ? "-" : won(n); }
+var PRODUCT_STATUS_LABEL = { IN_STOCK:"판매중", OUT_OF_STOCK:"품절", SUSPENDED:"판매중단" };
 function paintPrices(list){
   list.forEach(function(a){
     var v = PRICE_CACHE[a.product_id];
-    var priceEl = document.querySelector('.price-ph[data-pid="'+CSS.escape(String(a.product_id))+'"]');
-    if(priceEl){
-      priceEl.textContent = (v && v.maxBenefitPrice!=null) ? ("₩"+won(v.maxBenefitPrice)) : "-";
-      priceEl.classList.remove("price-ph");
+    var pid = CSS.escape(String(a.product_id));
+    function set(cls, html){
+      var el = document.querySelector('.'+cls+'[data-pid="'+pid+'"]');
+      if(!el) return;
+      el.innerHTML = html;
+      el.classList.remove(cls);
     }
-    var stockEl = document.querySelector('.stock-ph[data-pid="'+CSS.escape(String(a.product_id))+'"]');
-    if(stockEl){
-      stockEl.textContent = (v && v.stock!=null) ? won(v.stock) : "-";
-      stockEl.classList.remove("stock-ph");
-    }
-    var mlowEl = document.querySelector('.mlow-ph[data-pid="'+CSS.escape(String(a.product_id))+'"]');
-    if(mlowEl){
-      mlowEl.textContent = v ? priceOrDash(v.mustitLowestPrice) : "-";
-      mlowEl.classList.remove("mlow-ph");
-    }
-    var mktlowEl = document.querySelector('.mktlow-ph[data-pid="'+CSS.escape(String(a.product_id))+'"]');
-    if(mktlowEl){
-      mktlowEl.textContent = v ? priceOrDash(v.marketLowestPrice) : "-";
-      mktlowEl.classList.remove("mktlow-ph");
-    }
+    set("price-ph", (v && v.maxBenefitPrice!=null) ? ("₩"+won(v.maxBenefitPrice)) : "-");
+    set("stock-ph", (v && v.stock!=null) ? won(v.stock) : "-");
+    set("pstat-ph", (v && v.productStats && PRODUCT_STATUS_LABEL[v.productStats]) || "-");
+    set("mlow-ph", v ? priceOrDash(v.mustitLowestPrice) : "-");
+    set("mktlow-ph", v ? priceOrDash(v.marketLowestPrice) : "-");
+    set("normal-ph", v ? priceOrDash(v.normalPrice) : "-");
+    set("sell-ph", v ? priceOrDash(v.sellingPrice) : "-");
+    set("sdprice-ph", v ? priceOrDash(v.sellerDiscountPrice) : "-");
+    set("mbprank-ph", v ? rankOrDash(v.maxBenefitPriceRanking) : "-");
+    set("sdprank-ph", v ? rankOrDash(v.sellerDiscountPriceRanking) : "-");
+    set("catrank2-ph", v ? rankOrDash(v.catalogRanking) : "-");
+    set("mdisc-ph", v ? amtOrDash(v.mustitDiscountAmount) : "-");
+    set("sdisc-ph", v ? amtOrDash(v.sellerDiscountAmount) : "-");
+    set("lowitem-ph", (v && v.lowestPriceItemNo!=null)
+      ? ('<a class="plain" href="'+detailUrl(v.lowestPriceItemNo)+'" target="_blank" rel="noopener">'+esc(v.lowestPriceItemNo)+'</a>')
+      : "-");
     // 차액율 = (최대혜택가 − 시장최저가) / 시장최저가 × 100, 양수 빨강(비쌈) / 음수 파랑(더 저렴)
-    var gapEl = document.querySelector('.gap-ph[data-pid="'+CSS.escape(String(a.product_id))+'"]');
-    if(gapEl){
-      gapEl.classList.remove("gap-ph");
-      var mbp = v && v.maxBenefitPrice, mkt = v && v.marketLowestPrice;
-      if(mbp!=null && mkt){
-        var pct = ((mbp-mkt)/mkt*100);
-        gapEl.innerHTML = '<span class="'+(pct>0?"rank-up":pct<0?"rank-down":"rank-flat")+'">'+(pct>0?"+":"")+pct.toFixed(1)+"%</span>";
-      } else {
-        gapEl.textContent = "-";
-      }
+    var mbp = v && v.maxBenefitPrice, mkt = v && v.marketLowestPrice;
+    if(mbp!=null && mkt){
+      var pct = ((mbp-mkt)/mkt*100);
+      set("gap-ph", '<span class="'+(pct>0?"rank-up":pct<0?"rank-down":"rank-flat")+'">'+(pct>0?"+":"")+pct.toFixed(1)+"%</span>");
+    } else {
+      set("gap-ph", "-");
     }
+  });
+}
+
+// ── 조회수·장바구니·찜 (Open API products/stats, Edge Function 프록시) ──
+// 이미지·가격과 달리 "선택한 기간"의 집계값이라 기간이 바뀌면 캐시를 버려야 한다.
+// 원천 테이블 보관기간(95일)·대시보드 조회기간 상한(90일) 중 하나라도 벗어나면
+// 호출 자체를 생략하고 "-"로 표시한다(랭킹 조회는 이 값과 무관하게 항상 성공해야 함).
+function daysAgo(dateStr){ return daysBetweenInclusive(dateStr, ymd(new Date())) - 1; }
+function statsAllowed(from, to){
+  return daysBetweenInclusive(from, to) <= 90 && daysAgo(from) <= 95;
+}
+var STATS_CACHE = {};   // pid -> {viewCount,cartCount,likeCount} | null
+var STATS_PERIOD = null; // "from|to" — 바뀌면 캐시를 비운다(집계값은 기간에 종속적)
+function loadStats(list, from, to){
+  if(!statsAllowed(from, to)){ paintStats(list, null); return; }
+  var period = from+"|"+to;
+  if(period !== STATS_PERIOD){ STATS_CACHE = {}; STATS_PERIOD = period; }
+  var need = [];
+  list.forEach(function(a){ if(!(a.product_id in STATS_CACHE)) need.push(a.product_id); });
+  if(!need.length){ paintStats(list, STATS_CACHE); return; }
+  var chunks = [];
+  for(var i=0;i<need.length;i+=500) chunks.push(need.slice(i,i+500));
+  Promise.all(chunks.map(function(c){
+    return window.MUSTIT.fn("product-stats", {itemNos:c.join(","), statsFrom:from, statsTo:to}).catch(function(e){
+      console.error("[조회수·장바구니·찜] product-stats 함수 호출 실패:", e);
+      return {};
+    });
+  })).then(function(results){
+    results.forEach(function(m){ Object.keys(m||{}).forEach(function(k){ STATS_CACHE[k] = m[k]; }); });
+    need.forEach(function(pid){ if(!(pid in STATS_CACHE)) STATS_CACHE[pid]=null; });
+    paintStats(list, STATS_CACHE);
+  });
+}
+// cache===null 이면 조건 미충족으로 아예 호출하지 않은 경우 — 전부 "-"
+function paintStats(list, cache){
+  list.forEach(function(a){
+    var v = cache ? cache[a.product_id] : null;
+    [["view-ph","viewCount"],["cart-ph","cartCount"],["like-ph","likeCount"]].forEach(function(pair){
+      var el = document.querySelector('.'+pair[0]+'[data-pid="'+CSS.escape(String(a.product_id))+'"]');
+      if(!el) return;
+      var n = v && v[pair[1]];
+      el.textContent = (n==null) ? "-" : won(n);
+      el.classList.remove(pair[0]);
+    });
   });
 }
 
@@ -530,6 +617,7 @@ function loadRanking(){
         renderTable(cur);
         loadImages(cur);
         loadPrices(cur);
+        loadStats(cur, from, to);
 
         var sec = ((new Date().getTime()-t0)/1000).toFixed(1);
         var msg = "상위 "+won(cur.length)+"개 · 서버 집계 "+sec+"초";
@@ -742,7 +830,85 @@ $("tbody").addEventListener("click", function(e){
 });
 $("popclose").onclick = closePopup;
 $("popmodal").addEventListener("click", function(e){ if(e.target===$("popmodal")) closePopup(); });
-document.addEventListener("keydown", function(e){ if(e.key==="Escape" && $("popmodal").classList.contains("open")) closePopup(); });
+document.addEventListener("keydown", function(e){
+  if(e.key!=="Escape") return;
+  if($("popmodal").classList.contains("open")) closePopup();
+  if($("aimodal").classList.contains("open")) closeAi();
+});
+
+// ── AI 인사이트(분석/요약/이상탐지) — ai-insight Edge Function 재사용(gpt-5.5) ──
+// openapi-live-orders.html 이 이미 쓰고 있는 것과 같은 함수·이력 저장 방식을 그대로 쓴다.
+function mdLite(s){ return esc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/^\s*[-*] /gm,'• ').replace(/\n/g,'<br>'); }
+function showAi(html){ $("aibody").innerHTML=html; $("aimodal").classList.add("open"); }
+function closeAi(){ $("aimodal").classList.remove("open"); }
+$("aiclose").onclick = closeAi;
+$("aimodal").addEventListener("click", function(e){ if(e.target===$("aimodal")) closeAi(); });
+
+// 표에 보이는 컬럼을 그대로 AI에 넘긴다 — 이미지/가격/조회수 캐시는 비동기라
+// 조회 직후 바로 누르면 일부가 비어 있을 수 있다(그 값은 null로 간다).
+function aiData(){
+  var rows = LAST_LIST.map(function(a){
+    var pv = PRICE_CACHE[a.product_id] || {};
+    var st = STATS_CACHE[a.product_id] || {};
+    return {
+      순위:a.rank, 이전기간대비:a.rank_change, 상품번호:a.product_id, 상품명:a.product_name,
+      브랜드:a.brand, 카테고리:renderCategory(a), 판매자:a.seller_id,
+      카탈로그순위:a.catalog_rank, 카탈로그상품수:a.catalog_item_count,
+      재고:pv.stock!=null?pv.stock:null, 최대혜택가:pv.maxBenefitPrice, M최저가:pv.mustitLowestPrice, 시장최저가:pv.marketLowestPrice,
+      머스트잇할인:a.own_discount, 판매자할인:a.seller_discount,
+      판매수량:a.quantity, 거래금액:a.gmv,
+      조회수:st.viewCount, 장바구니:st.cartCount, 찜:st.likeCount
+    };
+  });
+  return { 조회기간:$("from").value+"~"+$("to").value, 필터:currentFilters(), 표시상품수:rows.length, 상품목록:rows };
+}
+function aiRun(btnId, question, label){
+  if(!LAST_LIST.length){ alert("먼저 [조회]로 데이터를 불러오세요."); return; }
+  var btn=$(btnId), ot=btn.textContent; btn.disabled=true; btn.textContent=label+" 중…";
+  showAi('<div style="color:var(--sub)">gpt-5.5로 '+label+' 중입니다… (약 15초)</div>');
+  var from=$("from").value, to=$("to").value;
+  window.MUSTIT.fn("ai-insight", {
+    context:"머스트잇 상품 랭킹 대시보드(기간 내 거래액 기준 상품 Top "+LAST_LIST.length+", 판매자 무관 상품단위 합산). 조회기간 "+from+"~"+to,
+    data:aiData(),
+    question:question,
+    dashboard:"d-msmrgs2xane",
+    params:{조회기간:from+"~"+to, filters:currentFilters()}
+  }).then(function(r){
+    if(r.error) throw new Error(r.error);
+    var sh = r.id ? (' · <a href="../ai-history.html?id='+r.id+'" target="_blank" style="color:var(--red);text-decoration:none">🔗 공유 링크</a>') : "";
+    showAi(mdLite(r.insight||"(빈 응답)")+'<div style="margin-top:14px;font-size:11px;color:var(--sub)">모델 '+esc(r.model||"")+' · '+Math.round((r.ms||0)/1000)+'초 · '+(r.saved?"이력 저장됨":"저장 안됨")+sh+'</div>');
+  }).catch(function(e){ showAi('<div style="color:#c0392b">오류: '+esc(e.message)+'</div>'); })
+    .finally(function(){ btn.disabled=false; btn.textContent=ot; });
+}
+function fmtAiParams(p){
+  if(!p) return "";
+  var a=[];
+  if(p.조회기간) a.push("조회 "+p.조회기간);
+  var f=p.filters||{};
+  Object.keys(f).forEach(function(k){ var v=f[k]; if(v && v.length) a.push(k+":"+(Array.isArray(v)?v.join(","):v)); });
+  return a.join(" · ");
+}
+function aiHistory(){
+  showAi('<div style="color:var(--sub)">이력 불러오는 중…</div>');
+  window.MUSTIT.fn("ai-insight",{history:true,dashboard:"d-msmrgs2xane",limit:20}).then(function(r){
+    var list=r.history||[];
+    var top='<div style="font-size:12px;margin-bottom:10px"><a href="../ai-history.html" target="_blank" style="color:var(--red);font-weight:700;text-decoration:none">🔗 전체 이력·공유 링크 페이지 →</a></div>';
+    if(!list.length){ showAi(top+'<div style="color:var(--sub)">저장된 인사이트가 없습니다. 위 버튼([분석]/[요약]/[이상탐지])으로 먼저 생성하세요.</div>'); return; }
+    var html=list.map(function(x){
+      var dt=(x.created_at||"").replace("T"," ").slice(0,16);
+      return '<details style="border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px">'+
+        '<summary style="cursor:pointer;font-size:13px"><b>'+dt+'</b> · '+esc(x.author||"-")+'</summary>'+
+        '<div style="font-size:11.5px;color:var(--sub);margin:6px 0">'+esc(fmtAiParams(x.params))+'</div>'+
+        '<div style="margin-top:4px;font-size:13.5px;line-height:1.7">'+mdLite(x.insight||"")+'</div>'+
+        '<div style="margin-top:6px;font-size:11px;color:var(--sub)">모델 '+esc(x.model||"")+' · id '+x.id+'</div></details>';
+    }).join("");
+    showAi(top+'<div style="font-size:13px;color:var(--sub);margin-bottom:8px">최근 인사이트 '+list.length+'건</div>'+html);
+  }).catch(function(e){ showAi('<div style="color:#c0392b">오류: '+esc(e.message)+'</div>'); });
+}
+$("ai_analyze").onclick = function(){ aiRun("ai_analyze","이 상품 랭킹 데이터를 분석해서 핵심 특징(브랜드·카테고리 쏠림, 가격대 분포, 판매자 집중도, 재고 상황 등)과 시사점을 정리해줘.","분석"); };
+$("ai_summary").onclick  = function(){ aiRun("ai_summary","이 상품 랭킹 데이터를 한눈에 파악할 수 있게 핵심 숫자 위주로 간단히 요약해줘(불릿 5개 이내).","요약"); };
+$("ai_anomaly").onclick  = function(){ aiRun("ai_anomaly","이 데이터에서 이상 징후(순위 급변, 재고 소진 임박, 시장최저가 대비 비정상적인 가격차, 특정 판매자·브랜드 편중 등)를 찾아 근거와 함께 알려줘. 특별한 이상이 없으면 없다고 말해줘.","이상탐지"); };
+$("ai_hist").onclick = aiHistory;
 
 // ── 상단바 / 접근권한 ──
 var ACCESS=null;

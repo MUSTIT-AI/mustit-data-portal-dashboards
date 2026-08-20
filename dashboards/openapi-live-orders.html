@@ -82,7 +82,18 @@
   </div>
   <div class="fltrs" id="filters"></div>
   <button class="gobtn" id="go">조회</button>
+  <button class="gobtn" id="ai" style="background:#111;color:#fff" title="현재 화면 데이터로 AI 인사이트">🤖 AI 인사이트</button>
+  <button class="gobtn" id="aihist" style="background:#555;color:#fff" title="과거 AI 인사이트 이력">📜 이력</button>
   <div class="proj"><div class="l" id="proj_l">예상 마감 거래액</div><div class="v" id="proj_v">–</div><div id="proj_f" style="font-size:10px;color:#a7a49c;margin-top:2px"></div></div>
+</div>
+<div id="ai-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;padding:40px 16px;overflow:auto" onclick="if(event.target===this)this.style.display='none'">
+  <div style="max-width:760px;margin:0 auto;background:#fff;border-radius:14px;padding:22px 26px;box-shadow:0 12px 48px rgba(0,0,0,.25)">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <b style="font-size:16px">🤖 AI 인사이트 <span style="font-size:11px;color:#a7a49c;font-weight:400">gpt-5.5</span></b>
+      <button onclick="document.getElementById('ai-modal').style.display='none'" style="border:0;background:none;font-size:20px;cursor:pointer;color:#999">✕</button>
+    </div>
+    <div id="ai-body" style="font-size:14px;line-height:1.75;color:#1c1b19"></div>
+  </div>
 </div>
 <div class="wrap">
   <div id="cmpfull" style="font-size:12px;color:#6b6a66;margin:0 0 8px"></div>
@@ -143,11 +154,13 @@
     [].forEach.call(document.querySelectorAll('input[name=cmp]'),function(r){r.onchange=function(){applyNday(Number(r.value));};});
     $("swap").onclick=function(){var a=$("date_from").value,b=$("date_to").value; $("date_from").value=$("cmp_from").value; $("date_to").value=$("cmp_to").value; $("cmp_from").value=a; $("cmp_to").value=b; clearN();};
     $("go").onclick=function(){ refresh(); };
+    $("ai").onclick=aiInsight;
+    $("aihist").onclick=aiHistory;
   }
   var PAYLBL={CARD:"카드",EXTERNAL:"외부결제",NAVER_PAY:"네이버페이",KAKAO_PAY:"카카오페이",TOSS_PAY:"토스",SAMSUNG_PAY:"삼성페이",EASY_BANK:"간편계좌",VBANK:"무통장",PAYCO:"페이코"};
   var TXNLBL={NEW:"신규구매",FIRST:"첫구매",NEW_PURCHASE:"신규구매",REPURCHASE:"재구매"};
   var SHIPLBL={DOMESTIC:"국내배송",OVERSEAS:"해외배송",OVERSEAS_DIRECT:"해외직배송",SURPRISE:"깜짝배송"};
-  var BIZLBL={normal:"일반",DIRECT:"직매입",direct:"직매입"};
+  var BIZLBL={normal:"일반",DIRECT:"직매입",direct:"직매입",OUTLET:"아울렛"};
   function lbl(map,k){return (map[k]||k);}
   // ── 필터 (복수 선택 · 체크박스 드롭다운) ──
   var FDEF=[{k:"paymentMethod",l:"결제수단",m:PAYLBL},{k:"shippingType",l:"배송유형",m:SHIPLBL},{k:"transactionType",l:"신규/재구매",m:TXNLBL},{k:"businessType",l:"유형",m:BIZLBL}];
@@ -248,6 +261,7 @@
     loadAmpAU();  // 앰플리튜드 AU도 상단 조회기간을 따라 갱신
     window.MUSTIT.fn("openapi-orders",{curFrom:$("date_from").value,curTo:$("date_to").value,cmpFrom:$("cmp_from").value,cmpTo:$("cmp_to").value,filters:getFilters()}).then(function(d){
       if(!d.ok) throw new Error(d.error||'실패');
+      LAST=d;
       if(d.options) buildFilters(d.options);
       renderKPI(d);
       $("proj_v").textContent=won(d.projected)+' 원';
@@ -269,19 +283,57 @@
     }).catch(function(e){ $("kpis").innerHTML='<div class="kpi"><div class="l">오류</div><div class="v" style="font-size:12px;color:#e8384f">'+esc(e.message)+'</div></div>'; })
       .finally(function(){ $("loading").classList.remove("on"); });
   }
-  // ───────────── 앰플리튜드 AU (방문자) · 상단 조회/비교기간 참조 ─────────────
-  // 조회·비교기간의 기간 전체 순유저(uniques)를 그룹막대(조회=빨강 · 비교=파랑)로 비교
-  function toRange(f,t){
-    var span=Math.round((new Date(t+"T00:00:00Z")-new Date(f+"T00:00:00Z"))/86400000)+1;
-    return {s:f.replace(/-/g,''), e:t.replace(/-/g,''), i:(span>=28?7:1)};
+
+  // ───────────── AI 인사이트 (ai-insight Edge Function · gpt-5.5) ─────────────
+  var LAST=null;
+  function aiData(d){
+    var pick=function(o){return o?{gmv:o.gmv,cnt:o.cnt,aov:o.aov,payment:o.payment,shipping:o.shipping,txn:o.txn,business:o.business,coupons:o.coupons}:null;};
+    return { 조회기간:$("date_from").value+'~'+$("date_to").value, 비교기간:$("cmp_from").value+'~'+$("cmp_to").value,
+      예상마감거래액:d.projected, 비교기간전체거래액:d.cmpFullGmv,
+      조회:pick(d.cur), 비교:pick(d.cmp),
+      브랜드Top:(d.brandTop||[]).slice(0,10), 판매자Top:(d.cur&&d.cur.sellerTop||[]).slice(0,10), 상품Top:(d.cur&&d.cur.itemTop||[]).slice(0,10) };
   }
-  function ampRange(){ return toRange($("date_from").value,$("date_to").value); }
-  function cmpRange(){ return toRange($("cmp_from").value,$("cmp_to").value); }
-  var CF=[{subprop_type:"user",subprop_key:"country",subprop_op:"is",subprop_value:["South Korea"]}];
-  function ev(t){return {event_type:t,filters:CF};}
+  function mdLite(s){ return esc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/^\s*[-*] /gm,'• ').replace(/\n/g,'<br>'); }
+  function showAi(html){ $("ai-body").innerHTML=html; $("ai-modal").style.display='block'; }
+  function aiInsight(){
+    if(!LAST){ alert('먼저 [조회]로 데이터를 불러오세요.'); return; }
+    var btn=$("ai"), ot=btn.textContent; btn.disabled=true; btn.textContent='분석 중…';
+    showAi('<div style="color:#6b6a66">gpt-5.5로 분석 중입니다… (약 15초)</div>');
+    window.MUSTIT.fn('ai-insight',{
+      context:'머스트잇 실시간 주문 현황 대시보드(거래액=GMV). 조회기간 '+$("date_from").value+'~'+$("date_to").value+' vs 비교기간 '+$("cmp_from").value+'~'+$("cmp_to").value,
+      data:aiData(LAST),
+      question:'조회 vs 비교기간 핵심 변화, 이상징후, 실행 제안을 뽑아줘.',
+      dashboard:'openapi-live-orders',
+      params:{조회:$("date_from").value+'~'+$("date_to").value, 비교:$("cmp_from").value+'~'+$("cmp_to").value, filters:getFilters()}
+    }).then(function(r){ if(r.error) throw new Error(r.error);
+      var sh=r.id?(' · <a href="../ai-history.html?id='+r.id+'" target="_blank" style="color:#c8102e;text-decoration:none">🔗 공유 링크</a>'):'';
+      showAi(mdLite(r.insight||'(빈 응답)')+'<div style="margin-top:14px;font-size:11px;color:#a7a49c">모델 '+esc(r.model||'')+' · '+Math.round((r.ms||0)/1000)+'초 · '+(r.saved?'이력 저장됨':'저장 안됨')+sh+'</div>'); })
+     .catch(function(e){ showAi('<div style="color:#e8384f">오류: '+esc(e.message)+'</div>'); })
+     .finally(function(){ btn.disabled=false; btn.textContent=ot; });
+  }
+  var FLBL={paymentMethod:'결제수단',shippingType:'배송',transactionType:'거래구분',businessType:'비즈니스'};
+  function fmtP(p){ if(!p)return ''; var a=[]; if(p['조회'])a.push('조회 '+p['조회']); if(p['비교'])a.push('비교 '+p['비교']); var f=p.filters||{}; Object.keys(f).forEach(function(k){var v=f[k]; if(v&&v.length)a.push((FLBL[k]||k)+':'+v.join(','));}); return a.join(' · '); }
+  function aiHistory(){
+    showAi('<div style="color:#6b6a66">이력 불러오는 중…</div>');
+    window.MUSTIT.fn('ai-insight',{history:true,dashboard:'openapi-live-orders',limit:20}).then(function(r){
+      var list=r.history||[];
+      var top='<div style="font-size:12px;margin-bottom:10px"><a href="../ai-history.html" target="_blank" style="color:#c8102e;font-weight:700;text-decoration:none">🔗 전체 이력·공유 링크 페이지 →</a></div>';
+      if(!list.length){ showAi(top+'<div style="color:#6b6a66">저장된 인사이트가 없습니다. [🤖 AI 인사이트]로 먼저 생성하세요.</div>'); return; }
+      var html=list.map(function(x){
+        var dt=(x.created_at||'').replace('T',' ').slice(0,16);
+        return '<details style="border:1px solid #eee;border-radius:8px;padding:10px 12px;margin-bottom:8px">'+
+          '<summary style="cursor:pointer;font-size:13px"><b>'+dt+'</b> · '+esc(x.author||'-')+'</summary>'+
+          '<div style="font-size:11.5px;color:#8a8780;margin:6px 0">'+esc(fmtP(x.params))+'</div>'+
+          '<div style="margin-top:4px;font-size:13.5px;line-height:1.7">'+mdLite(x.insight||'')+'</div>'+
+          '<div style="margin-top:6px;font-size:11px;color:#a7a49c">모델 '+esc(x.model||'')+' · id '+x.id+'</div></details>';
+      }).join('');
+      showAi(top+'<div style="font-size:13px;color:#6b6a66;margin-bottom:8px">최근 인사이트 '+list.length+'건</div>'+html);
+    }).catch(function(e){ showAi('<div style="color:#e8384f">오류: '+esc(e.message)+'</div>'); });
+  }
+  // ───────────── 앰플리튜드 AU (방문자) · 상단 조회/비교기간 참조 ─────────────
+  // 조회·비교 실적을 그룹막대(조회=빨강 · 비교=파랑)로 비교. 앰플리튜드 호출은 서버(amp-au)가 병렬 처리.
   var CRAWLER=[{prop:"os",op:"does not contain",values:["yeti","bot","headless","bingbot","bingbot2","crawler"]}];
-  function amp(endpoint,params){ return window.MUSTIT.fn("amplitude-proxy",{endpoint:endpoint,params:params}).then(function(r){ return r.data; }); }
-  // 세그먼트 정의 — 성별 / 디바이스·플랫폼 / 로그인여부 로 분리
+  // 세그먼트 정의(라벨용) — 성별 / 디바이스·플랫폼 / 로그인여부 로 분리
   var _MOWEB={prop:"device",op:"contains",values:["Android","iOS","Apple iPhone","Samsung Phone"]};
   var GENDER_SEG=[
     {n:"전체",c:CRAWLER},
@@ -304,57 +356,22 @@
   var NAV_EV=[["view_exhibition_home","기획전 홈"],["view_exhibition_detail","기획전 상세"],["view_category_home","카테고리 홈"],["view_category_detail","카테고리 상세"],["view_brand_home","브랜드 홈"],["view_brand_detail","브랜드 상세"],["view_ranking_tab","랭킹"]];
   var PROD_EV=[["view_product_detail","상품상세(PDP)"],["view_search_result","검색결과"],["click_product_in_search_result","검색→상품클릭"],["click_product_in_category_detail","카테고리→상품클릭"],["click_product_in_brand_detail","브랜드→상품클릭"]];
   function auErr(ids,e){ (Array.isArray(ids)?ids:[ids]).forEach(function(id){ if($(id)) $(id).innerHTML='<p style="color:#e8384f;font-size:12px">로드 실패: '+esc(e.message||e)+'</p>'; }); }
-  // 기간 전체 순유저 합계: seriesCollapsed 우선, 없으면 series 합산(폴백)
-  function collapsedAll(d,total){
-    var sc=d&&d.data&&d.data.seriesCollapsed, out=[];
-    for(var i=0;i<total;i++){
-      if(sc&&sc[i]&&sc[i][0]&&sc[i][0].value!=null) out.push(sc[i][0].value);
-      else { var s=((d.data||{}).series||[])[i]||[]; out.push(s.reduce(function(a,b){return a+(b||0);},0)); }
-    }
-    return out;
-  }
-  function gap(){ return new Promise(function(r){ setTimeout(r,150); }); }
-  // 세그먼트 통합(1 이벤트 × N 세그먼트 = N 시리즈) — 세그먼트는 원본 AU에서 10개 통합 검증됨
-  function segCall(event,segs,R){ return amp("events/segmentation",{e:[JSON.stringify(ev(event))],m:"uniques",i:R.i,start:R.s,end:R.e,s:segs.map(function(g){return JSON.stringify(g.c);})}); }
-  var ALLSEG=GENDER_SEG.concat(DEVICE_SEG).concat(LOGIN_SEG);   // 3+6+2=11 → 1쌍 호출로 3개 세그먼트 차트
-  function drawSeg(cur,cmp){
-    function nm(a){return a.map(function(x){return x.n;});}
-    vbar("c_au_gender",nm(GENDER_SEG),cur.slice(0,3),cmp.slice(0,3),true);
-    vbar("c_au_device",nm(DEVICE_SEG),cur.slice(3,9),cmp.slice(3,9),true);
-    vbar("c_au_login", nm(LOGIN_SEG), cur.slice(9,11),cmp.slice(9,11),true);
-  }
-  // ── 이벤트: 공개 segmentation은 1콜=1이벤트만 처리 → 이벤트별 1콜.
-  //    totals(합산 가능)로 합집합 기간을 한 번 조회해 조회·비교 기간을 각각 합산(콜 수 최소화).
-  function ymd(s){return s.replace(/-/g,'');}
-  function evTotalsCall(eventType,us,ue){ return amp("events/segmentation",{e:JSON.stringify(ev(eventType)),m:"totals",i:1,start:us,end:ue,s:JSON.stringify(CRAWLER)}); }
-  function sumRange(d,from,to){
-    var xs=(d.data&&d.data.xValues)||[], ser=((d.data&&d.data.series)||[])[0]||[], s=0;
-    for(var i=0;i<xs.length;i++){ var day=String(xs[i]).slice(0,10); if(day>=from&&day<=to) s+=(ser[i]||0); }
-    return s;
-  }
-  function loadEvChart(id,evs,cF,cT,mF,mT){
-    var us=ymd(cF<mF?cF:mF), ue=ymd(cT>mT?cT:mT);   // 합집합 기간
-    var cur=[], cmp=[], labels=evs.map(function(x){return x[1];});
-    var chain=Promise.resolve();
-    evs.forEach(function(x,idx){
-      chain=chain.then(function(){ return idx?gap():null; }).then(function(){ return evTotalsCall(x[0],us,ue); })
-        .then(function(d){ cur[idx]=sumRange(d,cF,cT); cmp[idx]=sumRange(d,mF,mT); });
-    });
-    return chain.then(function(){ vbar(id,labels,cur,cmp,true); }).catch(function(e){ auErr(id,e); });
-  }
-  // 세그먼트 2콜(순유저) + 이벤트 19콜(발생수, 이벤트당 1콜) · 150ms 간격 · '조회' 시에만
+  // 앰플리튜드 AU: 서버(amp-au)가 모든 호출을 병렬 처리 → 브라우저는 1콜만(빠름)
+  function nm(a){return a.map(function(x){return x.n;});}
+  function el(a){return a.map(function(x){return x[1];});}
   function loadAmpAU(){
     var f=$("date_from").value,t=$("date_to").value, cf=$("cmp_from").value,ct=$("cmp_to").value;
     var r=$("au_range"); if(r) r.textContent=(f===t?f:(f+"~"+t))+' vs 비교 '+(cf===ct?cf:(cf+"~"+ct));
-    var C=ampRange(), M=cmpRange();
-    return segCall("_active",ALLSEG,C).then(function(dc){
-        return gap().then(function(){return segCall("_active",ALLSEG,M);}).then(function(dm){
-          drawSeg(collapsedAll(dc,ALLSEG.length),collapsedAll(dm,ALLSEG.length));
-        });
-      }).catch(function(e){ auErr(["c_au_gender","c_au_device","c_au_login"],e); })
-      .then(gap).then(function(){ return loadEvChart("c_au_id",ID_EV,f,t,cf,ct); })
-      .then(gap).then(function(){ return loadEvChart("c_au_nav",NAV_EV,f,t,cf,ct); })
-      .then(gap).then(function(){ return loadEvChart("c_au_prod",PROD_EV,f,t,cf,ct); });
+    var ids=["c_au_gender","c_au_device","c_au_login","c_au_id","c_au_nav","c_au_prod"];
+    return window.MUSTIT.fn("amp-au",{curFrom:f,curTo:t,cmpFrom:cf,cmpTo:ct}).then(function(d){
+      if(!d||!d.ok) throw new Error((d&&d.error)||'실패');
+      vbar("c_au_gender",nm(GENDER_SEG),d.gender.cur,d.gender.cmp,true);
+      vbar("c_au_device",nm(DEVICE_SEG),d.device.cur,d.device.cmp,true);
+      vbar("c_au_login", nm(LOGIN_SEG), d.login.cur, d.login.cmp, true);
+      vbar("c_au_id",  el(ID_EV),  d.id.cur,  d.id.cmp,  true);
+      vbar("c_au_nav", el(NAV_EV), d.nav.cur, d.nav.cmp, true);
+      vbar("c_au_prod",el(PROD_EV),d.prod.cur,d.prod.cmp,true);
+    }).catch(function(e){ auErr(ids,e); });
   }
 
   function setupTopbar(){

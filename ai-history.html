@@ -1,0 +1,87 @@
+<!doctype html><html lang="ko"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>AI 인사이트 이력 · MUST IT</title>
+<link rel="icon" type="image/svg+xml" href="favicon.svg">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="auth.js"></script>
+<style>
+:root{--red:#c8102e}*{box-sizing:border-box}
+body{margin:0;background:#f4f4f5;color:#1c1b19;font-family:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",system-ui,sans-serif;line-height:1.6}
+.wrap{max-width:920px;margin:0 auto;padding:26px 20px 80px}
+a.back{color:#6b6a66;text-decoration:none;font-size:13px}a.back:hover{color:var(--red)}
+h1{font-size:22px;margin:8px 0 4px}.sub{color:#6b6a66;font-size:13px;margin:0 0 18px}
+.bar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:16px}
+select,input{padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:13px;font-family:inherit;background:#fff}
+.ins{background:#fff;border:1px solid #e2e0da;border-radius:12px;padding:14px 16px;margin-bottom:12px}
+.meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:#6b6a66}
+.meta b{color:#1c1b19;font-size:13px}
+.dash{background:#f0eeea;border-radius:6px;padding:1px 7px;font-size:11.5px;color:#555}
+.copy{margin-left:auto;border:1px solid #ddd;background:#fff;border-radius:8px;padding:3px 10px;font-size:11.5px;cursor:pointer;color:#555}
+.copy:hover{border-color:var(--red);color:var(--red)}
+.cond{font-size:12px;color:#8a8780;margin:6px 0 2px}
+details{margin-top:8px}summary{cursor:pointer;font-size:13.5px;font-weight:600;color:#1c1b19}
+.body{margin-top:10px;font-size:13.5px;line-height:1.75;border-top:1px solid #f0eeea;padding-top:10px}
+.muted{color:#a7a49c;font-size:11px;margin-top:8px}
+.empty{color:#6b6a66;background:#fff;border-radius:12px;padding:40px;text-align:center}
+</style></head><body>
+<div class="wrap">
+  <a class="back" href="index.html">← 대시보드 홈</a>
+  <h1>🤖 AI 인사이트 이력</h1>
+  <p class="sub">저장된 모든 AI 인사이트 · 대시보드별 조회조건·필터와 함께 · 링크로 공유 가능(로그인 필요)</p>
+  <div class="bar">
+    <select id="fdash"><option value="">전체 대시보드</option></select>
+    <input id="q" placeholder="🔎 내용·작성자 검색" style="flex:1;min-width:180px">
+    <button class="copy" id="reload">새로고침</button>
+  </div>
+  <div id="list"><p class="empty">불러오는 중…</p></div>
+</div>
+<script>
+var $=function(id){return document.getElementById(id);};
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+function mdLite(s){return esc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/^\s*[-*] /gm,'• ').replace(/\n/g,'<br>');}
+var FLBL={paymentMethod:'결제수단',shippingType:'배송',transactionType:'거래구분',businessType:'비즈니스',category_gender:'카테고리구분',category_l:'대분류',order_status:'주문상태',order_type:'비즈니스구분',product_division:'아울렛',payment_method:'결제수단',platform:'결제기기',member_grade:'구매자등급',age_band:'연령대',buyer_gender:'성별',region_sido:'지역',customer_type:'거래구분',seller_grade:'판매자등급',join_year:'가입연도',ship_origin:'배송구분',naver_discount_applied:'네이버CPS'};
+function fmtParams(p){ if(!p)return '<span style="color:#c0bdb5">조건 정보 없음</span>';
+  var parts=[]; if(p['조회'])parts.push('<b>조회</b> '+esc(p['조회'])); if(p['비교'])parts.push('<b>비교</b> '+esc(p['비교']));
+  var f=p.filters||{}; Object.keys(f).forEach(function(k){var v=f[k]; if(v&&v.length){parts.push(esc(FLBL[k]||k)+': '+esc(Array.isArray(v)?v.join(','):v));}});
+  if(!parts.length && (p['조회']||p['비교'])===undefined){ // params가 필터형태가 아니면 원본표시
+    try{return '<code style="font-size:11px">'+esc(JSON.stringify(p)).slice(0,300)+'</code>';}catch(e){}
+  }
+  return parts.length?parts.join(' <span style="color:#d5d2cc">·</span> '):'필터 없음(전체)';
+}
+var ALL=[];
+function render(){
+  var dash=$("fdash").value, q=($("q").value||'').toLowerCase();
+  var list=ALL.filter(function(x){ return (!dash||x.dashboard===dash) && (!q||((x.insight||'')+(x.author||'')+(x.question||'')).toLowerCase().indexOf(q)>=0); });
+  if(!list.length){ $("list").innerHTML='<p class="empty">해당하는 인사이트가 없습니다.</p>'; return; }
+  var focus=new URLSearchParams(location.search).get('id');
+  $("list").innerHTML=list.map(function(x){
+    var dt=(x.created_at||'').replace('T',' ').slice(0,16);
+    var open=(String(x.id)===String(focus))?' open':'';
+    return '<div class="ins" id="ins-'+x.id+'">'+
+      '<div class="meta"><b>'+dt+'</b> · '+esc(x.author||'-')+' <span class="dash">'+esc(x.dashboard||'-')+'</span>'+
+        '<button class="copy" data-id="'+x.id+'">🔗 링크 복사</button></div>'+
+      '<div class="cond">'+fmtParams(x.params)+'</div>'+
+      '<details'+open+'><summary>'+esc(x.question||'(질문 없음)')+'</summary>'+
+        '<div class="body">'+mdLite(x.insight||'')+'</div>'+
+        '<div class="muted">모델 '+esc(x.model||'')+' · id '+x.id+'</div></details></div>';
+  }).join('');
+  [].forEach.call(document.querySelectorAll('.copy[data-id]'),function(b){ b.onclick=function(){
+    var url=location.origin+location.pathname+'?id='+b.getAttribute('data-id');
+    navigator.clipboard.writeText(url).then(function(){ var o=b.textContent; b.textContent='복사됨 ✓'; setTimeout(function(){b.textContent=o;},1500); });
+  };});
+  if(focus){ var el=$("ins-"+focus); if(el) el.scrollIntoView({behavior:'smooth',block:'center'}); }
+}
+function load(){
+  $("list").innerHTML='<p class="empty">불러오는 중…</p>';
+  window.MUSTIT.fn('ai-insight',{history:true,limit:200}).then(function(r){
+    ALL=r.history||[];
+    var dashes=[]; ALL.forEach(function(x){ if(x.dashboard&&dashes.indexOf(x.dashboard)<0)dashes.push(x.dashboard); });
+    $("fdash").innerHTML='<option value="">전체 대시보드</option>'+dashes.map(function(d){return '<option value="'+esc(d)+'">'+esc(d)+'</option>';}).join('');
+    render();
+  }).catch(function(e){ $("list").innerHTML='<p class="empty" style="color:#c8102e">불러오지 못했습니다: '+esc(e.message)+'</p>'; });
+}
+window.MUSTIT.ready(function(){
+  $("fdash").onchange=render; $("q").oninput=render; $("reload").onclick=load;
+  load();
+});
+</script></body></html>

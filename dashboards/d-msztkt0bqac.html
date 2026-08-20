@@ -49,8 +49,11 @@
   .hint{font-size:11px;color:var(--sub)}
   /* layout */
   .wrap{max-width:100%;padding:14px 20px}
-  .kpis{display:grid;grid-template-columns:repeat(7,1fr);gap:10px;margin-bottom:12px}
-  @media(max-width:1100px){.kpis{grid-template-columns:repeat(4,1fr)}}
+  .wipbar{background:#fff4d6;color:#8a5a00;border-bottom:1px solid #f0d896;padding:7px 16px;text-align:center;font-size:12.5px;font-weight:700}
+  .sechead{margin:14px 0 6px;font-size:13px;color:var(--sub);font-weight:700}
+  .wrap>.sechead:first-child{margin-top:2px}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+  @media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}}
   @media(max-width:640px){.kpis{grid-template-columns:repeat(2,1fr)}}
   .kpi{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:11px 13px}
   .kpi .l{font-size:11px;color:var(--sub);margin-bottom:5px}
@@ -79,6 +82,7 @@
 </style>
 </head>
 <body>
+<div class="wipbar">🚧 (진행중) 지표 정의를 확인·보완하는 중인 대시보드입니다. 완료되면 이 안내는 제거됩니다.</div>
 <div class="topbar">
   <a class="logo" href="../index.html">🛍️ Data Portal</a>
   <div class="right">
@@ -97,7 +101,10 @@
 </div>
 
 <div class="wrap">
-  <div class="kpis" id="kpis"></div>
+  <div class="sechead">유저 지표</div>
+  <div class="kpis" id="kpis_user"></div>
+  <div class="sechead">매출 지표</div>
+  <div class="kpis" id="kpis_rev"></div>
 
   <div class="card">
     <h3>AU · 획득유저(가입자) · 결제 유저수 추이</h3>
@@ -132,7 +139,7 @@
     <div class="tblscroll"><table class="dt" id="dt"></table></div>
   </div>
 
-  <p class="note">데이터 소스: <b>dash_daily_conversion</b> (주문DB × 앰플리튜드 amp_daily, 매일 1회 동기화 캐시) + <b>획득유저(가입자)</b>는 조회 시점에 앰플리튜드 complete_signup 이벤트를 실시간 조회. 모두 크롤러/봇 트래픽을 제외한 값입니다.</p>
+  <p class="note">데이터 소스: <b>dash_daily_conversion</b> (주문DB × 앰플리튜드 amp_daily, 매일 1회 동기화 캐시) + <b>획득유저(가입자)</b>·<b>WAU</b>·<b>MAU</b>는 조회 시점에 앰플리튜드에서 실시간 조회(각각 complete_signup, Any Active Event 최근 7일/30일 구간). 모두 크롤러/봇 트래픽을 제외한 값입니다.</p>
 </div>
 
 <!-- 대시보드 설정 모달 (소유자/관리자) -->
@@ -229,11 +236,37 @@ function fetchSignups(fromStr,toStr){
     return map;
   }).catch(function(){ return {}; });
 }
+// WAU/MAU: 종료일 기준 최근 7일/30일 구간의 순유저수(Any Active Event, 단일 버킷)
+function fetchAUWindow(endStr, days, interval){
+  if(THUMB) return Promise.resolve(null);
+  var end=new Date(endStr+"T00:00:00");
+  var start=new Date(end.getTime()); start.setDate(start.getDate()-(days-1));
+  return amp("events/segmentation",{
+    e:[JSON.stringify({event_type:"_active",filters:[]})],
+    m:"uniques", i:interval, start:toCompact(ymd(start)), end:toCompact(endStr),
+    s:[JSON.stringify(CRAWLER_SEG)]
+  }).then(function(d){
+    var ss=(d&&d.data&&d.data.series&&d.data.series[0])||[];
+    return ss.length ? ss[ss.length-1] : null;
+  }).catch(function(){ return null; });
+}
 
 // ── KPI ──
+function sum(arr){ return arr.reduce(function(a,x){return a+(Number(x)||0);},0); }
 function avg(arr){ var v=arr.filter(function(x){return x!=null;}); return v.length? v.reduce(function(a,b){return a+b;},0)/v.length : 0; }
-function renderKPI(rows){
+function paintTiles(elId, tiles){
+  $(elId).innerHTML = tiles.map(function(t){
+    return '<div class="kpi"><div class="l">'+t.l+'</div><div class="v'+(t.red?" red":"")+'">'+t.v+'</div>'+
+      (t.note?'<div class="note2">'+esc(t.note)+'</div>':'')+'</div>';
+  }).join("");
+}
+function renderKPI(rows, extra){
+  extra = extra||{};
+  var auSum = sum(rows.map(function(r){return r.dau;}));
   var auAvg = avg(rows.map(function(r){return r.dau;}));
+  var dauLatest = rows.length ? rows[rows.length-1].dau : null;
+  var wau = extra.wau, mau = extra.mau;
+  var sticky = (dauLatest!=null && mau) ? (dauLatest/mau) : null;
   var signAvg = avg(rows.map(function(r){return r.signups;}));
   var buyAvg = avg(rows.map(function(r){return r.buyers;}));
   var netSum = rows.reduce(function(a,r){return a+(Number(r.net_rev)||0);},0);
@@ -241,19 +274,24 @@ function renderKPI(rows){
   var arppuAvg = avg(rows.map(function(r){return r.arppu;}));
   var convAvg = avg(rows.map(function(r){return r.conv;}));
   var range = rows.length ? (d10(rows[0].d)+" ~ "+d10(rows[rows.length-1].d)) : "";
-  var tiles=[
-    {l:"평균 AU", v:won(auAvg), note:range},
+  var days = rows.length;
+
+  paintTiles("kpis_user", [
+    {l:"AU (합계, 조회기간 일별 순유저 합)", v:won(auSum), note:range},
+    {l:"AU (평균, 합계÷"+days+"일)", v:won(auAvg), note:range},
+    {l:"DAU (최근일)", v:won(dauLatest)},
+    {l:"WAU (최근 7일 순유저)", v: wau==null?"—":won(wau)},
+    {l:"MAU (최근 30일 순유저)", v: mau==null?"—":won(mau)},
+    {l:"Stickiness (DAU÷MAU)", v: sticky==null?"—":pct(sticky)},
     {l:"평균 획득유저(가입자)", v:won(signAvg)},
-    {l:"평균 결제 유저수", v:won(buyAvg)},
+    {l:"평균 결제 유저수", v:won(buyAvg)}
+  ]);
+  paintTiles("kpis_rev", [
     {l:"총 순매출", v:"₩"+won(netSum), red:1},
     {l:"평균 ARPU", v:"₩"+won(arpuAvg), red:1},
     {l:"평균 ARPPU", v:"₩"+won(arppuAvg), red:1},
     {l:"평균 구매전환율", v:pct(convAvg)}
-  ];
-  $("kpis").innerHTML = tiles.map(function(t){
-    return '<div class="kpi"><div class="l">'+t.l+'</div><div class="v'+(t.red?" red":"")+'">'+t.v+'</div>'+
-      (t.note?'<div class="note2">'+esc(t.note)+'</div>':'')+'</div>';
-  }).join("");
+  ]);
 }
 
 // ── 일별 테이블 ──
@@ -288,11 +326,19 @@ function downloadCSV(){
 function refresh(){
   $("loading").classList.add("on"); $("err").textContent="";
   var p = { from:$("from").value, to:$("to").value };
+  // 앰플리튜드 호출은 순차 실행(동시 호출 시 429 위험) — 주문DB RPC와는 병렬
+  var ampChain = fetchSignups(p.from, p.to).then(function(signMap){
+    return fetchAUWindow(p.to, 7, 7).then(function(wau){
+      return fetchAUWindow(p.to, 30, 30).then(function(mau){
+        return { signMap:signMap, wau:wau, mau:mau };
+      });
+    });
+  });
   Promise.all([
     window.MUSTIT.rpc("dash_daily_conversion", {p:p}),
-    fetchSignups(p.from, p.to)
+    ampChain
   ]).then(function(res){
-    var rows = res[0]||[], signMap = res[1]||{};
+    var rows = res[0]||[], signMap = res[1].signMap||{};
     rows.forEach(function(r){
       r.d = d10(r.d);                                          // "2026-08-15 00:00:00+00" → "2026-08-15" (signMap 키와 맞춤)
       r.signups = signMap[r.d] != null ? signMap[r.d] : null;
@@ -302,7 +348,7 @@ function refresh(){
     });
     ROWS = rows;
     var dates = rows.map(function(r){ return md(r.d); });
-    renderKPI(rows);
+    renderKPI(rows, { wau:res[1].wau, mau:res[1].mau });
     barLine("c_au", dates, "AU", rows.map(function(r){return r.dau;}), [
       { name:"획득유저(가입자)", data:rows.map(function(r){return r.signups;}), color:"#2fae8f" },
       { name:"결제 유저수", data:rows.map(function(r){return r.buyers;}), color:"#c8102e" }

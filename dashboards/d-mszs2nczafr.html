@@ -45,20 +45,7 @@
   .fld{display:flex;flex-direction:column;gap:3px}
   .fld label{font-size:10.5px;color:var(--sub);font-weight:600;letter-spacing:.02em}
   .fld input[type=date]{border:1px solid #d6d4ce;border-radius:6px;padding:5px 7px;font-size:12px;background:#fff;height:29px}
-  /* multiselect */
-  .ms{position:relative}
-  .ms>button{border:1px solid #d6d4ce;border-radius:6px;background:#fff;padding:5px 8px;font-size:12px;height:29px;min-width:96px;max-width:150px;
-    display:flex;align-items:center;justify-content:space-between;gap:6px;cursor:pointer;white-space:nowrap;overflow:hidden}
-  .ms>button .v{overflow:hidden;text-overflow:ellipsis}
-  .ms>button .cnt{color:#fff;background:var(--red);border-radius:10px;padding:0 6px;font-size:10px;font-weight:700}
-  .ms>button svg{flex:none;opacity:.5}
-  .ms .panel{position:absolute;top:32px;left:0;z-index:60;background:#fff;border:1px solid #cfcdc7;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.14);
-    min-width:190px;max-height:290px;overflow:auto;padding:6px;display:none}
-  .ms.open .panel{display:block}
-  .ms .panel .search{width:100%;border:1px solid #e0ded8;border-radius:5px;padding:5px 7px;margin-bottom:5px;font-size:12px}
-  .ms .panel .opt{display:flex;align-items:center;gap:7px;padding:4px 6px;border-radius:5px;cursor:pointer;font-size:12.5px}
-  .ms .panel .opt:hover{background:#f3f2ee}
-  .ms .panel .opt input{margin:0}
+  .fld input[type=text]{border:1px solid #d6d4ce;border-radius:6px;padding:5px 7px;font-size:12px;background:#fff;height:29px;width:280px}
   .btns{display:flex;gap:6px;margin-left:auto}
   .btn{border:0;border-radius:7px;padding:6px 15px;font-size:12.5px;font-weight:700;cursor:pointer;height:29px}
   .btn.go{background:var(--red);color:#fff}
@@ -71,16 +58,25 @@
   .kpi .l{color:var(--sub);font-size:11.5px;margin-bottom:5px}
   .kpi .v{font-size:21px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
   .kpi .v.rate{color:var(--red)}
-  .grid2{display:grid;grid-template-columns:1.4fr 1fr;gap:12px}
-  @media(max-width:1100px){.grid2{grid-template-columns:1fr}}
-  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px 6px}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px 6px;margin-bottom:12px}
   .card h3{margin:0 0 2px;font-size:14px;font-weight:700}
   .card .h-sub{color:var(--sub);font-size:10.5px;margin:0 0 6px}
-  .chart{width:100%;height:420px}
+  .card .htools{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+  .chart{width:100%;height:340px}
   .loading{position:fixed;inset:0;background:rgba(255,255,255,.55);display:none;align-items:center;justify-content:center;z-index:80;font-weight:700;color:var(--red)}
   .loading.on{display:flex}
   .err{color:var(--red);padding:10px 14px;font-size:12.5px}
   .note{color:var(--sub);font-size:11px;margin:10px 2px 0}
+  .btn.csv{background:#1f8a4c;color:#fff}
+  .btn.csv:disabled{background:#c7ccc8;cursor:default}
+  .tblscroll{overflow-x:auto;border:1px solid var(--border);border-radius:8px;background:#fff}
+  table.piv{border-collapse:collapse;white-space:nowrap;font-size:12px;width:100%}
+  table.piv th{background:#f4f3ef;color:#33322f;padding:6px 10px;text-align:right;border-bottom:1px solid #e2e0da;position:sticky;top:0;font-weight:700}
+  table.piv th:first-child,table.piv td:first-child{text-align:left;position:sticky;left:0;background:#fff;box-shadow:1px 0 0 var(--border)}
+  table.piv th:first-child{background:#f4f3ef}
+  table.piv td{padding:5px 10px;border-bottom:1px solid #f0efe9;text-align:right;font-variant-numeric:tabular-nums}
+  table.piv tr:hover td{background:#fafaf7}
+  table.piv tr.tot td{background:#f8f7f3;font-weight:700}
 </style>
 </head>
 <body>
@@ -96,7 +92,7 @@
 <div class="filters" id="filters">
   <div class="fld"><label>주문일 (시작일)</label><input type="date" id="from"></div>
   <div class="fld"><label>주문일 (종료일)</label><input type="date" id="to"></div>
-  <div id="dropdowns" style="display:contents"></div>
+  <div class="fld"><label>판매자ID (담당 판매자, 쉼표로 구분)</label><input type="text" id="seller_id" placeholder="예: 12345, 67890"></div>
   <div class="btns">
     <button class="btn go" id="go">조회</button>
     <button class="btn reset" id="reset">초기화</button>
@@ -106,19 +102,23 @@
 <div class="wrap">
   <div class="kpis" id="kpis"></div>
 
-  <div class="grid2">
-    <div class="card">
-      <h3>브랜드별 거래액 TOP 15</h3>
-      <p class="h-sub">선택 기간 · 거래액(GMV) 상위 브랜드 (상위 2,000개 상품 집계 기준)</p>
-      <div id="c_brand" class="chart"></div>
-    </div>
-    <div class="card">
-      <h3>카테고리 비중</h3>
-      <p class="h-sub">선택 기간 · 대분류 기준 거래액(GMV) 비중</p>
-      <div id="c_cat" class="chart"></div>
-    </div>
+  <div class="card">
+    <h3>판매자ID별 일별 거래액 추이</h3>
+    <p class="h-sub">입력한 판매자ID들의 일별 거래액(GMV) 추이</p>
+    <div id="c_trend" class="chart"></div>
   </div>
-  <p class="note">* 브랜드/카테고리 집계는 원본을 브라우저로 내려받지 않고, 상품 단위 서버 집계 RPC(<code>dash_product_rank</code>, 거래액 상위 2,000개 상품)를 브랜드·대분류로 합산한 값입니다. 롱테일(그 외 상품) 비중이 큰 기간은 집계에서 누락될 수 있습니다.</p>
+
+  <div class="card">
+    <div class="htools">
+      <div>
+        <h3>판매자ID별 일별 거래액</h3>
+        <p class="h-sub" id="pivsub">판매자ID를 입력하고 조회하세요.</p>
+      </div>
+      <button class="btn csv" id="csv" disabled>⬇ CSV 다운로드</button>
+    </div>
+    <div class="tblscroll"><table class="piv" id="piv"></table></div>
+  </div>
+  <p class="note">* MD/담당자와 판매자ID를 매핑하는 데이터는 이 시스템에 없어, 담당 판매자ID를 직접 입력해서 조회합니다. 개인정보 없이 판매자ID·주문일자·거래액만 조회합니다(로그인 계정 권한 내에서 자동 마스킹).</p>
 </div>
 
 <!-- 대시보드 설정 모달 (소유자/관리자) -->
@@ -144,81 +144,20 @@
 <script>
 (function(){
 "use strict";
-// ── Supabase 직결 (publishable 키는 공개용, 안전 집계 RPC만 노출) ──
-// 인증 토큰으로 호출 (auth.js). 로그인 안 되면 데이터 RPC 거부됨.
-function rpc(fn, body){ return window.MUSTIT.rpc(fn, body); }
-
-// 필터 정의 (label ↔ orders_v 컬럼, 허용 화이트리스트 내에서만 동작)
-var FDEFS = [
-  {key:"category_gender",  label:"카테고리 구분"},
-  {key:"category_l",       label:"대분류"},
-  {key:"order_status",     label:"주문상태"},
-  {key:"order_type",       label:"비즈니스 구분"},
-  {key:"platform",         label:"결제기기"},
-  {key:"payment_method",   label:"결제수단"},
-  {key:"member_grade",     label:"구매자등급"},
-  {key:"customer_type",    label:"거래구분"}
-];
-var OPTS = {};   // key -> [values]
-var SEL  = {};   // key -> Set(selected)
-
 // ── helpers ──
 var $ = function(id){ return document.getElementById(id); };
 function won(n){ return (Number(n)||0).toLocaleString("ko-KR"); }
-function pct(n){ return ((Number(n)||0)*100).toFixed(2)+"%"; }
 function ymd(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function nextDay(str){ var d=new Date(str+"T00:00:00"); d.setDate(d.getDate()+1); return ymd(d); }
 
-// ── multiselect UI (기존 all-orders-master.html과 동일한 컴포넌트) ──
-function buildDropdowns(){
-  var host = $("dropdowns"); host.innerHTML="";
-  FDEFS.forEach(function(def){
-    SEL[def.key] = SEL[def.key] || new Set();
-    var vals = OPTS[def.key] || [];
-    var fld = document.createElement("div"); fld.className="fld";
-    fld.innerHTML = '<label>'+def.label+'</label>';
-    var ms = document.createElement("div"); ms.className="ms";
-    var btn = document.createElement("button");
-    btn.innerHTML = '<span class="v">전체</span><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 3l4 4 4-4" stroke="#333" fill="none" stroke-width="1.5"/></svg>';
-    var panel = document.createElement("div"); panel.className="panel";
-    panel.addEventListener("click", function(e){ e.stopPropagation(); });
-    var search = document.createElement("input"); search.className="search"; search.placeholder="검색…";
-    panel.appendChild(search);
-    var list = document.createElement("div");
-    panel.appendChild(list);
-
-    function renderList(q){
-      list.innerHTML="";
-      vals.filter(function(v){ return !q || String(v).toLowerCase().indexOf(q.toLowerCase())>=0; })
-          .slice(0,500)
-          .forEach(function(v){
-        var row = document.createElement("label"); row.className="opt";
-        var cb = document.createElement("input"); cb.type="checkbox"; cb.checked=SEL[def.key].has(v);
-        cb.onchange=function(){ if(cb.checked)SEL[def.key].add(v); else SEL[def.key].delete(v); updateBtn(); };
-        row.appendChild(cb); row.appendChild(document.createTextNode(" "+v));
-        list.appendChild(row);
-      });
-    }
-    function updateBtn(){
-      var n = SEL[def.key].size;
-      btn.querySelector(".v").textContent = n===0 ? "전체" : (n===1 ? Array.from(SEL[def.key])[0] : n+"개 선택");
-    }
-    search.oninput=function(){ renderList(search.value); };
-    btn.onclick=function(e){ e.stopPropagation();
-      document.querySelectorAll(".ms.open").forEach(function(o){ if(o!==ms)o.classList.remove("open"); });
-      ms.classList.toggle("open"); if(ms.classList.contains("open")){ renderList(""); search.focus(); }
-    };
-    ms.appendChild(btn); ms.appendChild(panel);
-    fld.appendChild(ms); host.appendChild(fld);
-    def._updateBtn = updateBtn;
+// 판매자ID 파싱 ("12345, 67890" → ["12345","67890"], 중복/공백 제거)
+function parseSellers(){
+  var raw = $("seller_id").value || "";
+  var seen = {}; var out = [];
+  raw.split(",").map(function(s){ return s.trim(); }).filter(Boolean).forEach(function(s){
+    if(!seen[s]){ seen[s]=1; out.push(s); }
   });
-}
-document.addEventListener("click", function(){ document.querySelectorAll(".ms.open").forEach(function(o){o.classList.remove("open");}); });
-
-// ── params ──
-function params(){
-  var f={};
-  FDEFS.forEach(function(def){ if(SEL[def.key] && SEL[def.key].size) f[def.key]=Array.from(SEL[def.key]); });
-  return { from:$("from").value, to:$("to").value, filters:f };
+  return out;
 }
 
 // ── ECharts ──
@@ -227,82 +166,124 @@ function chart(id){ if(!CH[id]) CH[id]=echarts.init($(id)); return CH[id]; }
 window.addEventListener("resize", function(){ Object.keys(CH).forEach(function(k){ CH[k].resize(); }); });
 
 function fmtM(v){ return (Math.round((Number(v)||0)/1e6)).toLocaleString("ko-KR")+"M"; }
-var TIP = { trigger:"item", confine:true, textStyle:{fontSize:11} };
 var PAL=["#ee3b52","#7b9ff2","#8fd3c7","#f2937f","#2fae8f","#f2c94c","#9b8cf2","#e88fbf","#2f80ed","#9aa0a6"];
 
-function renderBrandChart(rows){
-  var top = rows.slice(0,15);
-  var names = top.map(function(r){ return r.brand; }).reverse();
-  var vals  = top.map(function(r){ return Number(r.gmv)||0; }).reverse();
-  chart("c_brand").setOption({
-    grid:{ left:110, right:50, top:10, bottom:20 },
-    tooltip:{ trigger:"axis", confine:true, textStyle:{fontSize:11},
-      formatter:function(p){ var d=p[0]; return d.name+"<br/>거래액 "+won(d.value); } },
-    xAxis:{ type:"value", axisLabel:{ formatter:fmtM, fontSize:9, color:"#999" }, splitLine:{lineStyle:{color:"#eee"}} },
-    yAxis:{ type:"category", data:names, axisLabel:{ fontSize:11, color:"#333" }, axisTick:{show:false}, axisLine:{lineStyle:{color:"#ddd"}} },
-    series:[{ type:"bar", data:vals, itemStyle:{color:"#ee3b52"}, barMaxWidth:18,
-      label:{ show:true, position:"right", formatter:function(p){return fmtM(p.value);}, fontSize:10, color:"#666" } }]
+function renderTrendChart(dates, sellers, byDate){
+  var series = sellers.map(function(sid,i){
+    return { name:sid, type:"line", data:dates.map(function(d){ return (byDate[d]&&byDate[d][sid])||0; }),
+      symbol:"circle", symbolSize:4, lineStyle:{width:1.6,color:PAL[i%PAL.length]}, itemStyle:{color:PAL[i%PAL.length]} };
+  });
+  chart("c_trend").setOption({
+    grid:{ left:52, right:20, top:32, bottom:38 },
+    tooltip:{ trigger:"axis", confine:true, textStyle:{fontSize:11} },
+    legend:{ data:sellers, type:"scroll", top:2, textStyle:{fontSize:10.5,color:"#555"} },
+    xAxis:{ type:"category", data:dates, axisLabel:{fontSize:9,color:"#999",rotate:38}, axisTick:{show:false}, axisLine:{lineStyle:{color:"#ddd"}} },
+    yAxis:{ type:"value", axisLabel:{formatter:fmtM,fontSize:9,color:"#999"}, splitLine:{lineStyle:{color:"#eee"}} },
+    series:series
   }, true);
 }
 
-function renderCategoryChart(rows){
-  var total = rows.reduce(function(a,r){ return a+(Number(r.gmv)||0); }, 0);
-  var data = rows.map(function(r,i){ return { name:r.category_l||"미분류", value:Number(r.gmv)||0 }; });
-  chart("c_cat").setOption({
-    tooltip:{ trigger:"item", confine:true, textStyle:{fontSize:11},
-      formatter:function(p){ return p.name+"<br/>거래액 "+won(p.value)+" ("+(total? (p.value/total*100).toFixed(1):"0")+"%)"; } },
-    legend:{ type:"scroll", orient:"vertical", right:4, top:"middle", itemWidth:11, itemHeight:11, itemGap:6, textStyle:{fontSize:11,color:"#555"} },
-    color:PAL,
-    series:[{
-      type:"pie", radius:["42%","72%"], center:["38%","50%"],
-      avoidLabelOverlap:true,
-      label:{ formatter:function(p){ return p.percent.toFixed(1)+"%"; }, fontSize:10, color:"#666" },
-      labelLine:{ length:8, length2:6 },
-      data:data
-    }]
-  }, true);
+// ── 피벗 테이블 (날짜 × 판매자ID, 값=거래액) ──
+var PIV_HEAD = [], PIV_ROWS = [];  // CSV 다운로드용으로 렌더 결과 보관
+function renderPivot(dates, sellers, byDate){
+  var head = ["날짜"].concat(sellers, "합계");
+  var sellerTot = {}; sellers.forEach(function(s){ sellerTot[s]=0; });
+  var grand = 0;
+  var rows = dates.map(function(d){
+    var rowTot = 0;
+    var cells = sellers.map(function(s){
+      var v = (byDate[d]&&byDate[d][s])||0;
+      rowTot += v; sellerTot[s] += v;
+      return v;
+    });
+    grand += rowTot;
+    return [d].concat(cells, rowTot);
+  });
+  var totRow = ["합계"].concat(sellers.map(function(s){ return sellerTot[s]; }), grand);
+
+  PIV_HEAD = head; PIV_ROWS = rows.concat([totRow]);
+
+  var thead = "<thead><tr>"+head.map(function(h){return "<th>"+h+"</th>";}).join("")+"</tr></thead>";
+  var tbody = "<tbody>"+rows.map(function(r){
+    return "<tr>"+r.map(function(v,i){ return "<td>"+(i===0?v:won(v))+"</td>"; }).join("")+"</tr>";
+  }).join("")+
+    "<tr class=\"tot\">"+totRow.map(function(v,i){ return "<td>"+(i===0?v:won(v))+"</td>"; }).join("")+"</tr>"+
+    "</tbody>";
+  $("piv").innerHTML = thead+tbody;
+  $("csv").disabled = rows.length===0;
+}
+
+function csvCell(v){ v=(v==null?"":String(v)); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+function downloadCSV(){
+  if(!PIV_ROWS.length) return;
+  var head = PIV_HEAD.map(csvCell).join(",");
+  var body = PIV_ROWS.map(function(r){ return r.map(csvCell).join(","); }).join("\r\n");
+  var blob = new Blob(["﻿"+head+"\r\n"+body], {type:"text/csv;charset=utf-8;"});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a"); a.href=url; a.download="seller_daily_"+$("from").value+"_"+$("to").value+".csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 }
 
 // ── KPI ──
-function renderKPI(s){
+function renderKPI(sellers, dates, byDate, orderNos){
+  var total=0; dates.forEach(function(d){ sellers.forEach(function(s){ total += (byDate[d]&&byDate[d][s])||0; }); });
   $("kpis").innerHTML = [
-    {l:"총거래액(GMV)", v:won(s.total_purchase)},
-    {l:"총주문수", v:won(s.orders)},
-    {l:"총구매수량", v:won(s.qty)},
-    {l:"순이익율", v:pct(s.net_profit/(s.total_purchase||1)), rate:1}
+    {l:"총거래액(GMV)", v:won(total)},
+    {l:"총주문수", v:won(orderNos.size)},
+    {l:"판매자 수", v:won(sellers.length)},
+    {l:"조회 일수", v:won(dates.length)}
   ].map(function(k){
-    return '<div class="kpi"><div class="l">'+k.l+'</div><div class="v'+(k.rate?" rate":"")+'">'+k.v+'</div></div>';
+    return '<div class="kpi"><div class="l">'+k.l+'</div><div class="v">'+k.v+'</div></div>';
   }).join("");
 }
 
-// ── 홈 갤러리 썸네일(iframe #thumb)일 땐 상품 집계 조회 규모를 줄여 트래픽/DB 절감 ──
-var THUMB = location.hash.indexOf("thumb") >= 0;
+var THUMB = location.hash.indexOf("thumb") >= 0;  // 홈 갤러리 썸네일: 무거운 조회 스킵(필수 규약)
+var ROW_LIMIT = 20000; // 판매자ID로 좁힌 뒤의 상한(라인아이템 기준). 도달 시 경고.
 
-// 브랜드·카테고리 집계 = 상품 단위 집계 RPC(dash_product_rank)를 브랜드/대분류로 합산해서 재사용 (원본 행 다운로드 없음)
-function aggregate(rows, key){
-  var m = {}; var order = [];
-  rows.forEach(function(r){
-    var k = r[key] || "미분류";
-    if(!m[k]){ m[k]={ gmv:0 }; m[k][key]=k; order.push(k); }
-    m[k].gmv += Number(r.gmv)||0;
-  });
-  return order.map(function(k){ return m[k]; }).sort(function(a,b){ return b.gmv-a.gmv; });
-}
-
-// ── refresh ──
+// ── refresh: orders_secure를 판매자ID+기간으로 좁혀 직접 조회 후 날짜×판매자ID로 클라이언트 집계 ──
 function refresh(){
-  var p = params();
-  $("loading").classList.add("on"); $("err").textContent="";
-  var rankLimit = THUMB ? 300 : 2000;
-  Promise.all([ rpc("dash_summary",{p:p}), rpc("dash_product_rank",{p:p, p_limit:rankLimit}) ])
-  .then(function(res){
-    var s = res[0], products = res[1]||[];
-    renderKPI(s);
-    renderBrandChart(aggregate(products, "brand"));
-    renderCategoryChart(aggregate(products, "category_l"));
-  })
-  .catch(function(e){ $("err").textContent = "오류: "+e.message; })
-  .finally(function(){ $("loading").classList.remove("on"); });
+  if(THUMB) return;  // 썸네일 미리보기에서는 조회하지 않음
+  var sellers = parseSellers();
+  $("err").textContent="";
+  if(!sellers.length){
+    $("pivsub").textContent = "판매자ID를 입력하고 조회하세요.";
+    $("kpis").innerHTML=""; $("piv").innerHTML=""; $("csv").disabled=true;
+    Object.keys(CH).forEach(function(k){ CH[k].clear(); });
+    return;
+  }
+  var from = $("from").value, to = $("to").value;
+  $("loading").classList.add("on");
+  window.MUSTIT.client.from("orders_secure")
+    .select("seller_id,order_datetime,total_purchase,order_no")
+    .in("seller_id", sellers)
+    .gte("order_datetime", from)
+    .lt("order_datetime", nextDay(to))
+    .limit(ROW_LIMIT)
+    .then(function(res){
+      if(res.error) throw new Error(res.error.message);
+      var rows = res.data||[];
+      var byDate = {}; var dateSet = {}; var orderNos = new Set();
+      rows.forEach(function(r){
+        var d = String(r.order_datetime).slice(0,10);  // 이미 KST 값 그대로(문자열 슬라이스, 타임존 변환 없음)
+        dateSet[d]=1;
+        (byDate[d]=byDate[d]||{})[r.seller_id] = (byDate[d][r.seller_id]||0) + (Number(r.total_purchase)||0);
+        if(r.order_no) orderNos.add(r.order_no);
+      });
+      var dates = Object.keys(dateSet).sort();
+      // 거래액 합계 기준 내림차순으로 판매자 열 순서 정렬
+      var sellerTot = {}; sellers.forEach(function(s){ sellerTot[s]=0; });
+      dates.forEach(function(d){ sellers.forEach(function(s){ sellerTot[s]+=(byDate[d]&&byDate[d][s])||0; }); });
+      var sortedSellers = sellers.slice().sort(function(a,b){ return sellerTot[b]-sellerTot[a]; });
+
+      $("pivsub").textContent = "선택 기간 · 판매자 "+sellers.length+"개"+
+        (rows.length>=ROW_LIMIT ? " · ⚠ 상한("+won(ROW_LIMIT)+"행) 도달 — 기간을 좁혀서 다시 조회하세요" : "");
+      renderKPI(sortedSellers, dates, byDate, orderNos);
+      renderTrendChart(dates, sortedSellers, byDate);
+      renderPivot(dates, sortedSellers, byDate);
+    })
+    .catch(function(e){ $("err").textContent = "오류: "+e.message; })
+    .finally(function(){ $("loading").classList.remove("on"); });
 }
 
 // ── init ──
@@ -312,12 +293,13 @@ function setDefaultDates(){
   $("from").value=ymd(f); $("to").value=ymd(y);
 }
 $("go").onclick=refresh;
+$("csv").onclick=downloadCSV;
 $("editdash").onclick=openEditModal;
 $("m_close").onclick=function(){ $("editmodal").style.display="none"; };
 $("m_save").onclick=saveMeta;
 $("editmodal").onclick=function(e){ if(e.target===$("editmodal")) $("editmodal").style.display="none"; };
-$("reset").onclick=function(){ FDEFS.forEach(function(d){ SEL[d.key]=new Set(); d._updateBtn&&d._updateBtn(); });
-  setDefaultDates(); refresh(); };
+$("seller_id").addEventListener("keydown",function(e){ if(e.key==="Enter")refresh(); });
+$("reset").onclick=function(){ $("seller_id").value=""; setDefaultDates(); refresh(); };
 
 setDefaultDates();
 var ACCESS=null;
@@ -404,8 +386,7 @@ window.MUSTIT.ready(function(){
     if(!a || a.view===false){ blockNoAccess(); return; }
     ACCESS=a;
     setupTopbar();
-    rpc("dash_filters",{}).then(function(o){ OPTS=o||{}; buildDropdowns(); }).catch(function(e){ buildDropdowns(); })
-      .finally(refresh);
+    refresh();
   }).catch(function(e){ blockNoAccess(e.message); });
 });
 })();

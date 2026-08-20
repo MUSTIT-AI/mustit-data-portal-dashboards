@@ -160,9 +160,7 @@
 
 <div class="wrap">
 
-  <!-- ⓪ 유저 볼륨 개관 (전체/신규/매체유입) -->
-  <div class="sechd">유저 볼륨 추이 <span class="badge real">실데이터</span> <span class="n">신규유저 볼륨의 크기를 전체 유입 대비로 보기 위한 기준선</span></div>
-  <div class="card"><p class="csub">전체 유저(일별 활성유저) · 신규 유저(당일 가입) · 매체유입 유저(채널·캠페인 유입이 식별된 활성유저) — 이 중 신규유저가 얼마나 되는 볼륨인지 보는 용도입니다.</p><div class="chart" id="c_volume" style="height:280px"></div></div>
+  <!-- ⓪ 유저 볼륨 개관 — 속도 이슈로 임시 제외(2026-08-20). 필요시 refresh()에 loadVolumeOverview 다시 추가 -->
 
   <!-- ① AX Highlight Strip -->
   <div class="sechd">🤖 AX 하이라이트 <span class="badge real">AI 생성 · gpt-5.5</span></div>
@@ -290,7 +288,7 @@ var FUNNEL_LABELS=["가입","첫 세션(재방문)","장바구니 담기","첫 �
 
 // ── state ──
 var N=30;
-var STATE={cur:null, wow:null, mom:null, yoy:null, funnel:null, channel:null, cohort:{}, ttfp:null, siteDaily:null};
+var STATE={cur:null, wow:null, mom:null, yoy:null, funnel:null, channel:null, cohort:{}, ttfp:null, siteDaily:null, signupTotal:null};
 
 function setDefaults(){
   var y=new Date(); y.setDate(y.getDate()-N-1); // 성숙(N일 경과)한 코호트가 되도록 종료일을 N일만큼 당김
@@ -343,16 +341,20 @@ function loadNorthStar(){
   return callFor(cur).then(function(d){ STATE.cur=d&&d.data&&d.data[0]?d.data[0]:null; return callFor(wowR); })
     .then(function(d){ STATE.wow=d&&d.data&&d.data[0]?d.data[0]:null; return callFor(momR); })
     .then(function(d){ STATE.mom=d&&d.data&&d.data[0]?d.data[0]:null; return callFor(yoyR); })
-    .then(function(d){ STATE.yoy=d&&d.data&&d.data[0]?d.data[0]:null; renderNorthStar(); })
+    .then(function(d){ STATE.yoy=d&&d.data&&d.data[0]?d.data[0]:null;
+      // 퍼널 응답엔 절대 인원수가 없어 신규가입 절대수를 segmentation으로 별도 확인(누적전환율 역산의 기준치)
+      return amp("events/segmentation",{e:[JSON.stringify(ev("complete_signup",extra))], m:"totals", start:ad(cur.from), end:ad(cur.to)}); })
+    .then(function(segD){ STATE.signupTotal = segTotal(segD); renderNorthStar(); })
     .catch(function(e){ $("ns_cur").textContent="오류"; console.error(e); });
 }
 function cumAt(row,i){ return row && row.cumulative ? (Number(row.cumulative[i])||0) : null; }
-function cntAt(row,i){
-  if(!row) return null;
-  if(row.events && row.events[i]!=null) return Number(row.events[i])||0;
-  if(row.count!=null && row.cumulative) return Math.round((Number(row.count)||0)*(Number(row.cumulative[i])||0));
-  return null;
-}
+// events/segmentation 응답은 amplitude-proxy를 한번 거치며 {data:{series,xValues}} 형태(이중 data)로 오므로 양쪽 다 대응
+function segSeries(d){ var dd=(d&&d.data)?d.data:d; return (dd&&dd.series)||[]; }
+function segXValues(d){ var dd=(d&&d.data)?d.data:d; return (dd&&dd.xValues)||[]; }
+function sumArr(arr){ arr=arr||[]; var sum=0; arr.forEach(function(v){ sum+=(typeof v==="object"?Number(v.value)||0:Number(v)||0); }); return sum; }
+function segTotal(d){ return sumArr(segSeries(d)[0]); }
+// 퍼널(funnels) 응답엔 절대 인원수 필드가 없어(코호트 정의상), 검증된 신규가입 절대수(baseTotal) × 누적전환율로 역산
+function stepCnt(baseTotal,row,i){ return (baseTotal!=null && row) ? Math.round(baseTotal*cumAt(row,i)) : null; }
 function renderNorthStar(){
   var c=STATE.cur;
   var curCvr=cumAt(c,1);
@@ -369,7 +371,7 @@ function renderNorthStar(){
   put("ns_wow", STATE.wow);
   put("ns_mom", STATE.mom);
   put("ns_yoy", STATE.yoy);
-  var signupCnt=cntAt(c,0), buyerCnt=cntAt(c,1);
+  var signupCnt=STATE.signupTotal, buyerCnt=stepCnt(STATE.signupTotal,c,1);
   $("ns_signup").textContent = signupCnt==null?"-":won(signupCnt)+" 명";
   $("ns_buyer").textContent = buyerCnt==null?"-":won(buyerCnt)+" 명";
 }
@@ -402,12 +404,12 @@ function loadVolumeOverview(){
 }
 function renderVolumeOverview(dSignup, dMedia){
   var site=STATE.siteDaily||[]; // {d, dau, orders, net_rev, ...}
-  var xv=(dSignup&&dSignup.xValues)||[];
+  var xv=segXValues(dSignup);
   var labels=xv.map(function(s){return String(s).slice(5,10);});
   var siteByDate={}; site.forEach(function(r){ siteByDate[String(r.d).slice(0,10)]=Number(r.dau)||0; });
   var totalArr = xv.map(function(s){ return siteByDate[String(s).slice(0,10)] || null; });
-  function seriesVals(d){ var s=(d&&d.series&&d.series[0])||[]; return s.map(function(v){return typeof v==="object"?Number(v.value)||0:Number(v)||0;}); }
-  var signupArr=seriesVals(dSignup), mediaArr=seriesVals(dMedia);
+  var signupArr=(segSeries(dSignup)[0]||[]).map(function(v){return typeof v==="object"?Number(v.value)||0:Number(v)||0;});
+  var mediaArr=(segSeries(dMedia)[0]||[]).map(function(v){return typeof v==="object"?Number(v.value)||0:Number(v)||0;});
   chart("c_volume").setOption({
     grid:{left:46,right:14,top:26,bottom:36},
     tooltip:{trigger:"axis"},
@@ -441,7 +443,7 @@ function renderFunnel(){
   var maxDropIdx=1, maxDrop=-1;
   for(var i=1;i<cum.length;i++){ var d=cum[i-1]-cum[i]; if(d>maxDrop){maxDrop=d;maxDropIdx=i;} }
   for(i=0;i<FUNNEL_EVENTS.length;i++){
-    var v = cntAt(row,i);
+    var v = idx===0 ? stepCnt(STATE.signupTotal,row,i) : null; // 절대수는 전체(idx0) 기준치만 검증됨 — 기기 세그는 % 로만 표시
     var cvr = i===0? 1 : cum[i];
     var drop = i===0? 0 : (cum[i-1]-cum[i]);
     html += '<div class="fstep'+(i===maxDropIdx?' hot':'')+'"><div class="l">'+FUNNEL_LABELS[i]+'</div>'+
@@ -481,15 +483,22 @@ function loadChannel(){
     var rows=(d&&d.data)||[];
     STATE.channel = CHANNELS.map(function(c,i){
       var r=rows[i];
-      return { name:c.n, signup:cntAt(r,0), buyer:cntAt(r,1), cvr:cumAt(r,1) };
+      return { name:c.n, signup:null, buyer:null, cvr:cumAt(r,1) };
+    });
+    // 채널별 신규가입 절대수(실데이터) — 퍼널 응답엔 절대수가 없어 별도 조회 후 CVR과 결합해 첫구매자 역산
+    return amp("events/segmentation", {e:[JSON.stringify(ev("complete_signup"))], m:"totals", start:ad(cur.from), end:ad(cur.to), s:s});
+  }).then(function(dSignup){
+    var series=segSeries(dSignup);
+    STATE.channel.forEach(function(row,i){
+      row.signup = sumArr(series[i]);
+      row.buyer = (row.signup!=null && row.cvr!=null) ? Math.round(row.signup*row.cvr) : null;
     });
     // 첫구매 매출 합계(채널별, 실데이터) — AOV 계산용. 광고비 미연동이라 CAC는 계산하지 않음.
     return amp("events/segmentation", {e:[JSON.stringify(ev("complete_order"))], m:"totals", start:ad(cur.from), end:ad(cur.to), s:s});
   }).then(function(d2){
-    var series=(d2&&d2.series)||(d2&&d2.data&&d2.data.series)||[];
+    var series=segSeries(d2);
     STATE.channel.forEach(function(row,i){
-      var arr=series[i]||[];
-      var sum=0; arr.forEach(function(v){ sum+= (typeof v==="object"? Number(v.value)||0 : Number(v)||0); });
+      var sum=sumArr(series[i]);
       row.revenue=sum;
       row.aov = row.buyer? sum/row.buyer : null;
     });
@@ -512,7 +521,7 @@ function loadChannelTrend(){
   var s=CHANNELS.map(function(c){ return JSON.stringify([{prop:"gp:initial_utm_source",op:"is",values:c.v}]); });
   return amp("events/segmentation",{e:[JSON.stringify(ev("complete_signup"))], m:"uniques", i:7, start:ad(cur.from), end:ad(cur.to), s:s})
     .then(function(d){
-      var series=(d&&d.series)||[]; var xv=(d&&d.xValues)||[];
+      var series=segSeries(d); var xv=segXValues(d);
       var labels=xv.map(function(s2){return String(s2).slice(5,10);});
       var PAL=["#c8102e","#7b9ff2","#2fae8f","#e8a33d","#9b8cf2","#2f6fe8","#bbbbbb"];
       chart("c_chantrend").setOption({
@@ -556,10 +565,11 @@ function loadCohort(){
     });
     return chain;
   }
-  return seqFor(7).then(function(d7){ STATE.cohort.d7=d7; return seqFor(14); })
-    .then(function(d14){ STATE.cohort.d14=d14; return seqFor(30); })
-    .then(function(d30){ STATE.cohort.d30=d30; renderCohort(); })
-    .catch(function(e){ console.error(e); });
+  // D7/D14/D30 세 시리즈끼리는 병렬로 돌림(속도 3배 개선) — 각 시리즈 "내부"의 8주차는 여전히 순차 호출이라 429 방지 취지는 유지됨
+  return Promise.all([seqFor(7), seqFor(14), seqFor(30)]).then(function(res){
+    STATE.cohort.d7=res[0]; STATE.cohort.d14=res[1]; STATE.cohort.d30=res[2];
+    renderCohort();
+  }).catch(function(e){ console.error(e); });
 }
 function renderCohort(){
   var labels=(STATE.cohort.d30||[]).map(function(x){return x.label;});
@@ -596,15 +606,21 @@ function loadTTFP(){
   var cur=curRange();
   var pts=[1,2,3,5,7,10,14,21,30].filter(function(d){return d<=N;});
   if(!pts.length) pts=[Math.max(1,N)];
-  var chain=Promise.resolve({});
-  pts.forEach(function(d){
-    chain=chain.then(function(acc){
-      return amp("funnels",{e:[JSON.stringify(ev("complete_signup")),JSON.stringify(ev("complete_order"))],cs:d*86400,start:ad(cur.from),end:ad(cur.to)})
-        .then(function(res){ var r=res&&res.data&&res.data[0]; acc[d]=cumAt(r,1); return acc; })
-        .catch(function(){ acc[d]=null; return acc; });
-    });
-  });
-  return chain.then(function(acc){ STATE.ttfp={pts:pts, cum:acc}; renderTTFP(); });
+  var acc={};
+  // 서로 완전히 독립된 조회라 3개씩 묶어 병렬로(전부 동시에는 429 위험 있어 묶음 단위로 순차)
+  var CHUNK=3, chain=Promise.resolve();
+  for(var i=0;i<pts.length;i+=CHUNK){
+    (function(group){
+      chain = chain.then(function(){
+        return Promise.all(group.map(function(d){
+          return amp("funnels",{e:[JSON.stringify(ev("complete_signup")),JSON.stringify(ev("complete_order"))],cs:d*86400,start:ad(cur.from),end:ad(cur.to)})
+            .then(function(res){ var r=res&&res.data&&res.data[0]; acc[d]=cumAt(r,1); })
+            .catch(function(){ acc[d]=null; });
+        }));
+      });
+    })(pts.slice(i,i+CHUNK));
+  }
+  return chain.then(function(){ STATE.ttfp={pts:pts, cum:acc}; renderTTFP(); });
 }
 function renderTTFP(){
   var pts=STATE.ttfp.pts, cum=STATE.ttfp.cum;
@@ -644,7 +660,7 @@ function renderLastEvents(){
 function buildAiContext(){
   return {
     기간:$("from").value+"~"+$("to").value, N일기준:N,
-    노스스타: STATE.cur? {현재전환율:cumAt(STATE.cur,1), 신규가입자:cntAt(STATE.cur,0), 첫구매자:cntAt(STATE.cur,1)} : null,
+    노스스타: STATE.cur? {현재전환율:cumAt(STATE.cur,1), 신규가입자:STATE.signupTotal, 첫구매자:stepCnt(STATE.signupTotal,STATE.cur,1)} : null,
     전주전환율: STATE.wow? cumAt(STATE.wow,1) : null,
     전월전환율: STATE.mom? cumAt(STATE.mom,1) : null,
     전년전환율: STATE.yoy? cumAt(STATE.yoy,1) : null,
@@ -704,7 +720,6 @@ function refresh(){
   renderLastEvents();
   loadNorthStar()
     .then(loadCrossCheck)
-    .then(loadVolumeOverview)
     .then(loadFunnel)
     .then(loadChannel)
     .then(loadChannelTrend)

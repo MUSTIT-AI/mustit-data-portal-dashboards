@@ -21,6 +21,12 @@
   .gmeta{padding:12px 14px}
   .gname{font-weight:700;font-size:14.5px;line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;min-height:2.7em}
   .ginfo{color:#8a8880;font-size:12px;margin-top:5px}
+  .star{position:absolute;top:8px;right:8px;z-index:3;width:30px;height:30px;border-radius:50%;border:0;background:rgba(255,255,255,.92);cursor:pointer;font-size:16px;line-height:30px;text-align:center;box-shadow:0 1px 5px rgba(0,0,0,.18);padding:0}
+  .star.on{color:#f5a623}.star.off{color:#c4c2bb}
+  .star:hover{background:#fff}
+  .sec-h{font-size:15px;font-weight:800;margin:26px 0 10px;display:flex;align-items:center;gap:7px;letter-spacing:-.01em}
+  .sec-h:first-of-type{margin-top:6px}
+  .sec-h .cnt{font-size:12px;font-weight:600;color:#a7a49c}
   .foot{color:#a7a49c;font-size:12px;margin-top:26px;line-height:1.7}
   .toolbar{display:flex;gap:10px;align-items:stretch;margin:2px 0 16px;flex-wrap:wrap}
   .mkbtn{display:inline-flex;align-items:center;gap:7px;height:42px;padding:0 18px;background:#c8102e;color:#fff;border:0;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;text-decoration:none;box-sizing:border-box}
@@ -83,24 +89,68 @@
     return fetch('dashboards/' + encodeURIComponent(file), { method: 'HEAD', cache: 'no-store' })
       .then(function (r) { return r.ok; }).catch(function () { return false; });
   }
+  var GH_REPO = 'MUSTIT-AI/mustit-data-portal-dashboards';
+  // 실제 대시보드 업데이트일 = GitHub 최종 커밋일(공개 레포). localStorage 12h 캐시(레이트리밋 방지)
+  function ghDate(file) {
+    var key = 'ghd:' + file;
+    try { var c = JSON.parse(localStorage.getItem(key) || 'null'); if (c && (Date.now() - c.ts) < 43200000) return Promise.resolve(c.d); } catch (e) {}
+    return fetch('https://api.github.com/repos/' + GH_REPO + '/commits?per_page=1&path=dashboards/' + encodeURIComponent(file))
+      .then(function (r) { if (!r.ok) throw 0; return r.json(); })
+      .then(function (a) { var d = (a && a[0] && a[0].commit && a[0].commit.committer && a[0].commit.committer.date) || null; try { localStorage.setItem(key, JSON.stringify({ d: d, ts: Date.now() })); } catch (e) {} return d; })
+      .catch(function () { return null; });
+  }
+  var ITEMS = [], FAVS = {};
+  function card(d) {
+    var built = d.built;
+    var href = built ? ('dashboards/' + encodeURIComponent(d.file)) : ('dashboards/_starter.html?f=' + encodeURIComponent(d.file));
+    var on = !!FAVS[d.file];
+    var star = '<button class="star ' + (on ? 'on' : 'off') + '" data-file="' + esc(d.file) + '" title="즐겨찾기" aria-label="즐겨찾기">' + (on ? '★' : '☆') + '</button>';
+    var thumb = built
+      ? '<div class="thumb">' + star + '<iframe loading="lazy" scrolling="no" tabindex="-1" src="dashboards/' + encodeURIComponent(d.file) + '#thumb"></iframe></div>'
+      : '<div class="thumb">' + star + '<span class="badge-prep">준비중</span><div class="ph"><span class="pico">' + esc(d.icon || '📊') + '</span><span>준비중</span></div></div>';
+    var info = (d.owner_name ? esc(d.owner_name) : '') + (d.date ? ((d.owner_name ? ' · ' : '') + '업데이트 ' + fmtDate(d.date)) : '');
+    return '<a class="gcard" href="' + href + '">' + thumb +
+      '<div class="gmeta"><div class="gname">' + esc(d.title || d.file) + '</div><div class="ginfo">' + info + '</div></div></a>';
+  }
+  function render() {
+    var el = $('cards'); el.className = '';
+    if (!ITEMS.length) { el.innerHTML = '<p class="sub">열람 가능한 대시보드가 없습니다.</p>'; return; }
+    var byDate = function (a, b) { var x = a.date || '', y = b.date || ''; return y < x ? -1 : y > x ? 1 : 0; }; // 최신순
+    var favs = ITEMS.filter(function (d) { return FAVS[d.file]; }).sort(byDate);
+    var rest = ITEMS.filter(function (d) { return !FAVS[d.file]; }).sort(byDate);
+    var html = '';
+    if (favs.length) html += '<div class="sec-h">⭐ 즐겨찾기 <span class="cnt">' + favs.length + '</span></div><div class="gallery">' + favs.map(card).join('') + '</div>';
+    html += '<div class="sec-h">' + (favs.length ? '전체 대시보드' : '대시보드') + ' <span class="cnt">' + rest.length + '</span></div><div class="gallery">' + rest.map(card).join('') + '</div>';
+    el.innerHTML = html;
+    [].forEach.call(el.querySelectorAll('.star'), function (b) {
+      b.onclick = function (e) { e.preventDefault(); e.stopPropagation(); toggleFav(b.getAttribute('data-file')); };
+    });
+    setTimeout(scaleThumbs, 30);
+  }
+  function toggleFav(file) {
+    var on = !FAVS[file];
+    if (on) FAVS[file] = true; else delete FAVS[file];
+    render();
+    window.MUSTIT.rpc('dash_fav_set', { p_file: file, p_on: on }).catch(function () {
+      if (on) delete FAVS[file]; else FAVS[file] = true; render();  // 실패 시 롤백
+    });
+  }
   function refreshCards() {
     var el = $('cards');
-    return window.MUSTIT.rpc('dash_list', {}).then(function (list) {
-      list = list || [];
+    return Promise.all([
+      window.MUSTIT.rpc('dash_list', {}),
+      window.MUSTIT.rpc('dash_favs', {}).catch(function () { return []; })
+    ]).then(function (r) {
+      var list = r[0] || [], favs = r[1] || [];
+      FAVS = {}; favs.forEach(function (f) { FAVS[f] = true; });
       if (!list.length) { el.className = ''; el.innerHTML = '<p class="sub">열람 가능한 대시보드가 없습니다.</p>'; return; }
       return Promise.all(list.map(function (d) { return fileExists(d.file); })).then(function (exists) {
-        el.className = 'gallery';
-        el.innerHTML = list.map(function (d, i) {
-          var built = exists[i];
-          var href = built ? ('dashboards/' + encodeURIComponent(d.file)) : ('dashboards/_starter.html?f=' + encodeURIComponent(d.file));
-          var thumb = built
-            ? '<div class="thumb"><iframe loading="lazy" scrolling="no" tabindex="-1" src="dashboards/' + encodeURIComponent(d.file) + '#thumb"></iframe></div>'
-            : '<div class="thumb"><span class="badge-prep">준비중</span><div class="ph"><span class="pico">' + esc(d.icon || '📊') + '</span><span>준비중</span></div></div>';
-          var info = (d.owner_name ? esc(d.owner_name) : '') + (d.updated_at ? (' · ' + fmtDate(d.updated_at)) : '');
-          return '<a class="gcard" href="' + href + '">' + thumb +
-            '<div class="gmeta"><div class="gname">' + esc(d.title || d.file) + '</div><div class="ginfo">' + info + '</div></div></a>';
-        }).join('');
-        setTimeout(scaleThumbs, 30);
+        return Promise.all(list.map(function (d, i) { return exists[i] ? ghDate(d.file) : Promise.resolve(null); })).then(function (dates) {
+          ITEMS = list.map(function (d, i) {
+            return { file: d.file, title: d.title, icon: d.icon, owner_name: d.owner_name, built: exists[i], date: dates[i] || d.updated_at || d.created_at || null };
+          });
+          render();
+        });
       });
     }).catch(function () { el.className = ''; el.innerHTML = '<p class="sub">목록을 불러오지 못했습니다.</p>'; });
   }

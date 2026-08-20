@@ -75,6 +75,18 @@
   table.dt td{padding:5px 8px;border-bottom:1px solid #f0efe9;font-variant-numeric:tabular-nums;text-align:right}
   table.dt td:first-child{text-align:left}
   table.dt tr:hover td{background:#fafaf7}
+  /* DAU/WAU/MAU 컴포넌트 */
+  .auc{border-left:3px solid #7b9ff2}
+  .auc .acfilters{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin:8px 0}
+  .auc .acfilters select{border:1px solid #d6d4ce;border-radius:6px;padding:5px 7px;font-size:12px;height:29px;background:#fff;max-width:170px}
+  .acfrow{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;padding:8px;background:#f7f6f2;border-radius:8px}
+  .acf{display:flex;gap:4px;align-items:center}
+  .acf select,.acf input{border:1px solid #d6d4ce;border-radius:6px;padding:4px 6px;font-size:11.5px;height:26px}
+  .acf select{max-width:150px}
+  .acf input{width:110px}
+  .achead{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
+  .achead .kpi{flex:1;min-width:150px}
+  .acgrp{margin-bottom:8px}
   .loading{position:fixed;inset:0;background:rgba(255,255,255,.55);display:none;align-items:center;justify-content:center;z-index:80;font-weight:700;color:var(--red)}
   .loading.on{display:flex}
   .block{display:none;position:fixed;inset:0;background:var(--bg);z-index:80;place-items:center;text-align:center;color:var(--sub);font-family:system-ui}
@@ -101,28 +113,18 @@
 </div>
 
 <div class="wrap">
-  <div class="sechead">유저 지표</div>
+  <div class="sechead">유저 지표 (전체 요약)</div>
   <div class="kpis" id="kpis_user"></div>
-  <div class="sechead">매출 지표</div>
+  <div class="sechead">매출 지표 (전체 요약)</div>
   <div class="kpis" id="kpis_rev"></div>
 
+  <div class="sechead">DAU / WAU / MAU 분석 컴포넌트 <span style="font-weight:400">(각자 독립된 기간·그룹바이·필터)</span></div>
+  <div id="au_components"></div>
+
   <div class="card">
-    <h3>AU · 획득유저(가입자) · 결제 유저수 추이</h3>
+    <h3>AU · 획득유저(가입자) · 결제 유저수 추이 (전체 요약)</h3>
     <p class="csub">AU = Any Active Event 순유저수(막대, 좌측축) · 획득유저 = complete_signup 순유저수 · 결제 유저수 = complete_order 순유저수 (선, 우측축)</p>
     <div class="chart" id="c_au"></div>
-  </div>
-
-  <div class="grid2">
-    <div class="card">
-      <h3>ARPU 추이</h3>
-      <p class="csub">ARPU = 순매출 ÷ AU</p>
-      <div class="chart" id="c_arpu" style="height:260px"></div>
-    </div>
-    <div class="card">
-      <h3>ARPPU 추이</h3>
-      <p class="csub">ARPPU = 순매출 ÷ 결제 유저수</p>
-      <div class="chart" id="c_arppu" style="height:260px"></div>
-    </div>
   </div>
 
   <div class="card">
@@ -253,6 +255,197 @@ function fetchAUBucket(endStr, lookbackDays, interval){
   }).catch(function(){ return null; });
 }
 
+// ── DAU/WAU/MAU 분석 컴포넌트 (독립 기간·그룹바이·필터) ──
+// 그룹바이/필터에 쓸 수 있는 실제 존재하는 유저 프로퍼티(get_properties로 확인된 것만)
+var DIMS = [
+  {key:"", label:"(없음)", type:"string"},
+  {key:"gp:utm_source", label:"미디어소스(UTM Source)", type:"string"},
+  {key:"gp:gender", label:"성별", type:"string"},
+  {key:"platform", label:"플랫폼", type:"string"},
+  {key:"country", label:"국가", type:"string"},
+  {key:"device", label:"디바이스", type:"string"},
+  {key:"gp:membership_level", label:"멤버십등급", type:"string"},
+  {key:"os", label:"OS", type:"string"},
+  {key:"gp:birth_year", label:"생년(연령 필터용, 숫자)", type:"number"}
+];
+var STRING_OPS = [["is","포함(=)"],["is not","제외(≠)"],["contains","포함하는 값"],["does not contain","포함하지 않는 값"]];
+var NUMBER_OPS = [[">=","이상"],["<=","이하"],["=","같음"],["!=","다름"],[">","초과"],["<","미만"]];
+function dimByKey(k){ return DIMS.filter(function(d){return d.key===k;})[0] || DIMS[0]; }
+
+// event(예: _active, complete_order)의 from~to 구간 "진짜 유니크"(합산 아님) + 트렌드
+// overallSeries: 버킷(일/주/월)과 무관하게 전체 구간 distinct 유저수를 서버가 직접 계산해 주는 필드(실측 확인됨).
+// ⚠ 이 필드가 내부(세션인증) 차트 API에서는 확인됐으나, 우리가 쓰는 API키 기반 amplitude-proxy 응답에도
+//   동일하게 오는지는 아직 실서비스에서 미검증 — 없으면 headline이 "—"로 표시되니 배포 후 꼭 확인 필요.
+function queryAURange(eventType, from, to, filters, groupBy, interval){
+  if(THUMB) return Promise.resolve({overall:null, xValues:[], series:[], labels:[]});
+  var evFilters = (filters||[]).filter(function(f){ return f.key; }).map(function(f){
+    return {subprop_type:"user", subprop_key:f.key, subprop_op:f.op, subprop_value:f.values};
+  });
+  var gb = (groupBy||[]).filter(Boolean).map(function(k){ return {type:"user", value:k}; });
+  var ev = {event_type:eventType, filters:evFilters, group_by:gb};
+  return amp("events/segmentation",{
+    e:[JSON.stringify(ev)], m:"uniques", i:interval||1,
+    start:toCompact(from), end:toCompact(to), s:[JSON.stringify(CRAWLER_SEG)]
+  }).then(function(d){
+    var data=(d&&d.data)||{};
+    var overallRaw = data.overallSeries;
+    var overall=null;
+    if(Array.isArray(overallRaw) && overallRaw.length){
+      overall = overallRaw.map(function(row){
+        if(Array.isArray(row)) return (row[0]&&row[0].value!=null)?row[0].value:(typeof row[0]==="number"?row[0]:null);
+        return (row&&row.value!=null)?row.value:(typeof row==="number"?row:null);
+      });
+    }
+    return { overall:overall, xValues:data.xValues||[], series:data.series||[], labels:data.seriesLabels||[] };
+  }).catch(function(e){ return { error:(e&&e.message)||String(e) }; });
+}
+
+// ── 컴포넌트 UI 생성 ──
+var AUC = {}; // id -> {cfg, chart}
+function componentHTML(cfg){
+  var gbOpts = DIMS.map(function(d){ return '<option value="'+esc(d.key)+'">'+esc(d.label)+'</option>'; }).join("");
+  function filterRow(i){
+    return '<div class="acf">'+
+      '<select class="acf_dim" data-i="'+i+'">'+gbOpts+'</select>'+
+      '<select class="acf_op" data-i="'+i+'"></select>'+
+      '<input class="acf_val" data-i="'+i+'" type="text" placeholder="값(쉼표로 여러개)">'+
+      '</div>';
+  }
+  return ''+
+  '<div class="card auc" id="auc_'+cfg.id+'">'+
+    '<div class="tblwrap"><h3 style="margin:0">'+esc(cfg.title)+'</h3>'+
+      '<span class="hint">'+esc(cfg.hint)+'</span></div>'+
+    '<div class="acfilters">'+
+      '<div class="fld"><label>시작일</label><input type="date" class="ac_from"></div>'+
+      '<div class="fld"><label>종료일</label><input type="date" class="ac_to"></div>'+
+      '<div class="fld"><label>추이 단위</label><select class="ac_gran"><option value="1">일별</option><option value="30">월별</option></select></div>'+
+      '<div class="fld"><label>그룹바이 1</label><select class="ac_gb1">'+gbOpts+'</select></div>'+
+      '<div class="fld"><label>그룹바이 2</label><select class="ac_gb2">'+gbOpts+'</select></div>'+
+      '<button class="btn go ac_go">조회</button>'+
+    '</div>'+
+    '<div class="acfrow">'+filterRow(0)+filterRow(1)+filterRow(2)+'</div>'+
+    '<div class="achead" id="auc_'+cfg.id+'_kpis"></div>'+
+    '<div class="chart" id="auc_'+cfg.id+'_chart" style="height:240px"></div>'+
+    '<div class="acgrp" id="auc_'+cfg.id+'_grp"></div>'+
+    '<p class="note" id="auc_'+cfg.id+'_note"></p>'+
+  '</div>';
+}
+function setupFilterOps(root){
+  [].forEach.call(root.querySelectorAll(".acf"), function(row){
+    var dimSel=row.querySelector(".acf_dim"), opSel=row.querySelector(".acf_op");
+    function refreshOps(){
+      var dim=dimByKey(dimSel.value);
+      var ops = dim.type==="number" ? NUMBER_OPS : STRING_OPS;
+      opSel.innerHTML = ops.map(function(o){return '<option value="'+o[0]+'">'+o[1]+'</option>';}).join("");
+    }
+    dimSel.value=""; refreshOps();
+    dimSel.addEventListener("change", refreshOps);
+  });
+}
+function readFilters(root){
+  var out=[];
+  [].forEach.call(root.querySelectorAll(".acf"), function(row){
+    var key=row.querySelector(".acf_dim").value;
+    if(!key) return;
+    var op=row.querySelector(".acf_op").value;
+    var raw=row.querySelector(".acf_val").value.trim();
+    if(!raw) return;
+    var dim=dimByKey(key);
+    var values = dim.type==="number" ? [Number(raw)] : raw.split(",").map(function(s){return s.trim();}).filter(Boolean);
+    out.push({key:key, op:op, values:values});
+  });
+  return out;
+}
+function acDefaultDates(root, days){
+  var y=new Date(); y.setDate(y.getDate()-1);
+  var f=new Date(y.getTime()); f.setDate(f.getDate()-(days-1));
+  root.querySelector(".ac_from").value=ymd(f);
+  root.querySelector(".ac_to").value=ymd(y);
+}
+function paintAcKpis(elId, tiles){
+  $(elId).innerHTML = tiles.map(function(t){
+    return '<div class="kpi"><div class="l">'+t.l+'</div><div class="v'+(t.red?" red":"")+'">'+t.v+'</div></div>';
+  }).join("");
+}
+function refreshComponent(cfg){
+  var root = $("auc_"+cfg.id);
+  var from=root.querySelector(".ac_from").value, to=root.querySelector(".ac_to").value;
+  var gran = Number(root.querySelector(".ac_gran").value);
+  var gb1 = root.querySelector(".ac_gb1").value, gb2 = root.querySelector(".ac_gb2").value;
+  var filters = readFilters(root);
+  $("auc_"+cfg.id+"_note").textContent = "불러오는 중…";
+  // 앰플리튜드 호출 순차 실행(429 방지): AU유니크 → (MAU만) 결제유저유니크 → (MAU만) 매출 RPC
+  return queryAURange(cfg.event, from, to, filters, [gb1,gb2], gran).then(function(res){
+    if(res.error){ $("auc_"+cfg.id+"_note").textContent = "오류: "+res.error; return; }
+    var hasGroup = !!(gb1||gb2);
+    var overall = res.overall||[];
+    var chartId = "auc_"+cfg.id+"_chart";
+    if(hasGroup){
+      // 그룹바이 활성: 그룹별 breakdown 표로 표시 (헤드라인 단일값 대신)
+      var labels = res.labels||[];
+      $("auc_"+cfg.id+"_grp").innerHTML = '<table class="mtbl"><thead><tr><th>그룹</th><th style="text-align:right">순유저(구간 전체)</th></tr></thead><tbody>'+
+        labels.map(function(lb,i){ return '<tr><td>'+esc(String(lb))+'</td><td style="text-align:right">'+(overall[i]==null?'—':won(overall[i]))+'</td></tr>'; }).join("")+
+        '</tbody></table>';
+      paintAcKpis("auc_"+cfg.id+"_kpis", [{l:cfg.title+" (그룹 수)", v:won(labels.length)}]);
+      chart(chartId).clear();
+      $(chartId).innerHTML = "";
+    } else {
+      $("auc_"+cfg.id+"_grp").innerHTML = "";
+      var headline = overall.length ? overall[0] : null;
+      var tiles = [{l:cfg.title+" ("+from+" ~ "+to+", 구간 전체 순유저·유니크)", v: headline==null?"—":won(headline), red:1}];
+      var chainP = Promise.resolve();
+      if(cfg.showRevenue){
+        chainP = queryAURange("complete_order", from, to, filters, [], gran).then(function(payRes){
+          var payingUnique = (payRes.overall&&payRes.overall.length) ? payRes.overall[0] : null;
+          return window.MUSTIT.rpc("dash_daily_conversion", {p:{from:from,to:to}}).then(function(drows){
+            var netSum = (drows||[]).reduce(function(a,r){return a+(Number(r.net_rev)||0);},0);
+            var arpu = (headline>0) ? Math.round(netSum/headline) : null;
+            var arppu = (payingUnique>0) ? Math.round(netSum/payingUnique) : null;
+            tiles.push({l:"결제유저(구간 전체 순유저·유니크)", v: payingUnique==null?"—":won(payingUnique)});
+            tiles.push({l:"순매출(구간 합계)", v:"₩"+won(netSum), red:1});
+            tiles.push({l:"ARPU (순매출÷AU)", v: arpu==null?"—":"₩"+won(arpu), red:1});
+            tiles.push({l:"ARPPU (순매출÷결제유저)", v: arppu==null?"—":"₩"+won(arppu), red:1});
+          }).catch(function(e){ tiles.push({l:"매출 조회 오류", v:e.message}); });
+        }).catch(function(e){ tiles.push({l:"결제유저 조회 오류", v:e.message}); });
+      }
+      return chainP.then(function(){
+        paintAcKpis("auc_"+cfg.id+"_kpis", tiles);
+        var xs=res.xValues.map(function(x){return md(x);});
+        var ys=(res.series&&res.series[0])||[];
+        chart(chartId).setOption({
+          grid:{left:52,right:16,top:20,bottom:40},
+          tooltip:{trigger:"axis",confine:true},
+          xAxis:catAxis(xs), yAxis:valAxis(kFmt),
+          series:[{name:cfg.title,type:"bar",data:ys,itemStyle:{color:"#7b9ff2"},barMaxWidth:20}]
+        }, true);
+        $("auc_"+cfg.id+"_note").textContent = headline==null
+          ? "⚠ 서버 응답에 구간 전체 유니크(overallSeries)가 없어 헤드라인을 표시할 수 없습니다. 아래 차트는 "+(gran===30?"월별":"일별")+" 버킷별 값입니다(합산 시 중복 발생 — 참고용)."
+          : "차트는 참고용 "+(gran===30?"월별":"일별")+" 추이(버킷 간 중복 있을 수 있음) · 위 헤드라인 숫자만 구간 전체 순유저(유니크)입니다.";
+      });
+    }
+  }).catch(function(e){ $("auc_"+cfg.id+"_note").textContent = "오류: "+e.message; });
+}
+var AUC_CONFIGS = [
+  {id:"dau", title:"DAU", hint:"일 단위 Any Active Event 순유저(기본 1일)", event:"_active", defaultDays:1, showRevenue:false},
+  {id:"wau", title:"WAU", hint:"주 단위 Any Active Event 순유저(기본 7일)", event:"_active", defaultDays:7, showRevenue:false},
+  {id:"mau", title:"MAU (+ARPU·ARPPU)", hint:"월 단위 Any Active Event 순유저(기본 30일) · 매출은 주문DB 순매출", event:"_active", defaultDays:30, showRevenue:true}
+];
+function buildAUComponents(){
+  $("au_components").innerHTML = AUC_CONFIGS.map(componentHTML).join("");
+  AUC_CONFIGS.forEach(function(cfg){
+    var root = $("auc_"+cfg.id);
+    setupFilterOps(root);
+    acDefaultDates(root, cfg.defaultDays);
+    root.querySelector(".ac_go").onclick = function(){ refreshComponent(cfg); };
+  });
+}
+function refreshAllAUComponents(){
+  // 컴포넌트 3개의 앰플리튜드 호출도 순차 실행(429 방지)
+  return AUC_CONFIGS.reduce(function(p, cfg){
+    return p.then(function(){ return refreshComponent(cfg); });
+  }, Promise.resolve());
+}
+
 // ── KPI ──
 function sum(arr){ return arr.reduce(function(a,x){return a+(Number(x)||0);},0); }
 function avg(arr){ var v=arr.filter(function(x){return x!=null;}); return v.length? v.reduce(function(a,b){return a+b;},0)/v.length : 0; }
@@ -355,8 +548,6 @@ function refresh(){
       { name:"획득유저(가입자)", data:rows.map(function(r){return r.signups;}), color:"#2fae8f" },
       { name:"결제 유저수", data:rows.map(function(r){return r.buyers;}), color:"#c8102e" }
     ]);
-    singleBar("c_arpu", dates, "ARPU", rows.map(function(r){return r.arpu;}), wonFmt);
-    singleBar("c_arppu", dates, "ARPPU", rows.map(function(r){return r.arppu;}), wonFmt);
     singleBar("c_rev", dates, "순매출", rows.map(function(r){return r.net_rev;}), wonFmt);
     paintTable(rows);
     $("csv").disabled = rows.length===0;
@@ -447,7 +638,9 @@ window.MUSTIT.ready(function(){
   window.MUSTIT.rpc("dash_access",{p_dashboard:FILE}).then(function(a){
     if(!a || a.view===false){ $("block").style.display="grid"; return; }
     setupTopbar();
+    buildAUComponents();
     refresh();
+    refreshAllAUComponents();
   }).catch(function(e){ $("block").style.display="grid"; });
 });
 })();

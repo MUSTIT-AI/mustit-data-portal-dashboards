@@ -168,7 +168,7 @@
     </table>
   </div>
 
-  <p class="sub" style="text-align:center">데이터: <code>orders_secure</code> 직접 집계 · KST · GMV=총구매금액 · 실거래액=취소 3상태(구매취소환불완료·판매취소완료·반품환불완료) 제외</p>
+  <p class="sub" style="text-align:center">데이터: <code>dash_raw_all/dash_raw</code> RPC 집계 · KST · GMV=총구매금액 · 실거래액=취소 3상태(구매취소환불완료·판매취소완료·반품환불완료) 제외 · <b>build rpc-v2</b></p>
 </div>
 
 <div class="loading" id="loading">불러오는 중…</div>
@@ -231,11 +231,13 @@ function loadFilters(){
    orders_secure 직접 SELECT은 buyer_token() 실행권한 문제로 막혀, definer RPC를 사용한다. */
 var ACCESS=null;
 function fetchRows(from,to){
-  var p={from:from,to:to,filters:{}};
-  var fn=(ACCESS&&ACCESS.pii)?"dash_raw_all":"dash_raw";
-  return window.MUSTIT.rpc(fn,{p:p,p_limit:100000}).then(function(rows){
-    return Array.isArray(rows)?rows:[];
-  });
+  var big={p:{from:from,to:to,filters:{}},p_limit:100000};
+  function raw(){return window.MUSTIT.rpc("dash_raw",big).then(function(r){return Array.isArray(r)?r:[];});}
+  // PII 계정이면 구매자ID 포함 시도(dash_raw_all) → buyer_token 권한 등으로 실패하면 dash_raw로 폴백
+  if(ACCESS&&ACCESS.pii){
+    return window.MUSTIT.rpc("dash_raw_all",big).then(function(r){return Array.isArray(r)?r:[];}).catch(raw);
+  }
+  return raw();
 }
 
 /* ── 클라이언트 필터 (파생 + 텍스트 + 드롭다운) ── */
@@ -266,7 +268,7 @@ function clientFilter(rows){
 
 /* ── 집계 ── */
 function agg(rows){
-  var s={gmv:0,realGmv:0,tx:0,orders:0,qty:0,grossR:0,ownDiscR:0,pgR:0,ownDiscAll:0,
+  var s={gmv:0,realGmv:0,tx:0,orders:0,qty:0,grossR:0,ownDiscR:0,pgR:0,ownDiscAll:0,hasBuyer:false,
          orderSet:{},buyerSet:{},sellerSet:{},
          rel:{item:{g:0,d:0},dps:{g:0,d:0},naver:{g:0,d:0},member:{g:0,d:0}},
          byDate:{}, byProd:{}, cancelByProd:{}};
@@ -275,7 +277,7 @@ function agg(rows){
     s.gmv+=tp; s.tx+=1; s.qty+=Number(r.quantity)||0;
     s.ownDiscAll+=Number(r.own_discount_ttl)||0;
     if(r.order_no!=null) s.orderSet[r.order_no]=1;
-    if(r.buyer_hash!=null) s.buyerSet[r.buyer_hash]=1;
+    if(r.buyer_hash!=null){ s.buyerSet[r.buyer_hash]=1; s.hasBuyer=true; }
     if(r.seller_id!=null) s.sellerSet[r.seller_id]=1;
     var d=String(r.order_datetime||"").slice(0,10);
     var bd=s.byDate[d]||(s.byDate[d]={g:0,r:0}); bd.g+=tp;
@@ -328,7 +330,7 @@ function renderKPI(cur,cmp){
   $("kpi_bot").innerHTML=
     tile("거래건수", won(cur.tx)+"건",{cmp:cmp&&won(cmp.tx),curNum:cur.tx,cmpNum:cmp&&cmp.tx,bw:'order_detail_no'})+
     tile("주문건수", won(cur.orders)+"건",{cmp:cmp&&won(cmp.orders),curNum:cur.orders,cmpNum:cmp&&cmp.orders,bw:'distinct 주문번호'})+
-    tile("구매자수", (ACCESS&&ACCESS.pii)?(won(cur.buyers)+"명"):"권한 필요",{cmp:(ACCESS&&ACCESS.pii&&cmp)?won(cmp.buyers):null,curNum:cur.buyers,cmpNum:cmp&&cmp.buyers,bw:(ACCESS&&ACCESS.pii)?"distinct 구매자ID":"개인정보 권한 필요"})+
+    tile("구매자수", cur.hasBuyer?(won(cur.buyers)+"명"):"–",{cmp:(cur.hasBuyer&&cmp)?won(cmp.buyers):null,curNum:cur.buyers,cmpNum:cmp&&cmp.buyers,bw:cur.hasBuyer?"distinct 구매자ID":"buyer_token 권한 필요(관리자)"})+
     tile("주문수량", won(cur.qty)+"개",{cmp:cmp&&won(cmp.qty),curNum:cur.qty,cmpNum:cmp&&cmp.qty})+
     tile("활성판매자수", won(cur.sellers)+"명",{cmp:cmp&&won(cmp.sellers),curNum:cur.sellers,cmpNum:cmp&&cmp.sellers,bw:'기간내 판매 seller'})+
     tile("주문단가", won(cur.aovOrder)+"원",{cmp:cmp&&won(cmp.aovOrder)+"원",curNum:cur.aovOrder,cmpNum:cmp&&cmp.aovOrder,bw:'GMV ÷ 주문건수'})+

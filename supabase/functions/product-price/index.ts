@@ -1,9 +1,13 @@
-// 상품 최대혜택가·재고 조회 프록시 (Supabase Edge Function)
+// 상품 가격·재고 조회 프록시 (Supabase Edge Function)
 //
-// maxBenefitPrice(최대혜택가)·stock(재고)은 머스트잇 Open API price-detail 엔드포인트의
-// 실시간 값이라 매일 동기화되는 mustit_products/mustit_catalogs 뷰에는 없다(그건
-// selling_price까지만 보관, 재고는 있지만 하루 지연). 같은 응답에 stock도 들어있어서
-// 별도 호출 없이 함께 반환한다.
+// maxBenefitPrice(최대혜택가)·stock(재고)·marketLowestPrice(시장최저가)·
+// mustitLowestPrice(M최저가)·discountedPrice(즉시할인가)는 머스트잇 Open API
+// price-detail 엔드포인트의 실시간 값이라 매일 동기화되는 mustit_products/
+// mustit_catalogs 뷰에는 없다(그건 selling_price까지만 보관, 재고는 있지만 하루
+// 지연). 한 응답에 다 들어있어서 별도 호출 없이 함께 반환한다.
+// (참고: C:\Users\Admin\Documents\Claude\ax_open_api\mustit-dashboard 의 더 발전된
+// 버전과 필드명을 맞춤 — 그 앱은 GMV를 orders_v가 아니라 Open API 주문에서 직접
+// 집계해서 별개 프로젝트이지만, 상품가격 필드 의미는 동일한 API라 그대로 재사용 가능)
 // 이 함수가 서버측에서 인증하고 값만 로그인한 사용자에게 돌려준다.
 //
 // 자격증명은 openapi-orders / openapi-daily-sync 와 동일하게 Vault(get_openapi_creds RPC)에서
@@ -11,7 +15,8 @@
 //
 // verify_jwt=true 로 배포 → 로그인한 사용자만 호출 가능.
 // 호출 (프론트): window.MUSTIT.fn("product-price", { itemNos: "123,456,789" })
-//   → { "123": {maxBenefitPrice:139000, stock:5}, "456": null, ... }  (null = 조회 실패/판매종료 등)
+//   → { "123": {maxBenefitPrice, stock, marketLowestPrice, mustitLowestPrice, discountedPrice},
+//       "456": null, ... }  (null = 조회 실패/판매종료 등. 0은 "정보 없음"을 의미하는 값도 있음 — 최저가류)
 
 const BASE_URL = "https://api.mustit.co.kr";
 const SB = Deno.env.get("SUPABASE_URL") ?? "";
@@ -109,11 +114,21 @@ Deno.serve(async (req: Request) => {
       throw new Error(body.resultMessage ?? `HTTP ${res.status}`);
     }
 
-    const out: Record<string, { maxBenefitPrice: number | null; stock: number | null } | null> = {};
+    interface PriceOut {
+      maxBenefitPrice: number | null;
+      stock: number | null;
+      marketLowestPrice: number | null;
+      mustitLowestPrice: number | null;
+      discountedPrice: number | null;
+    }
+    const out: Record<string, PriceOut | null> = {};
     for (const item of body.resultData ?? []) {
       out[String(item.itemNo)] = {
         maxBenefitPrice: item.maxBenefitPrice ?? null,
         stock: item.stock ?? null,
+        marketLowestPrice: item.marketLowestPrice ?? null,
+        mustitLowestPrice: item.mustitLowestPrice ?? null,
+        discountedPrice: item.discountedPrice ?? null,
       };
     }
     return new Response(JSON.stringify(out), {

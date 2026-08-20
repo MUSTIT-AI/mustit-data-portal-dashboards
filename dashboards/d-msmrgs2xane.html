@@ -138,11 +138,12 @@
       <colgroup>
         <col style="width:44px"><col style="width:70px"><col style="width:56px"><col style="width:90px"><col style="width:300px">
         <col style="width:120px"><col style="width:90px"><col style="width:100px"><col style="width:70px"><col style="width:100px"><col style="width:100px">
-        <col style="width:100px"><col style="width:100px"><col style="width:90px"><col style="width:110px"><col style="width:90px">
+        <col style="width:100px"><col style="width:100px"><col style="width:80px"><col style="width:100px"><col style="width:100px"><col style="width:90px"><col style="width:110px"><col style="width:90px">
       </colgroup>
       <thead><tr>
         <th>순위</th><th>이전기간<br>대비</th><th>이미지</th><th>상품번호</th><th class="l">상품명</th>
         <th class="l">판매자</th><th>카탈로그<br>순위</th><th>카탈로그<br>상품수</th><th>재고</th><th>판매가</th><th>최대<br>혜택가</th>
+        <th>M<br>최저가</th><th>시장<br>최저가</th><th>차액율</th>
         <th>머스트잇<br>할인</th><th>판매자<br>할인</th><th>판매수량</th><th>거래금액</th><th>최근 7일</th>
       </tr></thead>
       <tbody id="tbody"></tbody>
@@ -348,6 +349,9 @@ function renderTable(list){
       '<td class="stock-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
       '<td>₩'+won(unit)+'</td>'+
       '<td class="price-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="mlow-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="mktlow-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
+      '<td class="gap-ph" data-pid="'+esc(a.product_id)+'">…</td>'+
       '<td>₩'+won(a.own_discount)+'</td>'+
       '<td>₩'+won(a.seller_discount)+'</td>'+
       '<td class="qty">'+won(a.quantity)+'</td>'+
@@ -413,6 +417,8 @@ function loadPrices(list){
     paintPrices(list);
   });
 }
+// 최저가류는 0이 "정보 없음"을 뜻함(참고: ax_open_api/mustit-dashboard 관례) — "-"로 표시
+function priceOrDash(n){ return (n==null || n===0) ? "-" : ("₩"+won(n)); }
 function paintPrices(list){
   list.forEach(function(a){
     var v = PRICE_CACHE[a.product_id];
@@ -425,6 +431,28 @@ function paintPrices(list){
     if(stockEl){
       stockEl.textContent = (v && v.stock!=null) ? won(v.stock) : "-";
       stockEl.classList.remove("stock-ph");
+    }
+    var mlowEl = document.querySelector('.mlow-ph[data-pid="'+CSS.escape(String(a.product_id))+'"]');
+    if(mlowEl){
+      mlowEl.textContent = v ? priceOrDash(v.mustitLowestPrice) : "-";
+      mlowEl.classList.remove("mlow-ph");
+    }
+    var mktlowEl = document.querySelector('.mktlow-ph[data-pid="'+CSS.escape(String(a.product_id))+'"]');
+    if(mktlowEl){
+      mktlowEl.textContent = v ? priceOrDash(v.marketLowestPrice) : "-";
+      mktlowEl.classList.remove("mktlow-ph");
+    }
+    // 차액율 = (최대혜택가 − 시장최저가) / 시장최저가 × 100, 양수 빨강(비쌈) / 음수 파랑(더 저렴)
+    var gapEl = document.querySelector('.gap-ph[data-pid="'+CSS.escape(String(a.product_id))+'"]');
+    if(gapEl){
+      gapEl.classList.remove("gap-ph");
+      var mbp = v && v.maxBenefitPrice, mkt = v && v.marketLowestPrice;
+      if(mbp!=null && mkt){
+        var pct = ((mbp-mkt)/mkt*100);
+        gapEl.innerHTML = '<span class="'+(pct>0?"rank-up":pct<0?"rank-down":"rank-flat")+'">'+(pct>0?"+":"")+pct.toFixed(1)+"%</span>";
+      } else {
+        gapEl.textContent = "-";
+      }
     }
   });
 }

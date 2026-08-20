@@ -70,14 +70,6 @@
   .card .csub{color:var(--sub);font-size:11px;margin:0 0 8px}
   .chart{width:100%;height:300px}
   .note{color:var(--sub);font-size:11px;margin:2px 0 12px}
-  /* table */
-  .tblwrap{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:2px 0 8px;flex-wrap:wrap}
-  .tblscroll{overflow-x:auto;border:1px solid var(--border);border-radius:8px;background:#fff}
-  table.dt{border-collapse:collapse;white-space:nowrap;font-size:11.5px;width:100%}
-  table.dt th{background:#f4f3ef;color:#33322f;padding:6px 8px;text-align:left;border-bottom:1px solid #e2e0da;position:sticky;top:0;font-weight:700}
-  table.dt td{padding:5px 8px;border-bottom:1px solid #f0efe9;font-variant-numeric:tabular-nums;text-align:right}
-  table.dt td:first-child{text-align:left}
-  table.dt tr:hover td{background:#fafaf7}
   /* DAU/WAU/MAU 위젯 */
   .auc{border-left:3px solid #7b9ff2;cursor:default}
   .auc.dragging{opacity:.4}
@@ -122,6 +114,26 @@
   .delta{display:inline-block;margin-left:7px;padding:2px 9px;border-radius:12px;font-size:11.5px;font-weight:700;vertical-align:middle}
   .delta.up{background:#e3f6ea;color:#1f8a4c}
   .delta.down{background:#fdeaea;color:#c8102e}
+  /* 지표 타일(요약 위젯) */
+  .tilegrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+  @media(max-width:900px){.tilegrid{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:560px){.tilegrid{grid-template-columns:1fr}}
+  .mtile{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px 16px;text-align:center;cursor:pointer;transition:box-shadow .15s}
+  .mtile:hover{box-shadow:0 4px 14px rgba(0,0,0,.10)}
+  .mtile.dragging{opacity:.4}
+  .mtile_l{font-size:12px;color:#b0aca3;margin-bottom:10px;font-weight:600}
+  .mtile_v{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .tm_presets{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
+  .tm_presets button{border:1px solid #d6d4ce;background:#fff;border-radius:20px;padding:5px 13px;font-size:12px;font-weight:600;cursor:pointer}
+  .tm_presets button:hover{border-color:var(--red);color:var(--red)}
+  .tm_presets button.active{background:var(--red);border-color:var(--red);color:#fff}
+  .leafbox{background:#f7f6f2;border-radius:8px;padding:10px;margin-bottom:8px}
+  .leafbox .mrow label{width:60px}
+  .leafbox select{border:1px solid #d6d4ce;border-radius:6px;padding:4px 6px;font-size:12px;height:27px}
+  .divwrap{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  @media(max-width:520px){.divwrap{grid-template-columns:1fr}}
+  .tm_preview{margin-top:10px;padding:12px;background:#f7f6f2;border-radius:8px;text-align:center;font-size:22px;font-weight:800}
+  .tm_preview .l{font-size:11px;color:var(--sub);font-weight:600;margin-bottom:4px}
   .loading{position:fixed;inset:0;background:rgba(255,255,255,.55);display:none;align-items:center;justify-content:center;z-index:80;font-weight:700;color:var(--red)}
   .loading.on{display:flex}
   .block{display:none;position:fixed;inset:0;background:var(--bg);z-index:80;place-items:center;text-align:center;color:var(--sub);font-family:system-ui}
@@ -140,12 +152,17 @@
 </div>
 
 <div class="wrap">
-  <div class="sechead"><span class="sectri" data-target="summarySection">▼</span>요약 위젯 <span style="font-weight:400">(AU·획득유저·결제유저·매출 지표 — 여러 개 추가 가능, 각자 독립된 기간)</span></div>
+  <div class="sechead"><span class="sectri" data-target="summarySection">▼</span>요약 위젯 <span style="font-weight:400">(ARPU·ARPPU·가입자수·결제자수·GMV·순수익·전환률 — 지표 타일, 여러 개 추가 가능)</span></div>
   <div class="secbody" id="summarySection">
-    <div id="summary_widgets"></div>
-    <button class="btn go" id="sw_add" type="button" style="margin-bottom:14px">+ 요약 위젯 추가</button>
-    <button class="btn reset" id="sw_refresh_all" type="button" style="margin-bottom:14px">🔄 전체 요약 조회</button>
-    <p class="note">데이터 소스: <b>dash_daily_conversion</b>(주문DB × 앰플리튜드 amp_daily 캐시) + <b>획득유저</b>·<b>WAU</b>·<b>MAU</b>는 조회 시점 앰플리튜드 실시간 조회(WAU=이번 주 월~일, MAU=이번 달 1일~말일, 진행 중이면 부분 집계). 위젯 구성은 <b>이 브라우저에만</b> 저장됩니다(localStorage, 공유 안 됨). "페이지 열 때 자동조회"가 꺼져 있으면(신규 위젯 기본값) 버튼을 눌러야 조회됩니다.</p>
+    <div class="acfilters" style="padding:0 0 10px">
+      <div class="fld"><label>시작일</label><input type="date" id="tiles_from"></div>
+      <div class="fld"><label>종료일</label><input type="date" id="tiles_to"></div>
+      <button class="btn go" id="tiles_go" type="button">조회</button>
+      <span class="hint">이 섹션의 모든 타일이 같은 기간을 공유합니다 · 타일을 클릭하면 상세 설정(계산식·세그먼트·비교)을 편집할 수 있습니다 · 드래그로 순서 변경</span>
+    </div>
+    <div class="tilegrid" id="summary_tiles"></div>
+    <button class="btn go" id="sw_add" type="button" style="margin:12px 0">+ 위젯 추가</button>
+    <p class="note">값 계산: <b>합계(sum)</b>=주문DB 기간 합계, <b>순유저수(countUnique)</b>=앰플리튜드 구간 전체 유니크(세그먼트 필터 가능), <b>나누기(div)</b>=분자÷분모. 위젯 구성은 <b>이 브라우저에만</b> 저장됩니다(localStorage, 공유 안 됨).</p>
   </div>
 
   <div class="sechead"><span class="sectri" data-target="auSection">▼</span>DAU / WAU / MAU 분석 위젯 <span style="font-weight:400">(각자 독립된 기간·세그먼트·필터, 위젯별로 자동조회 켜고 끌 수 있음)</span></div>
@@ -170,6 +187,25 @@
     <div id="m_delwrap" style="display:none;margin-top:18px;border-top:1px solid #eee;padding-top:14px">
       <button class="btn" id="m_del" style="background:#c8102e;color:#fff;padding:8px 16px">이 대시보드 삭제</button>
       <span style="font-size:11.5px;color:#8a8880;margin-left:8px">생성자만 · 목록에서 삭제 · 되돌릴 수 없음</span>
+    </div>
+  </div>
+</div>
+
+<!-- 지표 타일 설정 모달 (생성/상세 편집 공용) -->
+<div class="modal" id="tileModal">
+  <div class="modalbox" style="width:640px">
+    <div class="mhead"><b id="tm_headtitle">지표 위젯 설정</b><button id="tm_close">✕</button></div>
+    <div class="mrow"><label>제목</label><input id="tm_title" type="text"></div>
+    <h4>프리셋 (클릭하면 아래 계산식이 채워집니다 · 이후 자유롭게 수정 가능)</h4>
+    <div id="tm_presets" class="tm_presets"></div>
+    <h4>계산식</h4>
+    <div id="tm_metric"></div>
+    <div class="mrow" style="margin-top:8px"><label>비교</label><select id="tm_compare"></select></div>
+    <div id="tm_preview" class="tm_preview"></div>
+    <div style="display:flex;gap:8px;margin-top:14px;align-items:center">
+      <button class="btn go" id="tm_save" style="padding:8px 16px">저장</button>
+      <button class="btn" id="tm_del" style="background:#fff;border:1px solid #c8102e;color:#c8102e;padding:8px 16px">🗑 이 위젯 삭제</button>
+      <span class="mmsg" id="tm_msg"></span>
     </div>
   </div>
 </div>
@@ -202,64 +238,10 @@ var TIP = { trigger:"axis", confine:true, textStyle:{fontSize:11} };
 function catAxis(dates){ return { type:"category", data:dates, axisLabel:{fontSize:9,color:"#999",rotate:38,interval:Math.max(0,Math.floor(dates.length/14))}, axisTick:{show:false}, axisLine:{lineStyle:{color:"#ddd"}} }; }
 function valAxis(fmt){ return { type:"value", axisLabel:{fontSize:9,color:"#999",formatter:fmt}, splitLine:{lineStyle:{color:"#eee"}} }; }
 function kFmt(v){ return v>=10000 ? Math.round(v/1000)+"k" : v; }
-function wonFmt(v){ return "₩"+kFmt(v); }
-
-function barLine(id, dates, barName, barData, lines){
-  var names=[barName].concat(lines.map(function(l){return l.name;}));
-  var colors=["#9fb6e8"].concat(lines.map(function(l){return l.color;}));
-  chart(id).setOption({
-    grid:{left:48,right:52,top:30,bottom:40}, tooltip:TIP,
-    legend:{data:names,top:2,left:2,itemWidth:12,itemHeight:8,itemGap:8,textStyle:{fontSize:10,color:"#555"}},
-    color:colors,
-    xAxis:catAxis(dates),
-    yAxis:[ valAxis(kFmt), { type:"value", position:"right", axisLabel:{fontSize:9,color:"#999"}, splitLine:{show:false} } ],
-    series:[{ name:barName, type:"bar", data:barData, barMaxWidth:16 }].concat(lines.map(function(l){
-      return { name:l.name, type:"line", data:l.data, yAxisIndex:1, symbol:"none", lineStyle:{width:1.6} };
-    }))
-  }, true);
-}
-function singleBar(id, dates, name, data, fmt){
-  chart(id).setOption({
-    grid:{left:52,right:16,top:20,bottom:40}, tooltip:{trigger:"axis",confine:true,valueFormatter:function(v){return "₩"+won(v);}},
-    xAxis:catAxis(dates), yAxis:valAxis(fmt||kFmt),
-    series:[{ name:name, type:"bar", data:data, itemStyle:{color:"#ee3b52"}, barMaxWidth:20 }]
-  }, true);
-}
-
 // ── 앰플리튜드 획득유저(가입자, complete_signup) 조회 ──
 var CRAWLER_SEG = [{prop:"os",op:"does not contain",values:["yeti","bot","headless","bingbot","bingbot2","crawler"]}];
 function amp(endpoint,params){ return window.MUSTIT.fn("amplitude-proxy",{endpoint:endpoint,params:params}).then(function(r){return r.data;}); }
 function toCompact(dstr){ return String(dstr).replace(/-/g,""); }
-function fetchSignups(fromStr,toStr){
-  if(THUMB) return Promise.resolve({});
-  return amp("events/segmentation",{
-    e:[JSON.stringify({event_type:"complete_signup",filters:[]})],
-    m:"uniques", i:1, start:toCompact(fromStr), end:toCompact(toStr),
-    s:[JSON.stringify(CRAWLER_SEG)]
-  }).then(function(d){
-    var xs=(d&&d.data&&d.data.xValues)||[], ss=(d&&d.data&&d.data.series&&d.data.series[0])||[];
-    var map={};
-    xs.forEach(function(x,i){ map[String(x).slice(0,10)] = ss[i]; });
-    return map;
-  }).catch(function(){ return {}; });
-}
-// WAU/MAU: 앰플리튜드의 주(월~일)/월(1일~말일) 버킷은 조회 종료일이 속한 "달력 기준" 구간으로 고정됨
-// (임의 시작일부터의 rolling N일이 아님 — 실측: interval=30 요청 시 7/21~8/19 범위를 줘도 7/1, 8/1 버킷으로 스냅됨).
-// 그래서 지난 구간을 충분히 lookback해 마지막 버킷(=종료일이 속한 진행중인 주/월)만 취한다.
-function fetchAUBucket(endStr, lookbackDays, interval){
-  if(THUMB) return Promise.resolve(null);
-  var end=new Date(endStr+"T00:00:00");
-  var start=new Date(end.getTime()); start.setDate(start.getDate()-lookbackDays);
-  return amp("events/segmentation",{
-    e:[JSON.stringify({event_type:"_active",filters:[]})],
-    m:"uniques", i:interval, start:toCompact(ymd(start)), end:toCompact(endStr),
-    s:[JSON.stringify(CRAWLER_SEG)]
-  }).then(function(d){
-    var ss=(d&&d.data&&d.data.series&&d.data.series[0])||[];
-    return ss.length ? ss[ss.length-1] : null;
-  }).catch(function(){ return null; });
-}
-
 // ── DAU/WAU/MAU 분석 위젯 (독립 기간·세그먼트·필터) ──
 // 세그먼트 조건에 쓸 수 있는 실제 존재하는 프로퍼티(get_properties/get_event_properties로 확인된 것만)
 var USER_DIMS = [
@@ -759,12 +741,6 @@ function refreshAllAUComponents(){
 // ── KPI ──
 function sum(arr){ return arr.reduce(function(a,x){return a+(Number(x)||0);},0); }
 function avg(arr){ var v=arr.filter(function(x){return x!=null;}); return v.length? v.reduce(function(a,b){return a+b;},0)/v.length : 0; }
-function paintTiles(elId, tiles){
-  $(elId).innerHTML = tiles.map(function(t){
-    return '<div class="kpi"><div class="l">'+t.l+'</div><div class="v'+(t.red?" red":"")+'">'+t.v+(t.badge||"")+'</div>'+
-      (t.note?'<div class="note2">'+esc(t.note)+'</div>':'')+'</div>';
-  }).join("");
-}
 // 펼치기/접기 공통: 접혀있으면 body 숨김 + 조회 안 함(부하 절감). 처음 펼칠 때만 자동 조회, 이후엔 캐시된 차트 리사이즈만.
 function wireCollapse(root, w, saveFn, onExpand){
   var tri = root.querySelector(".tri");
@@ -782,238 +758,331 @@ function wireCollapse(root, w, saveFn, onExpand){
   };
 }
 
-// ── 요약 위젯(유저·매출 지표 + 추이 + 일별 테이블) — 여러 개 생성 가능, 개인 브라우저에만 저장 ──
-var SW_KEY = "auc_summarywidgets_"+FILE;
-var SUMMARY_WIDGETS = [];
-var SW_DT_COLS = [
-  ["d","날짜"],["dau","AU"],["signups","획득유저(가입자)"],["buyers","결제유저수"],["orders","주문수"],
-  ["net_rev","순매출"],["arpu","ARPU"],["arppu","ARPPU"],["conv_pct","구매전환율"]
+// ── 지표 타일(요약 위젯) 시스템 — sum/countUnique/div 조합 + 세그먼트 필터 + 비교기간, 개인 브라우저에만 저장 ──
+var TILE_KEY = "auc_tiles_"+FILE;
+var TILE_RANGE_KEY = "auc_tiles_range_"+FILE;
+var TILES = [];
+// "합계(sum)"에 쓸 수 있는 필드 — dash_daily_conversion이 주는 값 중 합산 의미가 있는 것만
+var SUM_FIELDS = [
+  {key:"net_rev", label:"순매출(net_rev)"},
+  {key:"gmv", label:"GMV·거래액(gmv)"},
+  {key:"orders", label:"주문수(orders)"},
+  {key:"dau", label:"AU 합계(dau, 일별 순유저 합)"},
+  {key:"buyers", label:"결제유저 합계(buyers, 일별)"}
 ];
-function defaultSummaryWidgets(){
-  return [{id:"sw_main", title:"유저·매출 지표 요약", note:"", from:null, to:null, compare:"none", collapsed:true}];
+function newLeaf(op){ return op==="sum" ? {op:"sum", field:"net_rev"} : {op:"countUnique", event:"_active", conds:[]}; }
+var TILE_PRESETS = [
+  {key:"arpu",   label:"ARPU",    metric:{op:"div", num:{op:"sum",field:"net_rev"}, den:{op:"countUnique",event:"_active",conds:[]}}},
+  {key:"arppu",  label:"ARPPU",   metric:{op:"div", num:{op:"sum",field:"net_rev"}, den:{op:"countUnique",event:"complete_order",conds:[]}}},
+  {key:"signups",label:"가입자수", metric:{op:"countUnique", event:"complete_signup", conds:[]}},
+  {key:"buyers", label:"결제자수", metric:{op:"countUnique", event:"complete_order", conds:[]}},
+  {key:"gmv",    label:"GMV",     metric:{op:"sum", field:"gmv"}},
+  {key:"profit", label:"순수익",  metric:{op:"sum", field:"net_rev"}},
+  {key:"conv",   label:"전환률",  metric:{op:"div", num:{op:"countUnique",event:"complete_order",conds:[]}, den:{op:"countUnique",event:"_active",conds:[]}}},
+  {key:"custom", label:"커스텀",  metric:{op:"sum", field:"net_rev"}}
+];
+function presetByKey(k){ return TILE_PRESETS.filter(function(p){return p.key===k;})[0]; }
+function defaultTiles(){
+  return TILE_PRESETS.filter(function(p){return p.key!=="custom";}).map(function(p,i){
+    return { id:"t_"+p.key, title:p.label, metric:JSON.parse(JSON.stringify(p.metric)), compare:"none", order:i };
+  });
 }
-function loadSummaryWidgets(){
+function loadTiles(){
   try{
-    var raw = localStorage.getItem(SW_KEY);
+    var raw = localStorage.getItem(TILE_KEY);
     if(raw){
-      var arr=JSON.parse(raw);
-      if(Array.isArray(arr)&&arr.length){
-        arr.forEach(function(s){ if(s.collapsed==null) s.collapsed=true; if(s.note==null) s.note=""; if(!s.compare) s.compare="none"; });
-        // 데이터 무결성 가드: id 없는(깨진) 항목은 걸러내고 새 id 부여
-        arr = arr.filter(Boolean).map(function(s){ if(!s.id) s.id = newSummaryWidgetId(); return s; });
+      var arr = JSON.parse(raw);
+      if(Array.isArray(arr) && arr.length){
+        arr = arr.filter(Boolean).map(function(t,i){
+          if(!t.id) t.id = newTileId();
+          if(!t.metric) t.metric = newLeaf("sum");
+          if(!t.compare) t.compare = "none";
+          if(t.order==null) t.order = i;
+          return t;
+        });
         if(arr.length) return arr;
       }
     }
-  }catch(e){ console.error("loadSummaryWidgets 복구 실패, 기본값 사용:", e); }
-  return defaultSummaryWidgets();
+  }catch(e){ console.error("loadTiles 복구 실패, 기본값 사용:", e); }
+  return defaultTiles();
 }
-function saveSummaryWidgets(){ try{ localStorage.setItem(SW_KEY, JSON.stringify(SUMMARY_WIDGETS.map(function(s){
-  return {id:s.id,title:s.title,note:s.note,from:s.from,to:s.to,compare:s.compare,collapsed:s.collapsed};
+function saveTiles(){ try{ localStorage.setItem(TILE_KEY, JSON.stringify(TILES.map(function(t){
+  return {id:t.id,title:t.title,metric:t.metric,compare:t.compare,order:t.order};
 }))); }catch(e){} }
-function newSummaryWidgetId(){ return "sw_"+Date.now()+"_"+Math.floor(Math.random()*1000); }
-function summaryWidgetHTML(sw){
-  var cmpOpts = COMPARE_OPTS.map(function(o){return '<option value="'+o[0]+'">'+esc(o[1])+'</option>';}).join("");
-  return ''+
-  '<div class="card sw" id="'+sw.id+'">'+
-    '<div class="achdr">'+
-      '<span class="tri" title="펼치기/접기">▶</span>'+
-      '<input type="text" class="ac_title" value="'+esc(sw.title)+'">'+
-      '<button type="button" class="btn del sw_del">🗑 삭제</button>'+
-    '</div>'+
-    '<div class="wbody">'+
-      '<input type="text" class="ac_note" placeholder="설명(주석)" value="'+esc(sw.note||"")+'">'+
-      '<div class="acfilters">'+
-        '<div class="fld"><label>시작일</label><input type="date" class="sw_from"></div>'+
-        '<div class="fld"><label>종료일</label><input type="date" class="sw_to"></div>'+
-        '<div class="fld"><label>비교</label><select class="sw_compare">'+cmpOpts+'</select></div>'+
-        '<button type="button" class="btn go sw_go">조회</button>'+
-        '<button type="button" class="btn reset sw_reset">초기화</button>'+
-      '</div>'+
-      '<div class="sechead">유저 지표</div>'+
-      '<div class="kpis" id="'+sw.id+'_ku"></div>'+
-      '<div class="sechead">매출 지표</div>'+
-      '<div class="kpis" id="'+sw.id+'_kr"></div>'+
-      '<h4 style="margin:10px 0 2px;font-size:13px">AU · 획득유저(가입자) · 결제 유저수 추이</h4>'+
-      '<div class="chart" id="'+sw.id+'_cau" style="height:280px"></div>'+
-      '<h4 style="margin:10px 0 2px;font-size:13px">일별 순매출</h4>'+
-      '<div class="chart" id="'+sw.id+'_crev" style="height:200px"></div>'+
-      '<div class="tblwrap"><h4 style="margin:0;font-size:13px">일별 데이터</h4><button type="button" class="btn csv" id="'+sw.id+'_csv">⬇ CSV 다운로드</button></div>'+
-      '<div class="tblscroll"><table class="dt" id="'+sw.id+'_dt"></table></div>'+
-      '<p class="note" id="'+sw.id+'_note"></p>'+
-    '</div>'+
-  '</div>';
+function newTileId(){ return "t_"+Date.now()+"_"+Math.floor(Math.random()*1000); }
+function loadTilesRange(){
+  try{ var raw=localStorage.getItem(TILE_RANGE_KEY); if(raw){ var o=JSON.parse(raw); if(o&&o.from&&o.to) return o; } }catch(e){}
+  return acDefaultDates(THUMB?14:30);
 }
-function paintSWTable(sw, rows){
-  var thead = "<thead><tr>"+SW_DT_COLS.map(function(c){return "<th>"+c[1]+"</th>";}).join("")+"</tr></thead>";
-  var tbody = "<tbody>"+rows.slice().reverse().map(function(r){
-    return "<tr>"+SW_DT_COLS.map(function(c){ var v=r[c[0]]; return "<td>"+(v==null?"—":v)+"</td>"; }).join("")+"</tr>";
-  }).join("")+"</tbody>";
-  $(sw.id+"_dt").innerHTML = thead+tbody;
+function saveTilesRange(){ try{ localStorage.setItem(TILE_RANGE_KEY, JSON.stringify({from:$("tiles_from").value, to:$("tiles_to").value})); }catch(e){} }
+
+// ── 지표 계산: leaf = {op:"sum",field} 또는 {op:"countUnique",event,conds:[{scope,key,op,values,join}]} ──
+function computeLeaf(leaf, from, to, dailyRowsCache){
+  if(leaf.op==="sum"){
+    return dailyRowsCache.then(function(rows){ return sum((rows||[]).map(function(r){ return r[leaf.field]; })); });
+  }
+  var userConds = (leaf.conds||[]).filter(function(c){return c.scope==="user" && c.key;}).map(function(c){return {key:c.key,op:c.op,values:c.values};});
+  var eventConds = (leaf.conds||[]).filter(function(c){return c.scope==="event" && c.key;}).map(function(c){return {key:c.key,op:c.op,values:c.values};});
+  return queryAURange(leaf.event, from, to, eventConds, userConds.length?[userConds]:[], 1).then(function(res){
+    return (res.overall && res.overall.length) ? res.overall[0] : null;
+  });
 }
-function csvCell(v){ v=(v==null?"":String(v)); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
-function downloadSWCSV(sw){
-  if(!sw._rows || !sw._rows.length) return;
-  var head = SW_DT_COLS.map(function(c){return csvCell(c[1]);}).join(",");
-  var body = sw._rows.map(function(r){ return SW_DT_COLS.map(function(c){return csvCell(r[c[0]]);}).join(","); }).join("\r\n");
-  var blob = new Blob(["﻿"+head+"\r\n"+body], {type:"text/csv;charset=utf-8;"});
-  var url = URL.createObjectURL(blob);
-  var a = document.createElement("a");
-  a.href=url; a.download=esc(sw.title)+"_"+sw.from+"_"+sw.to+".csv";
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+function computeMetric(metric, from, to, dailyRowsCache){
+  if(metric.op==="div"){
+    return Promise.all([
+      computeLeaf(metric.num, from, to, dailyRowsCache),
+      computeLeaf(metric.den, from, to, dailyRowsCache)
+    ]).then(function(r){ var n=r[0], d=r[1]; return (n!=null && d) ? n/d : null; });
+  }
+  return computeLeaf(metric, from, to, dailyRowsCache);
 }
-// 요약 위젯 KPI 타일 정의: key는 computeSummaryAggregates()가 반환하는 값의 키와 일치해야 함
-var SW_USER_TILE_DEFS = [
-  {key:"auSum", l:function(a){return "AU (합계, 조회기간 일별 순유저 합)";}},
-  {key:"auAvg", l:function(a){return "AU (평균, 합계÷"+a.days+"일)";}},
-  {key:"dauLatest", l:"DAU (최근일)"},
-  {key:"wau", l:"WAU (이번주, 월~일 기준·진행중)"},
-  {key:"mau", l:"MAU (이번달, 달력 기준·진행중)"},
-  {key:"sticky", l:"Stickiness (DAU÷MAU, 이번달)", isPct:true},
-  {key:"signAvg", l:"평균 획득유저(가입자)"},
-  {key:"buyAvg", l:"평균 결제 유저수"}
-];
-var SW_REV_TILE_DEFS = [
-  {key:"netSum", l:"총 순매출", won:true, red:1},
-  {key:"arpuAvg", l:"평균 ARPU", won:true, red:1},
-  {key:"arppuAvg", l:"평균 ARPPU", won:true, red:1},
-  {key:"convAvg", l:"평균 구매전환율", isPct:true}
-];
-function fmtSWTile(def, v){
+function fmtTileValue(metric, v){
   if(v==null) return "—";
-  if(def.isPct) return pct(v);
-  if(def.won) return "₩"+won(v);
+  if(metric.op==="div"){
+    var numIsMoney = metric.num.op==="sum";
+    return numIsMoney ? ("₩"+won(Math.round(v))) : pct(v);
+  }
+  if(metric.op==="sum" && (metric.field==="net_rev"||metric.field==="gmv")) return "₩"+won(v);
   return won(v);
 }
-function buildSWTiles(defs, agg, prevAgg, range){
-  return defs.map(function(def){
-    var v = agg[def.key];
-    var t = { l:(typeof def.l==="function"?def.l(agg):def.l), v:fmtSWTile(def,v), red:def.red };
-    if(def.key==="auSum" || def.key==="auAvg") t.note = range;
-    if(prevAgg){
-      var pv = prevAgg[def.key];
-      if(v!=null && pv!=null && pv!==0) t.badge = deltaBadge(v, pv);
-    }
-    return t;
+
+// ── 타일 그리드 렌더링 + 드래그 순서변경 ──
+function tileHTML(t){
+  return '<div class="mtile" id="tile_'+t.id+'" draggable="true" data-id="'+t.id+'">'+
+    '<div class="mtile_l">'+esc(t.title)+'</div>'+
+    '<div class="mtile_v" id="tile_'+t.id+'_v">—</div>'+
+  '</div>';
+}
+function renderTiles(){
+  TILES.sort(function(a,b){return (a.order||0)-(b.order||0);});
+  $("summary_tiles").innerHTML = TILES.map(tileHTML).join("");
+  [].forEach.call(document.querySelectorAll("#summary_tiles .mtile"), function(el){
+    el.addEventListener("click", function(){ openTileModal(el.getAttribute("data-id")); });
   });
+  wireTileDragReorder();
 }
-function computeSummaryAggregates(rows, wau, mau){
-  var auSum=sum(rows.map(function(r){return r.dau;})), auAvg=avg(rows.map(function(r){return r.dau;}));
-  var dauLatest = rows.length ? rows[rows.length-1].dau : null;
-  var sticky = (dauLatest!=null && mau) ? (dauLatest/mau) : null;
-  var signAvg=avg(rows.map(function(r){return r.signups;})), buyAvg=avg(rows.map(function(r){return r.buyers;}));
-  var netSum=rows.reduce(function(a,r){return a+(Number(r.net_rev)||0);},0);
-  var arpuAvg=avg(rows.map(function(r){return r.arpu;})), arppuAvg=avg(rows.map(function(r){return r.arppu;})), convAvg=avg(rows.map(function(r){return r.conv;}));
-  return { days:rows.length, auSum:auSum, auAvg:auAvg, dauLatest:dauLatest, wau:wau, mau:mau, sticky:sticky, signAvg:signAvg, buyAvg:buyAvg, netSum:netSum, arpuAvg:arpuAvg, arppuAvg:arppuAvg, convAvg:convAvg };
-}
-// 한 기간(from~to)의 요약 데이터를 통째로 가져와 집계까지 계산 — 현재 기간·비교 기간 양쪽에 재사용
-function fetchSummaryPeriod(from, to){
-  var p = { from:from, to:to };
-  var ampChain = fetchSignups(p.from, p.to).then(function(signMap){
-    return fetchAUBucket(p.to, 14, 7).then(function(wau){
-      return fetchAUBucket(p.to, 40, 30).then(function(mau){ return { signMap:signMap, wau:wau, mau:mau }; });
+function wireTileDragReorder(){
+  var container = $("summary_tiles");
+  var dragEl = null;
+  [].forEach.call(container.querySelectorAll(".mtile"), function(card){
+    card.addEventListener("dragstart", function(){ dragEl=card; card.classList.add("dragging"); });
+    card.addEventListener("dragend", function(){ card.classList.remove("dragging"); dragEl=null; syncTileOrderFromDOM(); });
+    card.addEventListener("dragover", function(e){
+      e.preventDefault();
+      if(!dragEl || dragEl===card) return;
+      var rect=card.getBoundingClientRect();
+      var after = (e.clientX - rect.left) > rect.width/2;
+      container.insertBefore(dragEl, after ? card.nextSibling : card);
     });
   });
-  return Promise.all([
-    window.MUSTIT.rpc("dash_daily_conversion", {p:p}),
-    ampChain
-  ]).then(function(res){
-    var rows = res[0]||[], signMap = res[1].signMap||{};
-    rows.forEach(function(r){
-      r.d = d10(r.d);
-      r.signups = signMap[r.d] != null ? signMap[r.d] : null;
-      r.arpu = (r.dau>0) ? Math.round((Number(r.net_rev)||0)/r.dau) : null;
-      r.arppu = (r.buyers>0) ? Math.round((Number(r.net_rev)||0)/r.buyers) : null;
-      r.conv_pct = pct(r.conv);
-    });
-    return { rows:rows, agg: computeSummaryAggregates(rows, res[1].wau, res[1].mau) };
-  });
 }
-function refreshSummaryWidget(sw){
-  var root = $(sw.id);
-  if(!root) return Promise.resolve();
-  var from=root.querySelector(".sw_from").value, to=root.querySelector(".sw_to").value;
-  var cmpSel = root.querySelector(".sw_compare");
-  var cmpMode = cmpSel ? cmpSel.value : "none";
-  sw.from=from; sw.to=to; sw.compare=cmpMode; saveSummaryWidgets();
-  $(sw.id+"_note").textContent = "불러오는 중…";
-  // 앰플리튜드 호출은 순차 실행(동시 호출 시 429 위험): 현재기간 → (비교기간 켜져있으면) 비교기간
-  return fetchSummaryPeriod(from, to).then(function(cur){
-    var rows = cur.rows;
-    sw._rows = rows; sw._loaded = true;
-    var dates = rows.map(function(r){ return md(r.d); });
-    var range = rows.length ? (d10(rows[0].d)+" ~ "+d10(rows[rows.length-1].d)) : "";
-    var cmp = compareRange(from, to, cmpMode);
-    var prevP = cmp ? fetchSummaryPeriod(cmp.from, cmp.to).then(function(p){return p;}).catch(function(){return null;}) : Promise.resolve(null);
-    return prevP.then(function(prev){
-      var prevAgg = prev && prev.agg;
-      paintTiles(sw.id+"_ku", buildSWTiles(SW_USER_TILE_DEFS, cur.agg, prevAgg, range));
-      paintTiles(sw.id+"_kr", buildSWTiles(SW_REV_TILE_DEFS, cur.agg, prevAgg, range));
-      barLine(sw.id+"_cau", dates, "AU", rows.map(function(r){return r.dau;}), [
-        { name:"획득유저(가입자)", data:rows.map(function(r){return r.signups;}), color:"#2fae8f" },
-        { name:"결제 유저수", data:rows.map(function(r){return r.buyers;}), color:"#c8102e" }
-      ]);
-      singleBar(sw.id+"_crev", dates, "순매출", rows.map(function(r){return r.net_rev;}), wonFmt);
-      paintSWTable(sw, rows);
-      $(sw.id+"_csv").disabled = rows.length===0;
-      $(sw.id+"_note").textContent = cmp ? ("비교기간: "+cmp.from+" ~ "+cmp.to) : "";
-    });
-  }).catch(function(e){ $(sw.id+"_note").textContent = "오류: "+e.message; });
+function syncTileOrderFromDOM(){
+  var ids = [].map.call($("summary_tiles").querySelectorAll(".mtile"), function(c){ return c.getAttribute("data-id"); });
+  ids.forEach(function(id,i){ var t=TILES.filter(function(x){return x.id===id;})[0]; if(t) t.order=i; });
+  saveTiles();
 }
-function wireSummaryWidget(sw){
-  var root = $(sw.id);
-  var d = (sw.from && sw.to) ? {from:sw.from,to:sw.to} : acDefaultDates(THUMB?14:30);
-  root.querySelector(".sw_from").value = d.from;
-  root.querySelector(".sw_to").value = d.to;
-  root.querySelector(".sw_compare").value = sw.compare||"none";
-  root.querySelector(".ac_title").addEventListener("change", function(e){ sw.title=e.target.value; saveSummaryWidgets(); });
-  root.querySelector(".ac_note").addEventListener("change", function(e){ sw.note=e.target.value; saveSummaryWidgets(); });
-  root.querySelector(".sw_del").onclick = function(){
-    if(!confirm('"'+sw.title+'" 요약 위젯을 삭제할까요? (이 브라우저에서만 사라집니다)')) return;
-    SUMMARY_WIDGETS = SUMMARY_WIDGETS.filter(function(x){ return x.id!==sw.id; });
-    delete CH[sw.id+"_cau"]; delete CH[sw.id+"_crev"];
-    saveSummaryWidgets();
-    renderSummaryWidgets();
+
+// ── 타일 값 계산·표시(공유 기간 필터 사용, 앰플리튜드 호출은 타일마다 순차) ──
+function refreshTile(t, from, to, dailyRowsCache){
+  var elV = $("tile_"+t.id+"_v");
+  return computeMetric(t.metric, from, to, dailyRowsCache).then(function(v){
+    t._value = v;
+    var cmp = compareRange(from, to, t.compare);
+    var chainP = cmp
+      ? computeMetric(t.metric, cmp.from, cmp.to, window.MUSTIT.rpc("dash_daily_conversion",{p:{from:cmp.from,to:cmp.to}}).then(function(r){return r||[];})).catch(function(){return null;})
+      : Promise.resolve(null);
+    return chainP.then(function(prevV){
+      var badge = (v!=null && prevV!=null && prevV!==0) ? deltaBadge(v, prevV) : "";
+      if(elV) elV.innerHTML = fmtTileValue(t.metric, v) + badge;
+    });
+  }).catch(function(e){ console.error("타일 계산 실패:", t.id, e); if(elV) elV.textContent = "오류"; });
+}
+function refreshAllTiles(){
+  var from=$("tiles_from").value, to=$("tiles_to").value;
+  saveTilesRange();
+  var dailyRowsCache = window.MUSTIT.rpc("dash_daily_conversion", {p:{from:from,to:to}}).then(function(rows){ return rows||[]; });
+  // 타일마다 순차 실행(앰플리튜드 429 방지) — sum-only 타일은 dailyRowsCache를 공유해 RPC 재호출 없음
+  return TILES.reduce(function(p, t){ return p.then(function(){ return refreshTile(t, from, to, dailyRowsCache); }); }, Promise.resolve());
+}
+function buildSummaryTiles(){
+  TILES = loadTiles();
+  var range = loadTilesRange();
+  $("tiles_from").value = range.from;
+  $("tiles_to").value = range.to;
+  renderTiles();
+}
+
+// ── 타일 설정 모달(생성/편집 공용) ──
+var TM_CURRENT = null; // 편집 중인 타일 id, null이면 신규
+var TM_LAST_PRESET_TITLE = "";
+function leafEditorHTML(cls){
+  var sumOpts = SUM_FIELDS.map(function(f){return '<option value="'+f.key+'">'+esc(f.label)+'</option>';}).join("");
+  var evOpts = EVENT_OPTS.map(function(o){return '<option value="'+o[0]+'">'+esc(o[1])+'</option>';}).join("");
+  return '<div class="leafbox '+cls+'">'+
+    '<div class="mrow"><label>연산</label><select class="leaf_op"><option value="sum">합계(sum)</option><option value="countUnique">순유저수(countUnique)</option></select></div>'+
+    '<div class="mrow leaf_sumrow"><label>필드</label><select class="leaf_field">'+sumOpts+'</select></div>'+
+    '<div class="mrow leaf_curow"><label>이벤트</label><select class="leaf_event">'+evOpts+'</select></div>'+
+    '<div class="leaf_conds leaf_curow"></div>'+
+    '<button type="button" class="btn reset leaf_addcond leaf_curow">+ 조건 추가</button>'+
+  '</div>';
+}
+function wireLeafBox(box, leaf){
+  box._leaf = leaf;
+  if(!leaf.conds) leaf.conds=[];
+  var opSel=box.querySelector(".leaf_op"), fieldSel=box.querySelector(".leaf_field"), evSel=box.querySelector(".leaf_event");
+  var sumRow=box.querySelector(".leaf_sumrow"), curows=box.querySelectorAll(".leaf_curow");
+  var condsBox=box.querySelector(".leaf_conds"), addBtn=box.querySelector(".leaf_addcond");
+  opSel.value=leaf.op; fieldSel.value=leaf.field||"net_rev"; evSel.value=leaf.event||"_active";
+  function applyVis(){
+    var isSum = opSel.value==="sum";
+    sumRow.style.display = isSum?"":"none";
+    [].forEach.call(curows, function(el){ el.style.display = isSum?"none":""; });
+  }
+  function renderConds(){
+    condsBox.innerHTML = leaf.conds.map(function(c,ci){
+      var dims = dimsForScope(c.scope, leaf.event);
+      var dimOpts = dims.map(function(d){return '<option value="'+esc(d.key)+'">'+esc(d.label)+'</option>';}).join("");
+      return '<div class="condrow">'+
+        (ci>0 ? '<select class="cond_join"><option value="AND">AND</option><option value="OR">OR</option></select>' : '<span class="cond_first">조건</span>')+
+        '<select class="cond_scope"><option value="user">유저속성</option><option value="event">이벤트속성</option></select>'+
+        '<select class="cond_key">'+dimOpts+'</select>'+
+        '<select class="cond_op"></select>'+
+        '<div class="condvalwrap"><input type="text" class="cond_val" placeholder="값(쉼표로 여러개)" autocomplete="off"><div class="condval_panel"></div></div>'+
+        '<button type="button" class="btn del cond_del">✕</button>'+
+      '</div>';
+    }).join("");
+    [].forEach.call(condsBox.querySelectorAll(".condrow"), function(row, ci){
+      var c = leaf.conds[ci];
+      var scopeSel=row.querySelector(".cond_scope"), keySel=row.querySelector(".cond_key"), opSel2=row.querySelector(".cond_op"), valInput=row.querySelector(".cond_val"), valPanel=row.querySelector(".condval_panel");
+      scopeSel.value=c.scope; keySel.value=c.key; valInput.value=(c.values||[]).join(",");
+      function refreshOps(){
+        var dim = dimByKeyIn(dimsForScope(scopeSel.value, leaf.event), keySel.value);
+        var ops = dim.type==="number"?NUMBER_OPS:STRING_OPS;
+        opSel2.innerHTML = ops.map(function(o){return '<option value="'+o[0]+'">'+o[1]+'</option>';}).join("");
+        opSel2.value = c.op || ops[0][0];
+      }
+      function refreshValPanel(){
+        var opts = VALUE_SUGGESTIONS[c.key]||[];
+        if(!opts.length){ valPanel.innerHTML=""; return; }
+        valPanel.innerHTML = opts.map(function(v){return '<div class="condval_opt">'+esc(v)+'</div>';}).join("");
+        [].forEach.call(valPanel.querySelectorAll(".condval_opt"), function(opt){
+          opt.onmousedown=function(e){
+            e.preventDefault();
+            var cur=valInput.value.split(",").map(function(s){return s.trim();}).filter(Boolean);
+            var v=opt.textContent; if(cur.indexOf(v)===-1) cur.push(v);
+            valInput.value=cur.join(","); valInput.dispatchEvent(new Event("change"));
+          };
+        });
+      }
+      refreshOps(); refreshValPanel();
+      valInput.addEventListener("focus",function(){ if(valPanel.innerHTML) valPanel.style.display="block"; });
+      valInput.addEventListener("blur",function(){ setTimeout(function(){valPanel.style.display="none";},150); });
+      var joinSel=row.querySelector(".cond_join");
+      if(joinSel){ joinSel.value=c.join||"AND"; joinSel.addEventListener("change",function(){c.join=joinSel.value;}); }
+      scopeSel.addEventListener("change",function(){ c.scope=scopeSel.value; c.key=""; renderConds(); });
+      keySel.addEventListener("change",function(){ c.key=keySel.value; refreshOps(); refreshValPanel(); });
+      opSel2.addEventListener("change",function(){ c.op=opSel2.value; });
+      valInput.addEventListener("change",function(){
+        var dim=dimByKeyIn(dimsForScope(c.scope, leaf.event), c.key);
+        c.values = dim.type==="number" ? [Number(valInput.value)] : valInput.value.split(",").map(function(s){return s.trim();}).filter(Boolean);
+      });
+      row.querySelector(".cond_del").onclick=function(){ leaf.conds.splice(ci,1); renderConds(); };
+    });
+  }
+  opSel.addEventListener("change", function(){ leaf.op=opSel.value; applyVis(); });
+  fieldSel.addEventListener("change", function(){ leaf.field=fieldSel.value; });
+  evSel.addEventListener("change", function(){ leaf.event=evSel.value; renderConds(); });
+  addBtn.onclick = function(){
+    if(leaf.conds.length>=10){ alert("조건은 최대 10개까지 추가할 수 있습니다."); return; }
+    leaf.conds.push({scope:"user",key:"platform",op:"is",values:[],join:"AND"});
+    renderConds();
   };
-  root.querySelector(".sw_go").onclick = function(){ refreshSummaryWidget(sw); };
-  root.querySelector(".sw_reset").onclick = function(){
-    var dd = acDefaultDates(THUMB?14:30);
-    root.querySelector(".sw_from").value=dd.from; root.querySelector(".sw_to").value=dd.to;
-    refreshSummaryWidget(sw);
-  };
-  root.querySelector(".sw_csv").onclick = function(){ downloadSWCSV(sw); };
-  wireCollapse(root, sw, saveSummaryWidgets, function(){ refreshSummaryWidget(sw); });
+  applyVis(); renderConds();
 }
-function renderSummaryWidgets(){
-  $("summary_widgets").innerHTML = SUMMARY_WIDGETS.map(summaryWidgetHTML).join("");
-  // 요약 위젯 하나가 깨져도 전체 페이지가 죽지 않도록 개별로 감쌈
-  SUMMARY_WIDGETS.forEach(function(sw){
-    try{ wireSummaryWidget(sw); }
-    catch(e){ console.error("요약 위젯 초기화 실패:", sw.id, e); var n=$(sw.id+"_note"); if(n) n.textContent="⚠ 이 위젯을 불러오는 중 오류: "+e.message; }
+function renderMetricEditor(metric){
+  $("tm_metric").innerHTML =
+    '<div class="mrow"><label>연산</label><select id="tm_op"><option value="sum">합계(sum)</option><option value="countUnique">순유저수(countUnique)</option><option value="div">나누기(div)</option></select></div>'+
+    '<div id="tm_singlewrap">'+leafEditorHTML("tm_single")+'</div>'+
+    '<div id="tm_divwrap" class="divwrap" style="display:none">'+
+      '<div><h4 style="margin:6px 0 4px">분자</h4>'+leafEditorHTML("tm_num")+'</div>'+
+      '<div><h4 style="margin:6px 0 4px">분모</h4>'+leafEditorHTML("tm_den")+'</div>'+
+    '</div>';
+  $("tm_op").value = metric.op;
+  wireLeafBox(document.querySelector(".tm_single"), metric.op==="div" ? newLeaf("sum") : JSON.parse(JSON.stringify(metric)));
+  wireLeafBox(document.querySelector(".tm_num"), metric.op==="div" ? metric.num : newLeaf("sum"));
+  wireLeafBox(document.querySelector(".tm_den"), metric.op==="div" ? metric.den : newLeaf("countUnique"));
+  function toggleShape(){
+    var op = $("tm_op").value;
+    $("tm_singlewrap").style.display = op==="div" ? "none" : "";
+    $("tm_divwrap").style.display = op==="div" ? "grid" : "none";
+  }
+  toggleShape();
+  $("tm_op").onchange = toggleShape;
+}
+function renderPresetButtons(){
+  $("tm_presets").innerHTML = TILE_PRESETS.map(function(p){
+    return '<button type="button" data-key="'+p.key+'">'+esc(p.label)+'</button>';
+  }).join("");
+  [].forEach.call($("tm_presets").querySelectorAll("button"), function(btn){
+    btn.onclick = function(){
+      var preset = presetByKey(btn.getAttribute("data-key"));
+      if(!preset) return;
+      if(!$("tm_title").value || $("tm_title").value===TM_LAST_PRESET_TITLE){ $("tm_title").value = preset.label; }
+      TM_LAST_PRESET_TITLE = preset.label;
+      renderMetricEditor(JSON.parse(JSON.stringify(preset.metric)));
+      [].forEach.call($("tm_presets").querySelectorAll("button"), function(b){b.classList.remove("active");});
+      btn.classList.add("active");
+    };
   });
 }
-function addSummaryWidget(){
-  var sw = {id:newSummaryWidgetId(), title:"새 요약 위젯", note:"", from:null, to:null, compare:"none", collapsed:false};
-  SUMMARY_WIDGETS.push(sw);
-  saveSummaryWidgets();
-  renderSummaryWidgets();
-  refreshSummaryWidget(sw);
+function readMetricFromEditor(){
+  var op = $("tm_op").value;
+  if(op==="div"){
+    return { op:"div", num: document.querySelector(".tm_num")._leaf, den: document.querySelector(".tm_den")._leaf };
+  }
+  var leaf = document.querySelector(".tm_single")._leaf;
+  leaf.op = op;
+  return leaf;
 }
-function buildSummaryWidgets(){
-  SUMMARY_WIDGETS = loadSummaryWidgets();
-  renderSummaryWidgets();
+function openTileModal(id){
+  TM_CURRENT = id || null;
+  var t = id ? TILES.filter(function(x){return x.id===id;})[0] : null;
+  $("tm_headtitle").textContent = t ? "지표 위젯 설정" : "새 지표 위젯";
+  $("tm_title").value = t ? t.title : "";
+  TM_LAST_PRESET_TITLE = "";
+  renderPresetButtons();
+  renderMetricEditor(t ? JSON.parse(JSON.stringify(t.metric)) : JSON.parse(JSON.stringify(TILE_PRESETS[0].metric)));
+  $("tm_compare").innerHTML = COMPARE_OPTS.map(function(o){return '<option value="'+o[0]+'">'+esc(o[1])+'</option>';}).join("");
+  $("tm_compare").value = t ? (t.compare||"none") : "none";
+  $("tm_del").style.display = t ? "" : "none";
+  $("tm_msg").textContent="";
+  $("tm_preview").innerHTML = '값 계산: <b>합계(sum)</b>=주문DB 기간 합계 · <b>순유저수(countUnique)</b>=앰플리튜드 구간 전체 유니크(세그먼트 필터 가능) · <b>나누기(div)</b>=분자÷분모. 저장하면 대시보드 타일에 바로 반영됩니다.';
+  $("tileModal").style.display="flex";
 }
-function refreshAllSummaryWidgets(){
-  SUMMARY_WIDGETS.forEach(function(sw){ sw.collapsed=false; });
-  saveSummaryWidgets();
-  renderSummaryWidgets();
-  return SUMMARY_WIDGETS.reduce(function(p, sw){ return p.then(function(){ return refreshSummaryWidget(sw); }); }, Promise.resolve());
+function closeTileModal(){ $("tileModal").style.display="none"; TM_CURRENT=null; }
+function saveTileFromModal(){
+  var title = $("tm_title").value.trim() || "새 지표";
+  var metric = readMetricFromEditor();
+  var compare = $("tm_compare").value;
+  var target;
+  if(TM_CURRENT){
+    target = TILES.filter(function(x){return x.id===TM_CURRENT;})[0];
+    if(target){ target.title=title; target.metric=metric; target.compare=compare; }
+  } else {
+    target = { id:newTileId(), title:title, metric:metric, compare:compare, order:TILES.length };
+    TILES.push(target);
+  }
+  saveTiles();
+  renderTiles();
+  closeTileModal();
+  var from=$("tiles_from").value, to=$("tiles_to").value;
+  var dailyRowsCache = window.MUSTIT.rpc("dash_daily_conversion", {p:{from:from,to:to}}).then(function(r){return r||[];});
+  refreshTile(target, from, to, dailyRowsCache);
 }
-// 랜딩 시 펼쳐져 있는(collapsed=false) 요약/AU 위젯만 순차 조회 — 접혀 있으면 조회 안 함(부하 절감)
+// 랜딩 시 지표 타일(요약 위젯)은 항상 조회, AU 위젯은 펼쳐져 있는(collapsed=false) 것만 순차 조회 — 접혀 있으면 조회 안 함(부하 절감)
 function refreshExpandedOnInit(){
-  var expandedSW = SUMMARY_WIDGETS.filter(function(s){return !s.collapsed;});
   var expandedW = WIDGETS.filter(function(w){return !w.collapsed;});
-  return expandedSW.reduce(function(p, sw){ return p.then(function(){ return refreshSummaryWidget(sw); }); }, Promise.resolve())
+  return refreshAllTiles()
     .then(function(){ return expandedW.reduce(function(p, w){ return p.then(function(){ return refreshWidget(w); }); }, Promise.resolve()); });
 }
 
@@ -1095,8 +1164,19 @@ function deleteDash(name){
     tri.textContent = hide ? "▶" : "▼";
   };
 });
-$("sw_add").onclick=addSummaryWidget;
-$("sw_refresh_all").onclick=function(){ refreshAllSummaryWidgets(); };
+$("sw_add").onclick=function(){ openTileModal(null); };
+$("tiles_go").onclick=function(){ refreshAllTiles(); };
+$("tm_close").onclick=closeTileModal;
+$("tm_save").onclick=saveTileFromModal;
+$("tm_del").onclick=function(){
+  if(!TM_CURRENT) return;
+  if(!confirm("이 지표 타일을 삭제할까요? (이 브라우저에서만 사라집니다)")) return;
+  TILES = TILES.filter(function(x){ return x.id!==TM_CURRENT; });
+  saveTiles();
+  renderTiles();
+  closeTileModal();
+};
+$("tileModal").onclick=function(e){ if(e.target===$("tileModal")) closeTileModal(); };
 $("ac_add").onclick=addWidget;
 $("ac_refresh_all").onclick=function(){ refreshAllAUComponents(); };
 $("editdash").onclick=openEditModal;
@@ -1118,7 +1198,7 @@ window.MUSTIT.ready(function(){
     if(!a || a.view===false){ $("block").style.display="grid"; return; }
     try{
       setupTopbar();
-      buildSummaryWidgets();
+      buildSummaryTiles();
       buildAUComponents();
       // 펼쳐진(collapsed=false) 위젯만 순차 조회 — 기본은 전부 접혀 있어 랜딩 시 조회 없음(부하 절감)
       refreshExpandedOnInit().catch(function(e){ showRenderError(e); });

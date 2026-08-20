@@ -73,8 +73,9 @@
   .chart{width:100%;height:230px}
   .chart.tall{height:280px}
   /* kpi */
-  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin:2px 0}
-  @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--border);border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin:2px 0}
+  @media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:640px){.kpis{grid-template-columns:repeat(2,1fr)}}
   .kpi{background:#fff;padding:12px 14px;text-align:center}
   .kpi .l{color:var(--sub);font-size:11.5px;margin-bottom:5px}
   .kpi .v{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
@@ -129,7 +130,7 @@
 <div class="kpis" id="kpis"></div>
 
 <!-- 취소 추이 -->
-<div class="grid1"><div class="card"><h3>결제완료일 기준 취소 건수 추이 <span class="h-sub" style="display:inline">(bar=취소건수 · line=취소총액)</span></h3><div id="c_trend" class="chart tall"></div></div></div>
+<div class="grid1"><div class="card"><h3>결제완료일 기준 취소 건수 추이 <span class="h-sub" style="display:inline">(bar=결제완료건수·취소건수 · line=취소총액)</span></h3><div id="c_trend" class="chart tall"></div></div></div>
 
 <!-- 사유별 · 판매자별 -->
 <div class="grid2">
@@ -261,13 +262,14 @@ function valAxisCnt(){ return { type:"value", axisLabel:{fontSize:9,color:"#999"
 function valAxisM(){ return { type:"value", position:"right", axisLabel:{formatter:function(v){return Math.round(v/1e6)+"M";},fontSize:9,color:"#999"}, splitLine:{show:false} }; }
 function legend(names){ return { data:names, top:2, left:2, itemWidth:12, itemHeight:8, itemGap:8, textStyle:{fontSize:10,color:"#555"} }; }
 
-function renderTrend(dates, cnt, amt){
+function renderTrend(dates, paidCnt, cnt, amt){
   chart("c_trend").setOption({
-    grid:GRID, tooltip:TIP, legend:legend(["취소건수","취소총액"]),
-    color:["#ee3b52","#111"],
+    grid:GRID, tooltip:TIP, legend:legend(["결제완료건수","취소건수","취소총액"]),
+    color:["#b7c6e6","#ee3b52","#111"],
     xAxis:catAxis(dates),
     yAxis:[valAxisCnt(), valAxisM()],
     series:[
+      { name:"결제완료건수", type:"bar", data:paidCnt, itemStyle:{color:"#b7c6e6"}, barMaxWidth:22, yAxisIndex:0 },
       { name:"취소건수", type:"bar", data:cnt, itemStyle:{color:"#ee3b52"}, barMaxWidth:22, yAxisIndex:0 },
       { name:"취소총액", type:"line", data:amt, yAxisIndex:1, symbol:"circle", symbolSize:3, lineStyle:{color:"#111",width:1.4}, itemStyle:{color:"#111"} }
     ]
@@ -326,8 +328,40 @@ function fetchAllCancels(from, to, filters, productName, stat){
   return next(0, []);
 }
 
+// 결제완료 건수(전체, 취소여부 무관) — 분모 파악용. 취소여부 상관없이 세는 값이라
+// paid_at만 선택해 대역폭을 줄이고, 취소유형/취소구분 필터는 제외(비취소건엔 항상 null).
+function queryPaidPage(from, toExcl, filters, productName, offset, limit){
+  var odFrom = addDays(from, -30);
+  var q = window.MUSTIT.client.from("orders_secure")
+    .select("paid_at")
+    .gte("paid_at", from)
+    .lt("paid_at", toExcl)
+    .gte("order_datetime", odFrom)
+    .lt("order_datetime", toExcl)
+    .order("paid_at", {ascending:false})
+    .range(offset, offset+limit-1);
+  q = applyFilters(q, filters);
+  if(productName) q = q.ilike("product_name", "%"+productName+"%");
+  return q.then(function(res){ if(res.error) throw res.error; return res.data||[]; });
+}
+function fetchAllPaid(from, to, filters, productName, stat){
+  var toExcl = addDays(to, 1);
+  var page = THUMB ? 500 : Q_PAGE;
+  var cap  = THUMB ? 500 : Q_CAP;
+  function next(offset, acc){
+    return queryPaidPage(from, toExcl, filters, productName, offset, page).then(function(rows){
+      acc = acc.concat(rows);
+      if(rows.length < page) return acc;
+      if(acc.length >= cap){ stat.paidTruncated = true; return acc; }
+      if(THUMB) return acc;
+      return next(offset+page, acc);
+    });
+  }
+  return next(0, []);
+}
+
 // ── KPI ──
-function renderKPI(rows){
+function renderKPI(rows, paidCount, paidTruncated){
   var n = rows.length;
   var sellers = {}; var amt = 0; var durSum = 0, durN = 0;
   rows.forEach(function(r){
@@ -339,8 +373,10 @@ function renderKPI(rows){
     }
   });
   var avgDur = durN ? (durSum/durN) : null;
+  var cancelRate = paidCount ? (n/paidCount*100) : null;
   $("kpis").innerHTML = [
-    ["취소 건수", won(n)+" 건"],
+    ["결제완료 건수", won(paidCount)+" 건"+(paidTruncated?" (상한 도달)":"")],
+    ["취소 건수", won(n)+" 건"+(cancelRate==null?"":" ("+cancelRate.toFixed(1)+"%)")],
     ["취소 판매자 수", won(Object.keys(sellers).length)+" 개사"],
     ["취소 총액", won(amt)+" 원"],
     ["결제→취소완료 평균 소요일", (avgDur==null?"-":avgDur.toFixed(1))+" 일"]
@@ -425,33 +461,49 @@ function downloadCSV(){
 }
 
 // ── params / filters ──
-function currentFilters(){
+// excludeKeys: 취소유형/취소구분은 비취소건엔 항상 null이라 "결제완료 건수"(전체) 조회엔 적용하면 안 됨
+function currentFilters(excludeKeys){
+  var ex = {}; (excludeKeys||[]).forEach(function(k){ ex[k]=1; });
   var f={};
-  FDEFS.forEach(function(def){ if(SEL[def.key] && SEL[def.key].size) f[def.key]=Array.from(SEL[def.key]); });
+  FDEFS.forEach(function(def){ if(!ex[def.key] && SEL[def.key] && SEL[def.key].size) f[def.key]=Array.from(SEL[def.key]); });
   var sid = $("seller_id").value.trim();
   if(sid) f.seller_id = sid.split(",").map(function(s){return s.trim();}).filter(Boolean);
   return f;
+}
+
+function dateRange(from, to){
+  var out=[]; var d=new Date(from+"T00:00:00"); var end=new Date(to+"T00:00:00");
+  while(d<=end){ out.push(ymd(d)); d.setDate(d.getDate()+1); }
+  return out;
 }
 
 // ── refresh ──
 function refresh(){
   var from = $("from").value, to = $("to").value;
   var filters = currentFilters();
+  var filtersNoCancel = currentFilters(["cancel_type","cancel_reason"]);
   var pn = $("product_name").value.trim();
-  var stat = {truncated:false};
+  var stat = {truncated:false, paidTruncated:false};
   $("loading").classList.add("on"); $("err").textContent="";
-  fetchAllCancels(from, to, filters, pn, stat).then(function(rows){
+  Promise.all([
+    fetchAllCancels(from, to, filters, pn, stat),
+    fetchAllPaid(from, to, filtersNoCancel, pn, stat)
+  ]).then(function(res){
+    var rows = withCancelDays(res[0]), paidRows = res[1];
     RAW_TRUNC = stat.truncated;
-    rows = withCancelDays(rows);
-    renderKPI(rows);
+    renderKPI(rows, paidRows.length, stat.paidTruncated);
     OPTS.cancel_type = uniqueVals(rows, "cancel_type");
     OPTS.cancel_reason = uniqueVals(rows, "cancel_reason");
 
-    // 결제완료일 기준 일별 취소건수·취소총액
-    var byDate = {};
+    // 결제완료일 기준 일별 결제완료건수·취소건수·취소총액 (범위 내 모든 날짜, 데이터 없는 날은 0)
+    var byDate = {}; var byPaidDate = {};
     rows.forEach(function(r){ var d=dateOf(r.paid_at); if(!byDate[d]) byDate[d]={cnt:0,amt:0}; byDate[d].cnt++; byDate[d].amt+=Number(r.total_purchase)||0; });
-    var dates = Object.keys(byDate).sort();
-    renderTrend(dates, dates.map(function(d){return byDate[d].cnt;}), dates.map(function(d){return byDate[d].amt;}));
+    paidRows.forEach(function(r){ var d=dateOf(r.paid_at); byPaidDate[d]=(byPaidDate[d]||0)+1; });
+    var dates = dateRange(from, to);
+    renderTrend(dates,
+      dates.map(function(d){ return byPaidDate[d]||0; }),
+      dates.map(function(d){ return byDate[d]?byDate[d].cnt:0; }),
+      dates.map(function(d){ return byDate[d]?byDate[d].amt:0; }));
 
     // 사유별 (취소구분 — cancel_reason_detail은 자유서술 안내문이라 제외. 취소유형은 필터로 별도 제공)
     var byReason = groupCount(rows, "cancel_reason", "미기재");

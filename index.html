@@ -7,40 +7,72 @@
 <title>MUST IT Data Portal 통합 대시보드</title>
 <style>
   body{font-family:'Pretendard','Malgun Gothic',system-ui,sans-serif;margin:0;background:#eef0f2;color:#1c1b19}
-  .wrap{max-width:1320px;margin:0 auto;padding:40px 32px}
+  .wrap{max-width:1320px;margin:0 auto;padding:36px 32px}
   h1{font-size:24px;margin:0 0 4px;letter-spacing:-.01em}
-  .sub{color:#6b6a66;font-size:14px;margin:0 0 22px}
+  .sub{color:#6b6a66;font-size:14px;margin:0 0 18px}
   .gallery{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px;margin-top:8px}
-  .gcard{display:block;background:#fff;border:1px solid #e2e0da;border-radius:14px;overflow:hidden;text-decoration:none;color:inherit;transition:border-color .15s,box-shadow .15s}
+  .gcard{position:relative;display:block;background:#fff;border:1px solid #e2e0da;border-radius:14px;overflow:hidden;cursor:pointer;color:inherit;transition:border-color .15s,box-shadow .15s}
   .gcard:hover{border-color:#c8102e;box-shadow:0 8px 22px rgba(0,0,0,.09)}
   .thumb{position:relative;width:100%;aspect-ratio:1/1;overflow:hidden;background:#f4f4f5;border-bottom:1px solid #eee}
   .thumb iframe{position:absolute;top:0;left:0;width:1280px;height:1280px;border:0;transform-origin:top left;pointer-events:none;background:#fff}
   .thumb .ph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#9a927f}
   .thumb .ph .pico{font-size:44px}
   .badge-prep{position:absolute;top:8px;left:8px;font-size:11px;font-weight:700;color:#b26a00;background:#fff3e0;border-radius:20px;padding:2px 9px;z-index:2}
+  .star{position:absolute;top:8px;right:8px;z-index:3;width:30px;height:30px;border-radius:50%;border:0;background:rgba(255,255,255,.92);cursor:pointer;font-size:16px;line-height:30px;text-align:center;box-shadow:0 1px 5px rgba(0,0,0,.18);padding:0}
+  .star.on{color:#f5a623}.star.off{color:#c4c2bb}.star:hover{background:#fff}
+  .cog{position:absolute;top:8px;left:8px;z-index:3;width:30px;height:30px;border-radius:50%;border:0;background:rgba(255,255,255,.92);cursor:pointer;font-size:14px;line-height:30px;text-align:center;box-shadow:0 1px 5px rgba(0,0,0,.18);padding:0}
+  .cog:hover{background:#fff}
+  .lock{position:absolute;bottom:8px;left:8px;z-index:2;font-size:10.5px;font-weight:700;color:#8a5a00;background:#fff6e0;border-radius:20px;padding:2px 8px}
   .gmeta{padding:12px 14px}
   .gname{font-weight:700;font-size:14.5px;line-height:1.35;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;min-height:2.7em}
-  .ginfo{color:#8a8880;font-size:12px;margin-top:5px}
-  .star{position:absolute;top:8px;right:8px;z-index:3;width:30px;height:30px;border-radius:50%;border:0;background:rgba(255,255,255,.92);cursor:pointer;font-size:16px;line-height:30px;text-align:center;box-shadow:0 1px 5px rgba(0,0,0,.18);padding:0}
-  .star.on{color:#f5a623}.star.off{color:#c4c2bb}
-  .star:hover{background:#fff}
-  .sec-h{font-size:15px;font-weight:800;margin:26px 0 10px;display:flex;align-items:center;gap:7px;letter-spacing:-.01em}
-  .sec-h:first-of-type{margin-top:6px}
-  .sec-h .cnt{font-size:12px;font-weight:600;color:#a7a49c}
+  .gdesc{color:#6b6a66;font-size:12px;margin-top:4px;line-height:1.45;overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .gtags{margin-top:7px;display:flex;flex-wrap:wrap;gap:4px}
+  .gtags .tg{font-size:10.5px;color:#c8102e;background:#fbe9ec;border-radius:20px;padding:1px 8px}
+  .ginfo{color:#a7a49c;font-size:11.5px;margin-top:8px;display:flex;align-items:center;justify-content:space-between;gap:6px}
+  .ginfo .fbtn{border:1px solid #e2e0da;background:#fff;border-radius:6px;font-size:11px;color:#6b6a66;padding:2px 8px;cursor:pointer}
+  .ginfo .fbtn:hover{border-color:#c8102e;color:#c8102e}
   .foot{color:#a7a49c;font-size:12px;margin-top:26px;line-height:1.7}
-  .toolbar{display:flex;gap:10px;align-items:stretch;margin:2px 0 16px;flex-wrap:wrap}
+  .toolbar{display:flex;gap:10px;align-items:center;margin:2px 0 14px;flex-wrap:wrap}
+  .search{flex:1;min-width:220px;max-width:420px;display:flex;align-items:center;gap:7px;background:#fff;border:1px solid #d6d4ce;border-radius:9px;padding:0 12px;height:42px}
+  .search input{border:0;outline:0;flex:1;font-size:14px;background:transparent}
   .mkbtn{display:inline-flex;align-items:center;gap:7px;height:42px;padding:0 18px;background:#c8102e;color:#fff;border:0;border-radius:9px;font-size:14px;font-weight:700;cursor:pointer;text-decoration:none;box-sizing:border-box}
   .mkbtn.ghost{background:#fff;color:#c8102e;border:1px solid #e2c3c8}
   .mkbtn.ghost .muted{color:#a7a49c;font-weight:500;font-size:12px}
   .mkbtn:disabled{opacity:.5;cursor:default}
-  .modal{display:none;position:fixed;inset:0;z-index:200;background:rgba(20,18,15,.4);align-items:flex-start;justify-content:center;padding:60px 16px}
-  .modalbox{background:#fff;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.25);width:520px;max-width:100%;max-height:80vh;overflow:auto;padding:20px 22px;color:#1c1b19}
+  .bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:0 0 12px}
+  .chip{border:1px solid #d6d4ce;background:#fff;border-radius:20px;padding:6px 14px;font-size:13px;cursor:pointer;color:#4a4844;display:inline-flex;align-items:center;gap:6px}
+  .chip.on{background:#1c1b19;color:#fff;border-color:#1c1b19}
+  .chip .x{opacity:.6;font-size:12px}.chip .x:hover{opacity:1}
+  .chip.add{color:#c8102e;border-style:dashed;border-color:#e2c3c8}
+  .sec-h{font-size:15px;font-weight:800;margin:22px 0 10px;display:flex;align-items:center;gap:7px;letter-spacing:-.01em}
+  .sec-h:first-of-type{margin-top:6px}
+  .sec-h .cnt{font-size:12px;font-weight:600;color:#a7a49c}
+  .empty{color:#8a8880;font-size:13.5px;padding:18px 2px}
+  /* modal */
+  .modal{display:none;position:fixed;inset:0;z-index:200;background:rgba(20,18,15,.4);align-items:flex-start;justify-content:center;padding:50px 16px;overflow:auto}
+  .modalbox{background:#fff;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.25);width:560px;max-width:100%;padding:20px 22px;color:#1c1b19}
   .modalbox .mhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
   .modalbox .mhead b{font-size:16px}.modalbox .mhead button{border:0;background:transparent;font-size:18px;cursor:pointer;color:#888}
-  .modalbox label.l{font-size:12.5px;color:#6b6a66;font-weight:600;display:block;margin-bottom:4px}
-  .modalbox input.t{width:100%;border:1px solid #d6d4ce;border-radius:8px;padding:9px 10px;font-size:14px;box-sizing:border-box}
-  .modalbox h4{margin:16px 0 4px;font-size:13.5px}.modalbox .hint{margin:0 0 8px;font-size:11.5px;color:#8a8880}
-  .mtbl{width:100%;border-collapse:collapse;font-size:12.5px}.mtbl th{background:#f4f3ef;text-align:left;padding:6px 8px;border-bottom:1px solid #e2e0da;font-size:11.5px}.mtbl td{padding:6px 8px;border-bottom:1px solid #f0efe9}
+  .modalbox label.l{font-size:12.5px;color:#6b6a66;font-weight:600;display:block;margin:12px 0 4px}
+  .modalbox input.t,.modalbox textarea.t{width:100%;border:1px solid #d6d4ce;border-radius:8px;padding:9px 10px;font-size:14px;box-sizing:border-box;font-family:inherit}
+  .modalbox .hint{margin:4px 0 0;font-size:11.5px;color:#8a8880;line-height:1.5}
+  .tagsug{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .tagsug .s{font-size:12px;color:#c8102e;background:#fbe9ec;border-radius:20px;padding:3px 10px;cursor:pointer}
+  .scope{display:flex;gap:16px;margin:6px 0 2px;font-size:13.5px}
+  .scope label{display:flex;gap:6px;align-items:center;cursor:pointer}
+  .mtbl{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}
+  .mtbl th{background:#f4f3ef;text-align:left;padding:6px 8px;border-bottom:1px solid #e2e0da;font-size:11.5px}
+  .mtbl td{padding:6px 8px;border-bottom:1px solid #f0efe9}
+  .sect{border-top:1px solid #eee;margin-top:16px;padding-top:14px}
+  .sect h4{margin:0 0 6px;font-size:13.5px}
+  .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+  .row select{border:1px solid #d6d4ce;border-radius:8px;padding:8px 10px;font-size:13px;flex:1;min-width:160px}
+  .btn{border:1px solid #d6d4ce;background:#fff;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer}
+  .btn.pri{background:#c8102e;color:#fff;border-color:#c8102e}
+  .btn.danger{background:#fff;color:#c8102e;border-color:#e2c3c8}
+  .msg{font-size:12.5px;margin-left:8px}
+  .flist{display:flex;flex-direction:column;gap:6px;margin-top:8px}
+  .flist label{display:flex;gap:8px;align-items:center;font-size:13.5px;cursor:pointer}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="auth.js"></script>
@@ -52,45 +84,107 @@
 
   <div class="toolbar">
     <button class="mkbtn" id="mkdash" style="display:none">+ 대시보드 생성</button>
+    <div class="search"><span>🔎</span><input id="q" type="text" placeholder="제목·설명·태그 검색"></div>
     <a class="mkbtn ghost" href="ai-history.html">🤖 AI 인사이트 이력</a>
     <a class="mkbtn ghost" href="admin.html" id="adminlink">⚙️ 계정 관리 <span class="muted">(관리자)</span></a>
   </div>
 
+  <div class="bar" id="bar"></div>
+
   <div id="cards">불러오는 중…</div>
 
+  <!-- 생성 -->
   <div class="modal" id="createmodal">
     <div class="modalbox">
       <div class="mhead"><b>대시보드 생성</b><button id="nd_close">✕</button></div>
       <label class="l">이름</label>
-      <input id="nd_title" class="t" type="text">
-      <h4>보기 / 수정 권한 (선택)</h4>
-      <p class="hint">기본은 <b>로그인 전원 열람</b>입니다. 특정 계정만 열람시키려면 그 계정의 <b>열람</b>을 체크하세요(체크한 순간부터 체크된 계정만 열람). <b>수정</b>만 체크하면 열람은 전원 유지됩니다. 만든 사람(본인)이 소유자가 됩니다.</p>
-      <table class="mtbl"><thead><tr><th>이메일</th><th style="text-align:center">열람</th><th style="text-align:center">수정</th></tr></thead><tbody id="nd_acl"></tbody></table>
-      <div style="margin-top:14px"><button class="mkbtn" id="nd_save">생성</button><span id="nd_msg" style="margin-left:8px;font-size:12.5px;color:#c8102e"></span></div>
+      <input id="nd_title" class="t" type="text" placeholder="예: 주문 핵심 지표 (개인용)">
+      <label class="l">한 줄 설명</label>
+      <input id="nd_short" class="t" type="text" placeholder="어떤 데이터를 확인하는 대시보드인지">
+      <label class="l">도메인 태그</label>
+      <input id="nd_tags" class="t" type="text" placeholder="쉼표로 구분 · 예: 주문, 매출">
+      <div class="tagsug" id="nd_tagsug"></div>
+      <label class="l">누가 볼 수 있나요?</label>
+      <div class="scope">
+        <label><input type="radio" name="nd_scope" value="all" checked> 전체 열람 <span class="hint" style="margin:0">(로그인 전원)</span></label>
+        <label><input type="radio" name="nd_scope" value="picked"> 지정 계정만</label>
+      </div>
+      <div id="nd_aclwrap" style="display:none">
+        <p class="hint">체크한 계정만 <b>열람</b>합니다. <b>수정</b>만 필요하면 수정만 체크(만든 사람=소유자는 항상 접근).</p>
+        <table class="mtbl"><thead><tr><th>계정</th><th style="text-align:center">열람</th><th style="text-align:center">수정</th></tr></thead><tbody id="nd_acl"></tbody></table>
+      </div>
+      <div style="margin-top:16px"><button class="btn pri" id="nd_save">생성</button><span id="nd_msg" class="msg" style="color:#c8102e"></span></div>
+    </div>
+  </div>
+
+  <!-- 관리·공유 -->
+  <div class="modal" id="managemodal">
+    <div class="modalbox">
+      <div class="mhead"><b>대시보드 관리 · 공유</b><button id="mg_close">✕</button></div>
+      <label class="l">이름</label>
+      <input id="mg_title" class="t" type="text">
+      <label class="l">한 줄 설명</label>
+      <input id="mg_short" class="t" type="text" placeholder="어떤 데이터를 확인하는 대시보드인지">
+      <label class="l">도메인 태그</label>
+      <input id="mg_tags" class="t" type="text" placeholder="쉼표로 구분 · 예: 주문, 매출">
+      <div class="tagsug" id="mg_tagsug"></div>
+      <div style="margin-top:14px"><button class="btn pri" id="mg_savemeta">이름·설명·태그 저장</button><span id="mg_metamsg" class="msg"></span></div>
+
+      <div class="sect">
+        <h4>🔓 열람 권한</h4>
+        <div class="scope">
+          <label><input type="radio" name="mg_scope" value="all"> 전체 열람 (로그인 전원)</label>
+          <label><input type="radio" name="mg_scope" value="picked"> 지정 계정만</label>
+        </div>
+        <div id="mg_aclwrap" style="display:none">
+          <p class="hint">체크를 켜고 끄면 <b>즉시 반영</b>됩니다.</p>
+          <table class="mtbl"><thead><tr><th>계정</th><th style="text-align:center">열람</th><th style="text-align:center">수정</th></tr></thead><tbody id="mg_acl"></tbody></table>
+        </div>
+        <span id="mg_aclmsg" class="msg"></span>
+      </div>
+
+      <div class="sect">
+        <h4>👤 소유자 이관</h4>
+        <p class="hint">현재 소유자: <b id="mg_owner"></b></p>
+        <div class="row"><select id="mg_to"></select><button class="btn" id="mg_transfer">이관</button><span id="mg_tmsg" class="msg"></span></div>
+      </div>
+
+      <div class="sect">
+        <h4 style="color:#c8102e">🗑 삭제</h4>
+        <p class="hint">되돌릴 수 없습니다. 확인을 위해 로그인 비밀번호를 입력합니다.</p>
+        <button class="btn danger" id="mg_delete">이 대시보드 삭제</button><span id="mg_dmsg" class="msg"></span>
+      </div>
+    </div>
+  </div>
+
+  <!-- 폴더 담기 -->
+  <div class="modal" id="foldermodal">
+    <div class="modalbox" style="width:420px">
+      <div class="mhead"><b>📁 폴더에 저장</b><button id="fd_close">✕</button></div>
+      <p class="hint" id="fd_name" style="margin-bottom:6px"></p>
+      <div class="flist" id="fd_list"></div>
+      <div class="row" style="margin-top:12px"><input id="fd_new" class="t" type="text" placeholder="새 폴더 이름" style="flex:1"><button class="btn" id="fd_add">추가</button></div>
+      <span id="fd_msg" class="msg"></span>
     </div>
   </div>
 
   <p class="foot">
     * 개인정보(구매자·회원번호·연령·성별·지역)는 집계 API에서 원천 제외됩니다.<br>
-    * 새 대시보드는 <code>dashboards/</code> 폴더에 HTML을 추가하고 push하면 <b>이 목록에 자동 표시</b>됩니다.
+    * 새 대시보드는 <code>dashboards/</code> 폴더에 HTML을 추가하고 push하면 <b>이 목록에 자동 표시</b>됩니다.<br>
+    * 메타데이터 규칙 — <b>제목</b>(목적별 자유) · <b>한 줄 설명</b>(무엇을 보는지) · <b>도메인 태그</b>(#주문 #행동 #카탈로그 #상품 #마케팅 #회원 등).
   </p>
 </div>
 <script>
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); };
   var $ = function (id) { return document.getElementById(id); };
+  var rpc = function (n, p) { return window.MUSTIT.rpc(n, p || {}); };
+  var fn = function (a) { return window.MUSTIT.fn('admin-users', a); };
+  var TAG_SUGGEST = ['주문', '행동', '카탈로그', '상품', '마케팅', '회원', '전환', '매출'];
   function fmtDate(s) { try { return new Date(s).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }); } catch (e) { return (s || '').slice(0, 10); } }
-  function scaleThumbs() {
-    [].forEach.call(document.querySelectorAll('.thumb iframe'), function (f) {
-      var w = f.parentNode.clientWidth; if (w) f.style.transform = 'scale(' + (w / 1280) + ')';
-    });
-  }
-  // 파일이 실제로 GitHub Pages에 올라와 있는지 확인 (built 플래그 대신 자동 감지)
-  function fileExists(file) {
-    return fetch('dashboards/' + encodeURIComponent(file), { method: 'HEAD', cache: 'no-store' })
-      .then(function (r) { return r.ok; }).catch(function () { return false; });
-  }
+  function parseTags(s) { return String(s || '').split(/[,#\s]+/).map(function (t) { return t.trim(); }).filter(Boolean); }
+  function scaleThumbs() { [].forEach.call(document.querySelectorAll('.thumb iframe'), function (f) { var w = f.parentNode.clientWidth; if (w) f.style.transform = 'scale(' + (w / 1280) + ')'; }); }
+  function fileExists(file) { return fetch('dashboards/' + encodeURIComponent(file), { method: 'HEAD', cache: 'no-store' }).then(function (r) { return r.ok; }).catch(function () { return false; }); }
   var GH_REPO = 'MUSTIT-AI/mustit-data-portal-dashboards';
-  // 실제 대시보드 업데이트일 = GitHub 최종 커밋일(공개 레포). localStorage 12h 캐시(레이트리밋 방지)
   function ghDate(file) {
     var key = 'ghd:' + file;
     try { var c = JSON.parse(localStorage.getItem(key) || 'null'); if (c && (Date.now() - c.ts) < 43200000) return Promise.resolve(c.d); } catch (e) {}
@@ -99,95 +193,287 @@
       .then(function (a) { var d = (a && a[0] && a[0].commit && a[0].commit.committer && a[0].commit.committer.date) || null; try { localStorage.setItem(key, JSON.stringify({ d: d, ts: Date.now() })); } catch (e) {} return d; })
       .catch(function () { return null; });
   }
-  var ITEMS = [], FAVS = {};
+
+  var ITEMS = [], FAVS = {}, FOLDERS = [], FILTER = 'all', SEARCH = '', ACCOUNTS = [];
+  function folderById(id) { for (var i = 0; i < FOLDERS.length; i++) if (String(FOLDERS[i].id) === String(id)) return FOLDERS[i]; return null; }
+
+  // ── 필터바(전체/즐겨찾기/폴더들) ──
+  function renderBar() {
+    var b = $('bar'); var h = '';
+    h += '<button class="chip ' + (FILTER === 'all' ? 'on' : '') + '" data-f="all">전체</button>';
+    h += '<button class="chip ' + (FILTER === 'fav' ? 'on' : '') + '" data-f="fav">⭐ 즐겨찾기</button>';
+    FOLDERS.forEach(function (f) {
+      h += '<button class="chip ' + (String(FILTER) === String(f.id) ? 'on' : '') + '" data-f="' + f.id + '">📁 ' + esc(f.name) + ' <span class="cnt" style="color:inherit;opacity:.6">' + (f.files ? f.files.length : 0) + '</span></button>';
+    });
+    h += '<button class="chip add" id="newfolder">+ 새 폴더</button>';
+    b.innerHTML = h;
+    [].forEach.call(b.querySelectorAll('.chip[data-f]'), function (c) { c.onclick = function () { FILTER = c.getAttribute('data-f'); renderBar(); render(); }; });
+    $('newfolder').onclick = createFolder;
+  }
+  function createFolder() {
+    var name = prompt('새 폴더 이름:'); if (name === null) return; name = name.trim(); if (!name) return;
+    rpc('dash_folder_create', { p_name: name }).then(function () { return loadFolders(); }).then(function () { renderBar(); }).catch(function (e) { alert('실패: ' + (e.message || e)); });
+  }
+  function loadFolders() {
+    return rpc('dash_folders', {}).then(function (fs) { FOLDERS = (fs || []).map(function (f) { return { id: f.id, name: f.name, files: f.files || [] }; }); }).catch(function () { FOLDERS = []; });
+  }
+
+  // ── 카드 ──
   function card(d) {
     var built = d.built;
     var href = built ? ('dashboards/' + encodeURIComponent(d.file)) : ('dashboards/_starter.html?f=' + encodeURIComponent(d.file));
     var on = !!FAVS[d.file];
-    var star = '<button class="star ' + (on ? 'on' : 'off') + '" data-file="' + esc(d.file) + '" title="즐겨찾기" aria-label="즐겨찾기">' + (on ? '★' : '☆') + '</button>';
+    var star = '<button class="star act ' + (on ? 'on' : 'off') + '" data-star="' + esc(d.file) + '" title="즐겨찾기">' + (on ? '★' : '☆') + '</button>';
+    var cog = d.manage ? '<button class="cog act" data-cog="' + esc(d.file) + '" title="관리·공유">⚙️</button>' : '';
+    var lock = (d.manage && d.restricted) ? '<span class="lock">🔒 지정 열람</span>' : '';
     var thumb = built
-      ? '<div class="thumb">' + star + '<iframe loading="lazy" scrolling="no" tabindex="-1" src="dashboards/' + encodeURIComponent(d.file) + '#thumb"></iframe></div>'
-      : '<div class="thumb">' + star + '<span class="badge-prep">준비중</span><div class="ph"><span class="pico">' + esc(d.icon || '📊') + '</span><span>준비중</span></div></div>';
-    var info = (d.owner_name ? esc(d.owner_name) : '') + (d.date ? ((d.owner_name ? ' · ' : '') + '업데이트 ' + fmtDate(d.date)) : '');
-    return '<a class="gcard" href="' + href + '">' + thumb +
-      '<div class="gmeta"><div class="gname">' + esc(d.title || d.file) + '</div><div class="ginfo">' + info + '</div></div></a>';
+      ? '<div class="thumb">' + star + cog + lock + '<iframe loading="lazy" scrolling="no" tabindex="-1" src="dashboards/' + encodeURIComponent(d.file) + '#thumb"></iframe></div>'
+      : '<div class="thumb">' + star + cog + '<span class="badge-prep">준비중</span><div class="ph"><span class="pico">' + esc(d.icon || '📊') + '</span><span>준비중</span></div></div>';
+    var tags = (d.tags && d.tags.length) ? ('<div class="gtags">' + d.tags.map(function (t) { return '<span class="tg">#' + esc(t) + '</span>'; }).join('') + '</div>') : '';
+    var owner = d.owner_name ? esc(d.owner_name) : '';
+    var dt = d.date ? ('업데이트 ' + fmtDate(d.date)) : '';
+    return '<div class="gcard" data-href="' + href + '">' + thumb +
+      '<div class="gmeta"><div class="gname">' + esc(d.title || d.file) + '</div>' +
+      (d.short ? '<div class="gdesc">' + esc(d.short) + '</div>' : '') + tags +
+      '<div class="ginfo"><span>' + owner + (owner && dt ? ' · ' : '') + dt + '</span>' +
+      '<button class="fbtn act" data-folder="' + esc(d.file) + '">📁 폴더</button></div></div></div>';
   }
+  function gallery(arr) { return '<div class="gallery">' + arr.map(card).join('') + '</div>'; }
+
   function render() {
     var el = $('cards'); el.className = '';
-    if (!ITEMS.length) { el.innerHTML = '<p class="sub">열람 가능한 대시보드가 없습니다.</p>'; return; }
-    var byDate = function (a, b) { var x = a.date || '', y = b.date || ''; return y < x ? -1 : y > x ? 1 : 0; }; // 최신순
-    var favs = ITEMS.filter(function (d) { return FAVS[d.file]; }).sort(byDate);
-    var rest = ITEMS.filter(function (d) { return !FAVS[d.file]; }).sort(byDate);
+    var q = SEARCH.trim().toLowerCase();
+    var matches = function (d) {
+      if (!q) return true;
+      var hay = ((d.title || '') + ' ' + (d.short || '') + ' ' + ((d.tags || []).join(' '))).toLowerCase();
+      return hay.indexOf(q) >= 0;
+    };
+    var byDate = function (a, b) { var x = a.date || '', y = b.date || ''; return y < x ? -1 : y > x ? 1 : 0; };
+    var pool = ITEMS.filter(matches);
     var html = '';
-    if (favs.length) html += '<div class="sec-h">⭐ 즐겨찾기 <span class="cnt">' + favs.length + '</span></div><div class="gallery">' + favs.map(card).join('') + '</div>';
-    html += '<div class="sec-h">' + (favs.length ? '전체 대시보드' : '대시보드') + ' <span class="cnt">' + rest.length + '</span></div><div class="gallery">' + rest.map(card).join('') + '</div>';
+    if (FILTER === 'fav') {
+      var favs = pool.filter(function (d) { return FAVS[d.file]; }).sort(byDate);
+      html = '<div class="sec-h">⭐ 즐겨찾기 <span class="cnt">' + favs.length + '</span></div>' + (favs.length ? gallery(favs) : '<div class="empty">즐겨찾기한 대시보드가 없습니다.</div>');
+    } else if (FILTER !== 'all') {
+      var f = folderById(FILTER); var set = {}; (f ? f.files : []).forEach(function (x) { set[x] = 1; });
+      var inf = pool.filter(function (d) { return set[d.file]; }).sort(byDate);
+      html = '<div class="sec-h">📁 ' + esc(f ? f.name : '') + ' <span class="cnt">' + inf.length + '</span></div>' + (inf.length ? gallery(inf) : '<div class="empty">이 폴더에 담긴 대시보드가 없습니다. 카드의 <b>📁 폴더</b>에서 추가하세요.</div>');
+    } else {
+      var favs2 = pool.filter(function (d) { return FAVS[d.file]; }).sort(byDate);
+      var rest = pool.filter(function (d) { return !FAVS[d.file]; }).sort(byDate);
+      if (favs2.length) html += '<div class="sec-h">⭐ 즐겨찾기 <span class="cnt">' + favs2.length + '</span></div>' + gallery(favs2);
+      html += '<div class="sec-h">' + (favs2.length ? '전체 대시보드' : '대시보드') + ' <span class="cnt">' + rest.length + '</span></div>' + (rest.length ? gallery(rest) : '<div class="empty">' + (q ? '검색 결과가 없습니다.' : '열람 가능한 대시보드가 없습니다.') + '</div>');
+    }
     el.innerHTML = html;
-    [].forEach.call(el.querySelectorAll('.star'), function (b) {
-      b.onclick = function (e) { e.preventDefault(); e.stopPropagation(); toggleFav(b.getAttribute('data-file')); };
-    });
     setTimeout(scaleThumbs, 30);
   }
+
+  // 카드 영역 클릭 위임
+  $('cards').addEventListener('click', function (e) {
+    var t = e.target;
+    var s = t.closest('[data-star]'); if (s) { e.preventDefault(); toggleFav(s.getAttribute('data-star')); return; }
+    var c = t.closest('[data-cog]'); if (c) { e.preventDefault(); openManage(c.getAttribute('data-cog')); return; }
+    var fo = t.closest('[data-folder]'); if (fo) { e.preventDefault(); openFolder(fo.getAttribute('data-folder')); return; }
+    var card = t.closest('.gcard'); if (card && card.getAttribute('data-href')) location.href = card.getAttribute('data-href');
+  });
+
   function toggleFav(file) {
-    var on = !FAVS[file];
-    if (on) FAVS[file] = true; else delete FAVS[file];
+    var on = !FAVS[file]; if (on) FAVS[file] = true; else delete FAVS[file];
     render();
-    window.MUSTIT.rpc('dash_fav_set', { p_file: file, p_on: on }).catch(function () {
-      if (on) delete FAVS[file]; else FAVS[file] = true; render();  // 실패 시 롤백
+    rpc('dash_fav_set', { p_file: file, p_on: on }).catch(function () { if (on) delete FAVS[file]; else FAVS[file] = true; render(); });
+  }
+
+  // ── 폴더 담기 모달 ──
+  var FD_FILE = null;
+  function openFolder(file) {
+    FD_FILE = file; var d = ITEMS.filter(function (x) { return x.file === file; })[0];
+    $('fd_name').innerHTML = '<b>' + esc(d ? (d.title || file) : file) + '</b> 을(를) 담을 폴더';
+    $('fd_msg').textContent = ''; $('fd_new').value = '';
+    renderFolderList(); $('foldermodal').style.display = 'flex';
+  }
+  function renderFolderList() {
+    if (!FOLDERS.length) { $('fd_list').innerHTML = '<div class="hint">폴더가 없습니다. 아래에서 새로 만드세요.</div>'; return; }
+    $('fd_list').innerHTML = FOLDERS.map(function (f) {
+      var inn = (f.files || []).indexOf(FD_FILE) >= 0;
+      return '<label><input type="checkbox" data-fid="' + f.id + '"' + (inn ? ' checked' : '') + '> 📁 ' + esc(f.name) + '</label>';
+    }).join('');
+    [].forEach.call($('fd_list').querySelectorAll('input[data-fid]'), function (cb) {
+      cb.onchange = function () {
+        var fid = cb.getAttribute('data-fid'), on = cb.checked;
+        rpc('dash_folder_set', { p_file: FD_FILE, p_folder_id: Number(fid), p_on: on }).then(function () {
+          var f = folderById(fid); if (!f) return; f.files = f.files || [];
+          if (on) { if (f.files.indexOf(FD_FILE) < 0) f.files.push(FD_FILE); } else { f.files = f.files.filter(function (x) { return x !== FD_FILE; }); }
+          renderBar();
+        }).catch(function (e) { $('fd_msg').style.color = '#c8102e'; $('fd_msg').textContent = '실패: ' + (e.message || e); cb.checked = !on; });
+      };
     });
   }
-  function refreshCards() {
-    var el = $('cards');
-    return Promise.all([
-      window.MUSTIT.rpc('dash_list', {}),
-      window.MUSTIT.rpc('dash_favs', {}).catch(function () { return []; })
-    ]).then(function (r) {
-      var list = r[0] || [], favs = r[1] || [];
-      FAVS = {}; favs.forEach(function (f) { FAVS[f] = true; });
-      if (!list.length) { el.className = ''; el.innerHTML = '<p class="sub">열람 가능한 대시보드가 없습니다.</p>'; return; }
-      return Promise.all(list.map(function (d) { return fileExists(d.file); })).then(function (exists) {
-        return Promise.all(list.map(function (d, i) { return exists[i] ? ghDate(d.file) : Promise.resolve(null); })).then(function (dates) {
-          ITEMS = list.map(function (d, i) {
-            return { file: d.file, title: d.title, icon: d.icon, owner_name: d.owner_name, built: exists[i], date: dates[i] || d.updated_at || d.created_at || null };
-          });
-          render();
-        });
-      });
-    }).catch(function () { el.className = ''; el.innerHTML = '<p class="sub">목록을 불러오지 못했습니다.</p>'; });
+  $('fd_add').onclick = function () {
+    var name = $('fd_new').value.trim(); if (!name) return;
+    rpc('dash_folder_create', { p_name: name }).then(function () { return loadFolders(); }).then(function () { renderBar(); renderFolderList(); $('fd_new').value = ''; }).catch(function (e) { $('fd_msg').style.color = '#c8102e'; $('fd_msg').textContent = '실패: ' + (e.message || e); });
+  };
+  $('fd_close').onclick = function () { $('foldermodal').style.display = 'none'; };
+  $('foldermodal').onclick = function (e) { if (e.target === $('foldermodal')) $('foldermodal').style.display = 'none'; };
+
+  // ── 관리·공유 모달 ──
+  var MG_FILE = null;
+  function tagChips(inputId, sugId) {
+    $(sugId).innerHTML = TAG_SUGGEST.map(function (t) { return '<span class="s" data-t="' + t + '">#' + t + '</span>'; }).join('');
+    [].forEach.call($(sugId).querySelectorAll('.s'), function (s) {
+      s.onclick = function () {
+        var cur = parseTags($(inputId).value); var t = s.getAttribute('data-t');
+        if (cur.indexOf(t) < 0) cur.push(t);
+        $(inputId).value = cur.join(', ');
+      };
+    });
   }
-  window.addEventListener('resize', scaleThumbs);
+  function openManage(file) {
+    MG_FILE = file; var d = ITEMS.filter(function (x) { return x.file === file; })[0] || {};
+    $('mg_title').value = d.title || ''; $('mg_short').value = d.short || ''; $('mg_tags').value = (d.tags || []).join(', ');
+    $('mg_owner').textContent = d.owner_name ? (d.owner_name + ' (' + (d.owner_email || '') + ')') : (d.owner_email || '(미지정)');
+    $('mg_metamsg').textContent = ''; $('mg_aclmsg').textContent = ''; $('mg_tmsg').textContent = ''; $('mg_dmsg').textContent = '';
+    tagChips('mg_tags', 'mg_tagsug');
+    $('mg_aclwrap').style.display = 'none';
+    $('managemodal').style.display = 'flex';
+    // 계정 + ACL 로드
+    fn({ action: 'acl_list', dashboard: file }).then(function (res) {
+      ACCOUNTS = res.rows || [];
+      var restricted = !!res.restricted;
+      // 소유자 이관 select
+      $('mg_to').innerHTML = '<option value="">이관할 계정 선택…</option>' + ACCOUNTS.filter(function (a) { return a.email !== (d.owner_email || ''); }).map(function (a) { return '<option value="' + esc(a.email) + '">' + esc(a.note || a.email) + ' · ' + esc(a.email) + '</option>'; }).join('');
+      setScope(restricted ? 'picked' : 'all');
+      renderMgAcl();
+      var r = document.querySelector('input[name=mg_scope][value=' + (restricted ? 'picked' : 'all') + ']'); if (r) r.checked = true;
+    }).catch(function (e) { $('mg_aclmsg').style.color = '#c8102e'; $('mg_aclmsg').textContent = e.message || e; });
+  }
+  function renderMgAcl() {
+    $('mg_acl').innerHTML = ACCOUNTS.map(function (a) {
+      return '<tr><td>' + esc(a.note || a.email) + ' <span style="color:#999;font-size:11px">' + esc(a.email) + (a.role === 'admin' ? ' · 관리자' : '') + '</span></td>' +
+        '<td style="text-align:center"><input type="checkbox" class="mgv" data-email="' + esc(a.email) + '"' + (a.can_view ? ' checked' : '') + '></td>' +
+        '<td style="text-align:center"><input type="checkbox" class="mge" data-email="' + esc(a.email) + '"' + (a.can_edit ? ' checked' : '') + '></td></tr>';
+    }).join('');
+    [].forEach.call($('mg_acl').querySelectorAll('input'), function (cb) {
+      cb.onchange = function () {
+        var email = cb.getAttribute('data-email');
+        var cv = $('mg_acl').querySelector('.mgv[data-email="' + email + '"]').checked;
+        var ce = $('mg_acl').querySelector('.mge[data-email="' + email + '"]').checked;
+        $('mg_aclmsg').style.color = '#6b6a66'; $('mg_aclmsg').textContent = '저장 중…';
+        fn({ action: 'acl_set', dashboard: MG_FILE, email: email, can_view: cv, can_edit: ce }).then(function () {
+          var a = ACCOUNTS.filter(function (x) { return x.email === email; })[0]; if (a) { a.can_view = cv; a.can_edit = ce; }
+          $('mg_aclmsg').textContent = '저장됨 ✓';
+          markRestricted();
+        }).catch(function (e) { $('mg_aclmsg').style.color = '#c8102e'; $('mg_aclmsg').textContent = e.message || e; });
+      };
+    });
+  }
+  function setScope(mode) { $('mg_aclwrap').style.display = mode === 'picked' ? 'block' : 'none'; }
+  function markRestricted() {
+    var any = ACCOUNTS.some(function (a) { return a.can_view || a.can_edit; });
+    var it = ITEMS.filter(function (x) { return x.file === MG_FILE; })[0]; if (it) it.restricted = any; render();
+  }
+  [].forEach.call(document.querySelectorAll('input[name=mg_scope]'), function (r) {
+    r.onchange = function () {
+      if (r.value === 'all') {
+        if (!confirm('전체 열람으로 전환하면 지정 열람 설정이 모두 해제됩니다. 계속할까요?')) { document.querySelector('input[name=mg_scope][value=picked]').checked = true; return; }
+        fn({ action: 'acl_reset_all', dashboard: MG_FILE }).then(function () {
+          ACCOUNTS.forEach(function (a) { a.can_view = false; a.can_edit = false; }); renderMgAcl(); setScope('all'); markRestricted();
+          $('mg_aclmsg').style.color = '#6b6a66'; $('mg_aclmsg').textContent = '전체 열람으로 전환됨 ✓';
+        }).catch(function (e) { $('mg_aclmsg').style.color = '#c8102e'; $('mg_aclmsg').textContent = e.message || e; });
+      } else { setScope('picked'); }
+    };
+  });
+  $('mg_savemeta').onclick = function () {
+    var t = $('mg_title').value.trim(); if (!t) { $('mg_metamsg').style.color = '#c8102e'; $('mg_metamsg').textContent = '이름을 입력하세요.'; return; }
+    $('mg_savemeta').disabled = true;
+    fn({ action: 'dash_meta_set', file: MG_FILE, title: t, short: $('mg_short').value.trim(), tags: parseTags($('mg_tags').value) }).then(function () {
+      var it = ITEMS.filter(function (x) { return x.file === MG_FILE; })[0]; if (it) { it.title = t; it.short = $('mg_short').value.trim(); it.tags = parseTags($('mg_tags').value); }
+      $('mg_metamsg').style.color = '#2e7d32'; $('mg_metamsg').textContent = '저장됨 ✓'; render();
+    }).catch(function (e) { $('mg_metamsg').style.color = '#c8102e'; $('mg_metamsg').textContent = e.message || e; }).finally(function () { $('mg_savemeta').disabled = false; });
+  };
+  $('mg_transfer').onclick = function () {
+    var to = $('mg_to').value; if (!to) { $('mg_tmsg').style.color = '#c8102e'; $('mg_tmsg').textContent = '대상을 선택하세요.'; return; }
+    if (!confirm(to + ' 계정으로 소유권을 이관할까요?\n이관 후에는 새 소유자와 관리자만 관리할 수 있습니다.')) return;
+    $('mg_transfer').disabled = true;
+    fn({ action: 'dash_transfer_owner', file: MG_FILE, to: to }).then(function () {
+      $('mg_tmsg').style.color = '#2e7d32'; $('mg_tmsg').textContent = '이관 완료 ✓ 목록을 새로고침합니다.';
+      setTimeout(function () { $('managemodal').style.display = 'none'; refreshAll(); }, 700);
+    }).catch(function (e) { $('mg_tmsg').style.color = '#c8102e'; $('mg_tmsg').textContent = e.message || e; }).finally(function () { $('mg_transfer').disabled = false; });
+  };
+  $('mg_delete').onclick = function () {
+    var d = ITEMS.filter(function (x) { return x.file === MG_FILE; })[0] || {};
+    if (!confirm('“' + (d.title || MG_FILE) + '” 대시보드를 삭제할까요?\n목록에서 사라지며 되돌릴 수 없습니다.')) return;
+    var email = (window.MUSTIT.user() && window.MUSTIT.user().email) || '';
+    var pw = prompt('확인을 위해 로그인 계정(' + email + ') 비밀번호를 입력하세요:'); if (pw === null) return; if (!pw) { alert('비밀번호를 입력하세요.'); return; }
+    $('mg_dmsg').style.color = '#6b6a66'; $('mg_dmsg').textContent = '확인 중…';
+    window.MUSTIT.client.auth.signInWithPassword({ email: email, password: pw }).then(function (res) {
+      if (res.error) { $('mg_dmsg').style.color = '#c8102e'; $('mg_dmsg').textContent = '비밀번호가 일치하지 않습니다.'; return; }
+      fn({ action: 'dash_delete', file: MG_FILE }).then(function () { $('managemodal').style.display = 'none'; refreshAll(); }).catch(function (e) { $('mg_dmsg').style.color = '#c8102e'; $('mg_dmsg').textContent = e.message || e; });
+    });
+  };
+  $('mg_close').onclick = function () { $('managemodal').style.display = 'none'; };
+  $('managemodal').onclick = function (e) { if (e.target === $('managemodal')) $('managemodal').style.display = 'none'; };
+
+  // ── 생성 모달 ──
   function openCreate() {
-    $('nd_title').value = ''; $('nd_msg').textContent = '';
+    $('nd_title').value = ''; $('nd_short').value = ''; $('nd_tags').value = ''; $('nd_msg').textContent = '';
+    document.querySelector('input[name=nd_scope][value=all]').checked = true; $('nd_aclwrap').style.display = 'none';
+    tagChips('nd_tags', 'nd_tagsug');
     $('createmodal').style.display = 'flex';
     $('nd_acl').innerHTML = '<tr><td colspan="3" style="color:#999">불러오는 중…</td></tr>';
-    window.MUSTIT.fn('admin-users', { action: 'accounts' }).then(function (res) {
+    fn({ action: 'accounts' }).then(function (res) {
       var rows = res.rows || [];
       $('nd_acl').innerHTML = rows.map(function (r) {
-        return '<tr><td>' + esc(r.email) + ' <span style="color:#999;font-size:11px">' + esc(r.note || '') + (r.department ? ' / ' + esc(r.department) : '') + '</span></td>' +
+        return '<tr><td>' + esc(r.note || r.email) + ' <span style="color:#999;font-size:11px">' + esc(r.email) + (r.department ? ' / ' + esc(r.department) : '') + '</span></td>' +
           '<td style="text-align:center"><input type="checkbox" class="ndv" data-email="' + esc(r.email) + '"></td>' +
           '<td style="text-align:center"><input type="checkbox" class="nde" data-email="' + esc(r.email) + '"></td></tr>';
       }).join('');
     }).catch(function (e) { $('nd_acl').innerHTML = '<tr><td colspan="3" style="color:#c8102e">' + esc(e.message) + '</td></tr>'; });
   }
+  [].forEach.call(document.querySelectorAll('input[name=nd_scope]'), function (r) { r.onchange = function () { $('nd_aclwrap').style.display = (document.querySelector('input[name=nd_scope]:checked').value === 'picked') ? 'block' : 'none'; }; });
   function submitCreate() {
-    var title = $('nd_title').value.trim();
-    if (!title) { $('nd_msg').textContent = '이름을 입력하세요.'; return; }
-    var perms = [].map.call(document.querySelectorAll('.ndv'), function (v) {
-      var email = v.getAttribute('data-email');
-      var e = document.querySelector('.nde[data-email="' + email + '"]');
-      return { email: email, can_view: v.checked, can_edit: e.checked };
-    }).filter(function (p) { return p.can_view || p.can_edit; });
+    var title = $('nd_title').value.trim(); if (!title) { $('nd_msg').textContent = '이름을 입력하세요.'; return; }
+    var scope = document.querySelector('input[name=nd_scope]:checked').value;
+    var perms = [];
+    if (scope === 'picked') {
+      perms = [].map.call(document.querySelectorAll('.ndv'), function (v) { var email = v.getAttribute('data-email'); var e = document.querySelector('.nde[data-email="' + email + '"]'); return { email: email, can_view: v.checked, can_edit: e.checked }; }).filter(function (p) { return p.can_view || p.can_edit; });
+      if (!perms.length) { $('nd_msg').textContent = '지정 계정을 1명 이상 선택하거나 전체 열람을 고르세요.'; return; }
+    }
     $('nd_save').disabled = true;
-    window.MUSTIT.fn('admin-users', { action: 'dash_create', title: title, perms: perms }).then(function (res) {
+    fn({ action: 'dash_create', title: title, short: $('nd_short').value.trim(), tags: parseTags($('nd_tags').value), perms: perms }).then(function (res) {
       $('createmodal').style.display = 'none';
       alert('대시보드가 생성되었습니다.\n파일: ' + res.file + '\n개발자가 이 파일명으로 대시보드 HTML을 만들면 됩니다.');
-      refreshCards();
+      refreshAll();
     }).catch(function (e) { $('nd_msg').textContent = '실패: ' + e.message; }).finally(function () { $('nd_save').disabled = false; });
   }
+
+  // ── 로드 ──
+  function refreshAll() {
+    var el = $('cards');
+    return Promise.all([
+      rpc('dash_list', {}),
+      rpc('dash_favs', {}).catch(function () { return []; }),
+      loadFolders()
+    ]).then(function (r) {
+      var list = r[0] || [], favs = r[1] || [];
+      FAVS = {}; favs.forEach(function (f) { FAVS[f] = true; });
+      renderBar();
+      if (!list.length) { el.innerHTML = '<div class="empty">열람 가능한 대시보드가 없습니다.</div>'; return; }
+      return Promise.all(list.map(function (d) { return fileExists(d.file); })).then(function (exists) {
+        return Promise.all(list.map(function (d, i) { return exists[i] ? ghDate(d.file) : Promise.resolve(null); })).then(function (dates) {
+          ITEMS = list.map(function (d, i) {
+            return { file: d.file, title: d.title, short: d.short, icon: d.icon, tags: d.tags || [], owner_name: d.owner_name, owner_email: d.owner_email, manage: d.manage, built: exists[i], restricted: !!d.restricted, date: dates[i] || d.updated_at || d.created_at || null };
+          });
+          // 관리 가능한 대시보드의 지정열람 여부 표시(자물쇠)
+          render();
+        });
+      });
+    }).catch(function () { el.innerHTML = '<div class="empty">목록을 불러오지 못했습니다.</div>'; });
+  }
+  window.addEventListener('resize', scaleThumbs);
+  $('q').oninput = function () { SEARCH = $('q').value; render(); };
   window.MUSTIT.ready(function () {
-    refreshCards();
-    window.MUSTIT.rpc('dash_me', {}).then(function (me) {
-      if (me && (me.role === 'editor' || me.role === 'admin')) $('mkdash').style.display = '';
-    }).catch(function () {});
+    refreshAll();
+    rpc('dash_me', {}).then(function (me) { if (me && (me.role === 'editor' || me.role === 'admin')) $('mkdash').style.display = ''; }).catch(function () {});
     $('mkdash').onclick = openCreate;
     $('nd_close').onclick = function () { $('createmodal').style.display = 'none'; };
     $('nd_save').onclick = submitCreate;

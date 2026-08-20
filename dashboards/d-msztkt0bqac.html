@@ -50,9 +50,14 @@
   /* layout */
   .wrap{max-width:100%;padding:14px 20px}
   .wipbar{background:#fff4d6;color:#8a5a00;border-bottom:1px solid #f0d896;padding:7px 16px;text-align:center;font-size:12.5px;font-weight:700}
-  .sechead{margin:14px 0 6px;font-size:13px;color:var(--sub);font-weight:700}
-  .sechead.secflex{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+  .sechead{margin:14px 0 6px;font-size:13px;color:var(--sub);font-weight:700;display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+  .sechead.secflex{justify-content:space-between}
   .sectoggle{font-weight:400;font-size:11px;display:flex;align-items:center;gap:5px;color:var(--sub)}
+  .sechead_title,.sechead_note{border:1px solid transparent;background:transparent;font:inherit;color:inherit;padding:2px 5px;border-radius:5px}
+  .sechead_title{font-weight:700;min-width:70px}
+  .sechead_note{font-weight:400;flex:1;min-width:160px}
+  .sechead_title:hover,.sechead_note:hover{border-color:var(--border)}
+  .sechead_title:focus,.sechead_note:focus{border-color:#d6d4ce;background:#fff;outline:none}
   .wrap>.sechead:first-child{margin-top:2px}
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
   @media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}}
@@ -85,8 +90,8 @@
   .achdr .btn.del:hover{background:#c8102e;color:#fff}
   .ac_note{width:100%;border:1px solid transparent;border-radius:6px;padding:4px 6px;font-size:11.5px;color:var(--sub);margin-bottom:8px;background:transparent}
   .ac_note:hover,.ac_note:focus{border-color:#d6d4ce;background:#fff}
-  .auc .acfilters{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin:8px 0}
-  .auc .acfilters select{border:1px solid #d6d4ce;border-radius:6px;padding:5px 7px;font-size:12px;height:29px;background:#fff;max-width:170px}
+  .acfilters{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin:8px 0}
+  .acfilters select{border:1px solid #d6d4ce;border-radius:6px;padding:5px 7px;font-size:12px;height:29px;background:#fff;max-width:170px}
   .segswrap{margin-bottom:10px}
   .segs{display:flex;flex-direction:column;gap:10px;margin:6px 0}
   .segbox{background:#f7f6f2;border-radius:8px;padding:8px}
@@ -152,7 +157,7 @@
 </div>
 
 <div class="wrap">
-  <div class="sechead"><span class="sectri" data-target="summarySection">▼</span>요약 위젯 <span style="font-weight:400">(ARPU·ARPPU·가입자수·결제자수·GMV·순수익·전환률 — 지표 타일, 여러 개 추가 가능)</span></div>
+  <div class="sechead"><span class="sectri" data-target="summarySection">▼</span><input type="text" class="sechead_title" id="sec_summary_title"><input type="text" class="sechead_note" id="sec_summary_note"></div>
   <div class="secbody" id="summarySection">
     <div class="acfilters" style="padding:0 0 10px">
       <div class="fld"><label>시작일</label><input type="date" id="tiles_from"></div>
@@ -165,7 +170,7 @@
     <p class="note">값 계산: <b>합계(sum)</b>=주문DB 기간 합계, <b>순유저수(countUnique)</b>=앰플리튜드 구간 전체 유니크(세그먼트 필터 가능), <b>나누기(div)</b>=분자÷분모. 위젯 구성은 <b>이 브라우저에만</b> 저장됩니다(localStorage, 공유 안 됨).</p>
   </div>
 
-  <div class="sechead"><span class="sectri" data-target="auSection">▼</span>DAU / WAU / MAU 분석 위젯 <span style="font-weight:400">(각자 독립된 기간·세그먼트·필터, 위젯별로 자동조회 켜고 끌 수 있음)</span></div>
+  <div class="sechead"><span class="sectri" data-target="auSection">▼</span><input type="text" class="sechead_title" id="sec_au_title"><input type="text" class="sechead_note" id="sec_au_note"></div>
   <div class="secbody" id="auSection">
     <div id="au_components"></div>
     <button class="btn go" id="ac_add" type="button" style="margin-bottom:14px">+ 위젯 추가</button>
@@ -1164,6 +1169,48 @@ function deleteDash(name){
     tri.textContent = hide ? "▶" : "▼";
   };
 });
+// 섹션 제목·설명(요약 위젯 / DAU·WAU·MAU 위젯) 편집 가능 — 이 브라우저에만 저장(localStorage), 로그인 여부와 무관하게 항상 동작
+var SEC_LABEL_KEY = "auc_seclabels_"+FILE;
+var SEC_LABEL_DEFAULTS = {
+  summary: {title:"요약 위젯", note:"(ARPU·ARPPU·가입자수·결제자수·GMV·순수익·전환률 — 지표 타일, 여러 개 추가 가능)"},
+  au: {title:"DAU / WAU / MAU 분석 위젯", note:"(각자 독립된 기간·세그먼트·필터, 위젯별로 자동조회 켜고 끌 수 있음)"}
+};
+function loadSecLabels(){
+  var out = {summary:{}, au:{}};
+  try{
+    var raw = localStorage.getItem(SEC_LABEL_KEY);
+    var saved = raw ? JSON.parse(raw) : {};
+    ["summary","au"].forEach(function(k){
+      out[k].title = (saved[k]&&saved[k].title) || SEC_LABEL_DEFAULTS[k].title;
+      out[k].note = (saved[k]&&saved[k].note!=null) ? saved[k].note : SEC_LABEL_DEFAULTS[k].note;
+    });
+  }catch(e){
+    out.summary = SEC_LABEL_DEFAULTS.summary; out.au = SEC_LABEL_DEFAULTS.au;
+  }
+  return out;
+}
+function saveSecLabels(){
+  var data = {
+    summary: {title:$("sec_summary_title").value, note:$("sec_summary_note").value},
+    au: {title:$("sec_au_title").value, note:$("sec_au_note").value}
+  };
+  try{ localStorage.setItem(SEC_LABEL_KEY, JSON.stringify(data)); }catch(e){}
+}
+function autosizeTitle(el){ el.style.width = Math.max(4, el.value.length+1)+"ch"; }
+(function wireSecLabels(){
+  var labels = loadSecLabels();
+  $("sec_summary_title").value = labels.summary.title;
+  $("sec_summary_note").value = labels.summary.note;
+  $("sec_au_title").value = labels.au.title;
+  $("sec_au_note").value = labels.au.note;
+  [].forEach.call(document.querySelectorAll(".sechead_title"), function(el){
+    autosizeTitle(el);
+    el.addEventListener("input", function(){ autosizeTitle(el); });
+  });
+  [].forEach.call(document.querySelectorAll(".sechead_title,.sechead_note"), function(el){
+    el.addEventListener("change", saveSecLabels);
+  });
+})();
 $("sw_add").onclick=function(){ openTileModal(null); };
 $("tiles_go").onclick=function(){ refreshAllTiles(); };
 $("tm_close").onclick=closeTileModal;

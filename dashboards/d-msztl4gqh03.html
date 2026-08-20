@@ -249,6 +249,7 @@ function won(v){return (Math.round(Number(v)||0)).toLocaleString("ko-KR");}
 function ymd(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0");}
 function fmtDT(d){return ymd(d)+" "+String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0");}
 function ymdCompact(d){return ""+d.getFullYear()+String(d.getMonth()+1).padStart(2,'0')+String(d.getDate()).padStart(2,'0');}
+function ad(s){return String(s).replace(/-/g,"");} // "YYYY-MM-DD" → "YYYYMMDD" (Amplitude API 필수 형식)
 function addDays(d,n){return new Date(d.getTime()+n*86400000);}
 function chgTxt(cur,prev){
   if(prev==null||!isFinite(prev)||prev===0) return {t:"–",c:"flat"};
@@ -262,8 +263,9 @@ var THUMB = location.hash.indexOf("thumb") >= 0;
 function amp(endpoint,params){
   return window.MUSTIT.fn("amplitude-proxy",{endpoint:endpoint,params:params}).then(function(r){ return r.data; });
 }
-var CRAWLER=[{prop:"os",op:"does not contain",values:["yeti","bot","headless","bingbot","bingbot2","crawler"]},
-             {prop:"country",op:"is",values:["South Korea"]}];
+// 이벤트에 붙는 필터는 세그(s) 파라미터와 스키마가 다름: subprop_type/subprop_key/subprop_op/subprop_value 형식 필요
+// (crawler/os 제외는 이 스키마로 검증된 사례가 없어 일단 국가 필터만 적용. 신규유저 signup/order 이벤트엔 크롤러 유입이 거의 없어 영향 적음)
+var CRAWLER=[{subprop_type:"user",subprop_key:"country",subprop_op:"is",subprop_value:["South Korea"]}];
 function ev(t,extra){ return {event_type:t, filters: extra?CRAWLER.concat(extra):CRAWLER}; }
 
 // 실제 확인된 initial_utm_source 분포(최근30일) 기반 채널 그룹 — Amplitude 실데이터
@@ -336,8 +338,8 @@ function loadNorthStar(){
   var cur=curRange();
   var wowR=shiftRange(cur,7), momR=shiftRange(cur,30), yoyR=shiftRange(cur,365);
   var chanVals=selectedChannelVals();
-  var extra=chanVals?[{prop:"gp:initial_utm_source",op:"is",values:chanVals}]:null;
-  function callFor(r){ return amp("funnels",{e:[JSON.stringify(ev("complete_signup",extra)),JSON.stringify(ev("complete_order",extra))],cs:N*86400,start:r.from,end:r.to}); }
+  var extra=chanVals?[{subprop_type:"user",subprop_key:"gp:initial_utm_source",subprop_op:"is",subprop_value:chanVals}]:null;
+  function callFor(r){ return amp("funnels",{e:[JSON.stringify(ev("complete_signup",extra)),JSON.stringify(ev("complete_order",extra))],cs:N*86400,start:ad(r.from),end:ad(r.to)}); }
   return callFor(cur).then(function(d){ STATE.cur=d&&d.data&&d.data[0]?d.data[0]:null; return callFor(wowR); })
     .then(function(d){ STATE.wow=d&&d.data&&d.data[0]?d.data[0]:null; return callFor(momR); })
     .then(function(d){ STATE.mom=d&&d.data&&d.data[0]?d.data[0]:null; return callFor(yoyR); })
@@ -391,10 +393,10 @@ function loadCrossCheck(){
 // ═══════════════════════ ⓪ 유저 볼륨 개관(전체·신규·매체유입) ═══════════════════════
 function loadVolumeOverview(){
   var cur=curRange();
-  var mediaFilter=[{prop:"gp:initial_utm_source",op:"is not",values:["(none)","EMPTY"]}];
-  return amp("events/segmentation",{e:[JSON.stringify(ev("complete_signup"))], m:"uniques", i:1, start:cur.from, end:cur.to})
+  var mediaFilter=[{subprop_type:"user",subprop_key:"gp:initial_utm_source",subprop_op:"is not",subprop_value:["(none)","EMPTY"]}];
+  return amp("events/segmentation",{e:[JSON.stringify(ev("complete_signup"))], m:"uniques", i:1, start:ad(cur.from), end:ad(cur.to)})
     .then(function(dSignup){
-      return amp("events/segmentation",{e:[JSON.stringify(ev("_active",mediaFilter))], m:"uniques", i:1, start:cur.from, end:cur.to})
+      return amp("events/segmentation",{e:[JSON.stringify(ev("_active",mediaFilter))], m:"uniques", i:1, start:ad(cur.from), end:ad(cur.to)})
         .then(function(dMedia){ renderVolumeOverview(dSignup, dMedia); });
     }).catch(function(e){ $("c_volume").innerHTML='<p style="color:#c8102e;font-size:12px">로드 실패: '+esc(e.message)+'</p>'; });
 }
@@ -424,7 +426,7 @@ function renderVolumeOverview(dSignup, dMedia){
 function loadFunnel(){
   var cur=curRange();
   var s=DEVSEG.map(function(g){ return JSON.stringify(g.c); });
-  var p={e:FUNNEL_EVENTS.map(function(t){return JSON.stringify(ev(t));}), cs:N*86400, start:cur.from, end:cur.to, s:s};
+  var p={e:FUNNEL_EVENTS.map(function(t){return JSON.stringify(ev(t));}), cs:N*86400, start:ad(cur.from), end:ad(cur.to), s:s};
   return amp("funnels",p).then(function(d){
     STATE.funnel = (d&&d.data)||[];
     renderFunnel();
@@ -474,7 +476,7 @@ $("funnelseg").onchange = renderFunnel;
 function loadChannel(){
   var cur=curRange();
   var s=CHANNELS.map(function(c){ return JSON.stringify([{prop:"gp:initial_utm_source",op:"is",values:c.v}]); });
-  var pF={e:[JSON.stringify(ev("complete_signup")),JSON.stringify(ev("complete_order"))],cs:N*86400,start:cur.from,end:cur.to,s:s};
+  var pF={e:[JSON.stringify(ev("complete_signup")),JSON.stringify(ev("complete_order"))],cs:N*86400,start:ad(cur.from),end:ad(cur.to),s:s};
   return amp("funnels",pF).then(function(d){
     var rows=(d&&d.data)||[];
     STATE.channel = CHANNELS.map(function(c,i){
@@ -482,7 +484,7 @@ function loadChannel(){
       return { name:c.n, signup:cntAt(r,0), buyer:cntAt(r,1), cvr:cumAt(r,1) };
     });
     // 첫구매 매출 합계(채널별, 실데이터) — AOV 계산용. 광고비 미연동이라 CAC는 계산하지 않음.
-    return amp("events/segmentation", {e:[JSON.stringify(ev("complete_order"))], m:"totals", start:cur.from, end:cur.to, s:s});
+    return amp("events/segmentation", {e:[JSON.stringify(ev("complete_order"))], m:"totals", start:ad(cur.from), end:ad(cur.to), s:s});
   }).then(function(d2){
     var series=(d2&&d2.series)||(d2&&d2.data&&d2.data.series)||[];
     STATE.channel.forEach(function(row,i){
@@ -508,7 +510,7 @@ function renderChannelTable(){
 function loadChannelTrend(){
   var cur=curRange();
   var s=CHANNELS.map(function(c){ return JSON.stringify([{prop:"gp:initial_utm_source",op:"is",values:c.v}]); });
-  return amp("events/segmentation",{e:[JSON.stringify(ev("complete_signup"))], m:"uniques", i:7, start:cur.from, end:cur.to, s:s})
+  return amp("events/segmentation",{e:[JSON.stringify(ev("complete_signup"))], m:"uniques", i:7, start:ad(cur.from), end:ad(cur.to), s:s})
     .then(function(d){
       var series=(d&&d.series)||[]; var xv=(d&&d.xValues)||[];
       var labels=xv.map(function(s2){return String(s2).slice(5,10);});
@@ -544,7 +546,7 @@ function loadCohort(){
     weeks.forEach(function(w){
       chain = chain.then(function(acc){
         var mature = addDays(new Date(w.to+"T00:00:00"), days) <= today;
-        return amp("funnels",{e:[JSON.stringify(ev("complete_signup")),JSON.stringify(ev("complete_order"))],cs:days*86400,start:w.from,end:w.to})
+        return amp("funnels",{e:[JSON.stringify(ev("complete_signup")),JSON.stringify(ev("complete_order"))],cs:days*86400,start:ad(w.from),end:ad(w.to)})
           .then(function(d){
             var r=d&&d.data&&d.data[0];
             acc.push({label:w.label, v:cumAt(r,1), mature:mature});
@@ -597,7 +599,7 @@ function loadTTFP(){
   var chain=Promise.resolve({});
   pts.forEach(function(d){
     chain=chain.then(function(acc){
-      return amp("funnels",{e:[JSON.stringify(ev("complete_signup")),JSON.stringify(ev("complete_order"))],cs:d*86400,start:cur.from,end:cur.to})
+      return amp("funnels",{e:[JSON.stringify(ev("complete_signup")),JSON.stringify(ev("complete_order"))],cs:d*86400,start:ad(cur.from),end:ad(cur.to)})
         .then(function(res){ var r=res&&res.data&&res.data[0]; acc[d]=cumAt(r,1); return acc; })
         .catch(function(){ acc[d]=null; return acc; });
     });

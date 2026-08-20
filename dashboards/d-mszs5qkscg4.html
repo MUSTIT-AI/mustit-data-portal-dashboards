@@ -118,16 +118,16 @@
 
 <div class="wrap">
   <p class="note">
-    <b>매칭 정의</b>: 머스트잇 Open API(<code>/catalogs/matched-items</code>)가 실시간 계산하는 <b>matchedItemCount</b>(카탈로그당 매칭 상품 수)가 2개 이상이면 <b>매칭</b>, 1개 이하(자기 자신뿐 또는 카탈로그 미배정)면 <b>미매칭</b>.
-    ① <b>DB 파트</b>(신규등록 추이·판매자별 현황)는 Open API 상품 목록(<code>/products?queryType=CREATED</code>)으로 가져온 신규 등록 상품을 위 기준으로 판정해 <code>catalog-matching-sync</code> Edge Function이 주기적으로 집계·적재한 값입니다(근사치 아님, 실측값). 최신 동기화 시각은 판매자 테이블에서 확인.
+    <b>매칭 정의</b>: 같은 카탈로그(<code>catalog_id</code>)에 상품이 2개 이상 묶이면 <b>매칭</b>, 혼자뿐이면 <b>미매칭</b>.
+    ① <b>DB 파트</b>는 Open API 상품 마스터(<code>mustit_api.products</code>, 매일 08:00 갱신) 기준 신규 등록 시점의 현재 매칭 상태입니다.
     ② <b>앰플리튜드 파트</b>는 PDP(상품상세) 조회 이벤트의 가격비교 매칭 상품 수(<code>count_price_comparison</code>≥2)로 판정하며, <b>조회(uniques) 기준 추이</b>로 근사한 것입니다(Amplitude 원본 대시보드의 상품 고유수 수식은 이 프록시로 재현 불가).
-    <b>카탈로그 등록 처리자(관리자/AI/자동동기화) 구분</b>은 Open API 응답에 없어 제외되었습니다.
+    <b>카탈로그 등록 처리자(관리자/AI/자동동기화) 구분</b>은 이 스키마에 없어 제외되었습니다.
   </p>
 
   <div class="kpis" id="kpis"></div>
 
   <div class="grid2">
-    <div class="card"><h3>주간 신규 카탈로그 등록 · 매칭 추이</h3><span class="h-sub">Open API 실측 (catalogs/matched-items) · 등록일 기준</span><div id="c_weekly" class="chart"></div></div>
+    <div class="card"><h3>주간 신규 카탈로그 등록 · 매칭 추이</h3><span class="h-sub">DB 기준 (mustit_api.products, 등록일 기준)</span><div id="c_weekly" class="chart"></div></div>
     <div class="card"><h3>PDP 조회 기준 매칭·미매칭 추이</h3><span class="h-sub">Amplitude · view_product_detail (uniques, 봇 제외)</span><div id="c_amp" class="chart"></div></div>
   </div>
 
@@ -136,7 +136,7 @@
       <h3>판매자별 매칭 현황 <span class="badge">등록 많은데 매칭률 낮은 판매자 확인용</span></h3>
       <span class="tblcount" id="sellercount"></span>
     </div>
-    <p class="note" style="margin:0 0 8px" id="sellernote">가장 최근 동기화 기준(동기화 대상 기간은 배치 설정값) · 매칭률 낮은 순 정렬(헤더 클릭으로 재정렬) · 매칭률 20% 미만 &amp; 등록 10건 이상은 빨간 배경으로 표시.</p>
+    <p class="note" style="margin:0 0 8px" id="sellernote">선택한 기간 내 신규 등록 기준 · 매칭률 낮은 순 정렬(헤더 클릭으로 재정렬) · 매칭률 20% 미만 &amp; 등록 10건 이상은 빨간 배경으로 표시.</p>
     <div class="tblscroll"><table class="sellers" id="sellers"></table></div>
     <div class="pager" id="pager"></div>
   </div>
@@ -316,51 +316,26 @@ function fetchAmpWeekly(weeks){
   }});
 }
 
-// ── DB 캐시 테이블 (supabase/functions/catalog-matching-sync 가 적재) ──
-// mustit_api.products 실시간 근사치가 아니라, 머스트잇 Open API
-// /catalogs/matched-items 의 matchedItemCount 실측값 기반 집계.
-function fetchWeeklyFromCache(){
-  return window.MUSTIT.client.from("catalog_matching_weekly")
-    .select("week_start,week_end,new_items,matched,unmatched")
-    .order("week_start", {ascending:true})
-    .then(function(r){ if(r.error) throw r.error; return r.data||[]; });
-}
-function fetchSellersFromCache(){
-  // window_days 는 동기화 배치가 마지막으로 채운 값을 그대로 쓴다(가장 최근 synced_at 기준).
-  return window.MUSTIT.client.from("catalog_matching_by_seller")
-    .select("seller_id,new_items,matched,unmatched,match_rate,window_days,synced_at")
-    .then(function(r){
-      if(r.error) throw r.error;
-      var rows = r.data||[];
-      if(!rows.length) return rows;
-      var latestSynced = rows.reduce(function(a,b){ return (b.synced_at>a) ? b.synced_at : a; }, rows[0].synced_at);
-      var latestWin = rows.filter(function(x){ return x.synced_at===latestSynced; })[0].window_days;
-      return rows.filter(function(x){ return x.window_days===latestWin; });
-    });
-}
-
 // ── refresh ──
 function refresh(){
   var weeks = Number($("weeks").value)||12;
+  var end = new Date();
+  var from = mondayOf(new Date(end.getTime() - weeks*7*86400000));
+  var to = end;
   $("loading").classList.add("on"); $("err").textContent="";
 
   var calls = [
-    fetchWeeklyFromCache(),
-    THUMB ? Promise.resolve([]) : fetchSellersFromCache(),
+    rpc("catalog_matching_weekly", {p_weeks: weeks}),
+    THUMB ? Promise.resolve([]) : rpc("catalog_matching_by_seller", {p_from: ymd(from), p_to: ymd(to), p_limit: 1000}),
     THUMB ? Promise.resolve(null) : fetchAmpWeekly(weeks).catch(function(e){ return null; })
   ];
 
   Promise.all(calls).then(function(res){
-    var weeklyAll = res[0]||[], sellers = res[1]||[], amp = res[2];
-    var weekly = weeklyAll.slice(Math.max(0, weeklyAll.length-weeks));
+    var weekly = res[0]||[], sellers = res[1]||[], amp = res[2];
     SELLERS = sellers; sortSellers(); PAGE=0;
     renderKPI(weekly, sellers);
     renderWeeklyChart(weekly);
     if(!THUMB){
-      if(sellers.length){
-        var wd = sellers[0].window_days, syncedAt = sellers[0].synced_at;
-        $("sellernote").textContent = "최근 "+wd+"일 신규 등록 기준(동기화: "+(syncedAt?new Date(syncedAt).toLocaleString("ko-KR"):"-")+") · 매칭률 낮은 순 정렬(헤더 클릭으로 재정렬) · 매칭률 20% 미만 & 등록 10건 이상은 빨간 배경으로 표시.";
-      }
       paintSellers();
       if(amp && amp.data && amp.data.data){
         var d = amp.data.data;

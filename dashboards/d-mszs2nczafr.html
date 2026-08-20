@@ -72,6 +72,9 @@
   .note{color:var(--sub);font-size:11px;margin:10px 2px 0}
   .btn.csv{background:#1f8a4c;color:#fff}
   .btn.csv:disabled{background:#c7ccc8;cursor:default}
+  .modegroup{display:flex;gap:4px}
+  .modebtn{background:#e9e7e1;color:#333;padding:6px 11px}
+  .modebtn.active{background:var(--red);color:#fff}
   .topscroll{overflow-x:auto;overflow-y:hidden;height:14px}
   .topscroll-inner{height:1px}
   .tblscroll{overflow-x:auto;border:1px solid var(--border);border-radius:8px;background:#fff}
@@ -148,7 +151,14 @@
         <h3 id="tblTitle">패키지 판매자 현황</h3>
         <p class="h-sub" id="pivsub">불러오는 중…</p>
       </div>
-      <button class="btn csv" id="csv" disabled>⬇ CSV 다운로드</button>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="modegroup" id="gmvmode">
+          <button class="btn modebtn active" data-mode="all">전체</button>
+          <button class="btn modebtn" data-mode="brokerage">중개기준</button>
+          <button class="btn modebtn" data-mode="actual">실거래액기준</button>
+        </div>
+        <button class="btn csv" id="csv" disabled>⬇ CSV 다운로드</button>
+      </div>
     </div>
     <div class="topscroll" id="topscroll"><div class="topscroll-inner" id="topscrollInner"></div></div>
     <div class="tblscroll" id="tblscroll"><table class="sumtbl" id="piv"></table></div>
@@ -369,17 +379,29 @@ function populateFilterOptions(){
   }).join("");
 }
 
+// 거래액 기준: all=전체, brokerage=중개기준(결제수단 External_1/2/3/10 제외), actual=실거래액기준(취소/반품 주문상태 제외)
+// "그로스 패키지 판매자 현황" 영역에만 적용(미가입 판매자 표는 영향 없음).
+var GMV_MODE = "all";
+var GMV_EXCLUDED_PAYMENT = ["External_1","External_10","External_2","External_3"];
+var GMV_EXCLUDED_STATUS = ["구매취소환불완료","반품환불완료","판매취소완료"];
+function applyGmvMode(query, mode){
+  if(mode==="brokerage") return query.not("payment_method","in","("+GMV_EXCLUDED_PAYMENT.join(",")+")");
+  if(mode==="actual") return query.not("order_status","in","("+GMV_EXCLUDED_STATUS.join(",")+")");
+  return query;
+}
+function gmvModeLabel(mode){ return mode==="brokerage"?"중개기준":mode==="actual"?"실거래액기준":"전체"; }
+
 // PostgREST 기본 응답 상한(~1,000행)은 .limit()만으로는 못 넘는다(서버가 그대로 자름) → .range()로 페이지네이션해서 이어붙일 것.
 var PAGE_SIZE = 1000;
-function fetchAllPages(ids, range){
+function fetchAllPages(ids, range, mode){
   var acc = [];
   function loadPage(offset){
-    return window.MUSTIT.client.from("orders_secure")
+    var q = window.MUSTIT.client.from("orders_secure")
       .select("seller_id,order_datetime,total_purchase")
       .in("seller_id", ids)
       .gte("order_datetime", range.start)
-      .lt("order_datetime", range.end)
-      .range(offset, offset+PAGE_SIZE-1)
+      .lt("order_datetime", range.end);
+    return applyGmvMode(q, mode).range(offset, offset+PAGE_SIZE-1)
       .then(function(res){
         if(res.error) throw new Error(res.error.message);
         var rows = res.data||[];
@@ -392,25 +414,26 @@ function fetchAllPages(ids, range){
 }
 
 // ── 판매자ID·거래액 클릭 시 상품별 거래액(판매자 1명 단위라 소량이라 페이지네이션 없이도 충분) ──
-function fetchProductRows(sellerId, range){
-  return window.MUSTIT.client.from("orders_secure")
+function fetchProductRows(sellerId, range, mode){
+  var q = window.MUSTIT.client.from("orders_secure")
     .select("product_id,product_name,quantity,total_purchase")
     .eq("seller_id", sellerId)
     .gte("order_datetime", range.start)
-    .lt("order_datetime", range.end)
-    .limit(5000)
+    .lt("order_datetime", range.end);
+  return applyGmvMode(q, mode).limit(5000)
     .then(function(res){
       if(res.error) throw new Error(res.error.message);
       return res.data||[];
     });
 }
-function openProductModal(sellerId, dateStr){
+function openProductModal(sellerId, dateStr, mode){
+  mode = mode||"all";
   var range = dateStr ? { start:dateStr, end:nextDay(dateStr) } : monthRangeFor(SELECTED_MONTH);
-  var label = sellerId+" · "+(dateStr || (SELECTED_MONTH+" 전체"));
+  var label = sellerId+" · "+(dateStr || (SELECTED_MONTH+" 전체"))+(mode!=="all" ? " · "+gmvModeLabel(mode) : "");
   $("prodSub").textContent = label+" — 불러오는 중…";
   $("prodTbl").innerHTML = "";
   $("prodmodal").style.display = "flex";
-  fetchProductRows(sellerId, range).then(function(rows){
+  fetchProductRows(sellerId, range, mode).then(function(rows){
     var byProd = {};
     rows.forEach(function(r){
       var pid = r.product_id!=null ? String(r.product_id) : "";
@@ -442,7 +465,9 @@ document.addEventListener("click", function(e){
   var td = e.target.closest && e.target.closest("td.clk");
   if(!td) return;
   var seller = td.getAttribute("data-seller");
-  if(seller) openProductModal(seller, td.getAttribute("data-date"));
+  if(!seller) return;
+  var mode = td.closest("#piv") ? GMV_MODE : "all";  // 미가입 판매자 표는 거래액 기준 토글 영향 없음
+  openProductModal(seller, td.getAttribute("data-date"), mode);
 });
 
 // ── 데이터 로드: 매핑된 모든 판매자ID를 선택 월(월초~오늘/말일)로 좁혀 조회(1,000행 단위 페이지네이션) → 클라이언트에서 판매자별 재집계 ──
@@ -451,7 +476,7 @@ function loadData(){
   var ids = MAP.rows.map(function(r){ return r.seller_id; });
   var range = monthRangeFor(SELECTED_MONTH);
   $("loading").classList.add("on"); $("err").textContent="";
-  return fetchAllPages(ids, range)
+  return fetchAllPages(ids, range, GMV_MODE)
     .then(function(rows){
       DATA = {};
       rows.forEach(function(r){
@@ -591,7 +616,7 @@ function render(){
   CSV_HEAD = ["패키지","담당자","판매자ID",tlabel+" 목표액",dlabel+" 달성율(%)",dlabel+" 누적 거래액"].concat(days.map(dayLabel));
   CSV_ROWS = rows.map(function(r){ return [r.package,r.md,r.seller_id,r.target,(r.rate==null?"":(r.rate*100).toFixed(1)),r.cum].concat(r.daily); });
   $("csv").disabled = rows.length===0;
-  $("pivsub").textContent = "조회 월 "+SELECTED_MONTH+" · "+rows.length+"개 판매자"+(THUMB?" (미리보기)":"");
+  $("pivsub").textContent = "조회 월 "+SELECTED_MONTH+" · "+rows.length+"개 판매자 · "+gmvModeLabel(GMV_MODE)+(THUMB?" (미리보기)":"");
 }
 
 function csvCell(v){ v=(v==null?"":String(v)); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
@@ -601,7 +626,7 @@ function downloadCSV(){
   var body = CSV_ROWS.map(function(r){ return r.map(csvCell).join(","); }).join("\r\n");
   var blob = new Blob(["﻿"+head+"\r\n"+body], {type:"text/csv;charset=utf-8;"});
   var url = URL.createObjectURL(blob);
-  var a = document.createElement("a"); a.href=url; a.download="seller_package_"+SELECTED_MONTH+".csv";
+  var a = document.createElement("a"); a.href=url; a.download="seller_package_"+SELECTED_MONTH+"_"+GMV_MODE+".csv";
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 }
@@ -634,6 +659,14 @@ $("toggleUnjoined").onclick=function(){
   loadUnjoinedIfNeeded().then(loadUnjoinedData).then(renderUnjoined);
 };
 $("csvUnjoined").onclick=downloadUnjoinedCSV;
+[].forEach.call(document.querySelectorAll("#gmvmode .modebtn"), function(b){
+  b.onclick=function(){
+    if(GMV_MODE===b.getAttribute("data-mode")) return;
+    GMV_MODE = b.getAttribute("data-mode");
+    [].forEach.call(document.querySelectorAll("#gmvmode .modebtn"), function(x){ x.classList.toggle("active", x===b); });
+    refreshAll();
+  };
+});
 
 function init(){
   return loadMap().then(function(){

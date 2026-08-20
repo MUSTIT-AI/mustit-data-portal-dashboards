@@ -93,7 +93,7 @@ Deno.serve(async (req: Request) => {
       if (sr.ok) { const row = await sr.json(); insightId = Array.isArray(row) && row[0] ? row[0].id : null; saved = true; }
     } catch { /* 저장 실패 무시 */ }
 
-    return json(200, { insight, model: useModel, ms: Date.now() - t0, saved, id: insightId });
+    return json(200, { insight, model: useModel, ms: Date.now() - t0, saved, id: insightId, usage: j?.usage ?? null });
   } catch (e) {
     return json(500, { error: String((e as Error)?.message ?? e) });
   }

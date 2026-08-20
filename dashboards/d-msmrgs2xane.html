@@ -871,7 +871,7 @@ function aiRun(btnId, question, label){
     context:"머스트잇 상품 랭킹 대시보드(기간 내 거래액 기준 상품 Top "+LAST_LIST.length+", 판매자 무관 상품단위 합산). 조회기간 "+from+"~"+to,
     data:aiData(),
     question:question,
-    dashboard:"d-msmrgs2xane",
+    dashboard:"상품 랭킹",
     params:{조회기간:from+"~"+to, filters:currentFilters()}
   }).then(function(r){
     if(r.error) throw new Error(r.error);
@@ -890,7 +890,7 @@ function fmtAiParams(p){
 }
 function aiHistory(){
   showAi('<div style="color:var(--sub)">이력 불러오는 중…</div>');
-  window.MUSTIT.fn("ai-insight",{history:true,dashboard:"d-msmrgs2xane",limit:20}).then(function(r){
+  window.MUSTIT.fn("ai-insight",{history:true,dashboard:"상품 랭킹",limit:20}).then(function(r){
     var list=r.history||[];
     var top='<div style="font-size:12px;margin-bottom:10px"><a href="../ai-history.html" target="_blank" style="color:var(--red);font-weight:700;text-decoration:none">🔗 전체 이력·공유 링크 페이지 →</a></div>';
     if(!list.length){ showAi(top+'<div style="color:var(--sub)">저장된 인사이트가 없습니다. 위 버튼([분석]/[요약]/[이상탐지])으로 먼저 생성하세요.</div>'); return; }

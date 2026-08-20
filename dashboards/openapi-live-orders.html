@@ -286,6 +286,7 @@
 
   // ───────────── AI 인사이트 (ai-insight Edge Function · gpt-5.5) ─────────────
   var LAST=null;
+  var AIDASH='실시간 주문 현황 (OpenAPI)';  // AI 이력에 기록될 대시보드 이름(사람이 읽는 이름)
   function aiData(d){
     var pick=function(o){return o?{gmv:o.gmv,cnt:o.cnt,aov:o.aov,payment:o.payment,shipping:o.shipping,txn:o.txn,business:o.business,coupons:o.coupons}:null;};
     return { 조회기간:$("date_from").value+'~'+$("date_to").value, 비교기간:$("cmp_from").value+'~'+$("cmp_to").value,
@@ -303,7 +304,7 @@
       context:'머스트잇 실시간 주문 현황 대시보드(거래액=GMV). 조회기간 '+$("date_from").value+'~'+$("date_to").value+' vs 비교기간 '+$("cmp_from").value+'~'+$("cmp_to").value,
       data:aiData(LAST),
       question:'조회 vs 비교기간 핵심 변화, 이상징후, 실행 제안을 뽑아줘.',
-      dashboard:'openapi-live-orders',
+      dashboard:AIDASH,
       params:{조회:$("date_from").value+'~'+$("date_to").value, 비교:$("cmp_from").value+'~'+$("cmp_to").value, filters:getFilters()}
     }).then(function(r){ if(r.error) throw new Error(r.error);
       var sh=r.id?(' · <a href="../ai-history.html?id='+r.id+'" target="_blank" style="color:#c8102e;text-decoration:none">🔗 공유 링크</a>'):'';
@@ -315,7 +316,7 @@
   function fmtP(p){ if(!p)return ''; var a=[]; if(p['조회'])a.push('조회 '+p['조회']); if(p['비교'])a.push('비교 '+p['비교']); var f=p.filters||{}; Object.keys(f).forEach(function(k){var v=f[k]; if(v&&v.length)a.push((FLBL[k]||k)+':'+v.join(','));}); return a.join(' · '); }
   function aiHistory(){
     showAi('<div style="color:#6b6a66">이력 불러오는 중…</div>');
-    window.MUSTIT.fn('ai-insight',{history:true,dashboard:'openapi-live-orders',limit:20}).then(function(r){
+    window.MUSTIT.fn('ai-insight',{history:true,dashboard:AIDASH,limit:20}).then(function(r){
       var list=r.history||[];
       var top='<div style="font-size:12px;margin-bottom:10px"><a href="../ai-history.html" target="_blank" style="color:#c8102e;font-weight:700;text-decoration:none">🔗 전체 이력·공유 링크 페이지 →</a></div>';
       if(!list.length){ showAi(top+'<div style="color:#6b6a66">저장된 인사이트가 없습니다. [🤖 AI 인사이트]로 먼저 생성하세요.</div>'); return; }

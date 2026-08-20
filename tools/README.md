@@ -15,9 +15,12 @@ node gen-thumbs.mjs
 - 특정 대시보드만: `$env:ONLY="openapi-live-orders.html,all-orders-master.html"; node gen-thumbs.mjs`
 - 캡처 계정 변경(기본 admin `ceo@mustit.co.kr`, 전체 열람 위해 admin 권장): `$env:CAPTURE_EMAIL="..."`
 
-## 주기적 갱신 (선택)
-- Windows 작업 스케줄러 / cron 으로 위 명령을 매일 1회 실행.
-- 또는 GitHub Actions(스케줄) + Secrets(`SUPABASE_SERVICE_ROLE_KEY`)로 자동화.
+## 자동 갱신 (설정됨)
+- **Windows 작업 스케줄러 `MustitDashThumbs`** 가 **매일 08:10**(PC가 꺼져 있었으면 다음 켜질 때) `run-thumbs.ps1` 실행 → 전체 스냅샷 갱신. 로그: `tools/thumbs.log`.
+  - 즉시 실행: `Start-ScheduledTask -TaskName MustitDashThumbs`
+  - 시간 변경/삭제: `Get-ScheduledTask MustitDashThumbs` / `Unregister-ScheduledTask MustitDashThumbs`
+  - 키는 `mustit-orders\.env`의 `SUPABASE_SERVICE_ROLE_KEY`를 읽어 주입(스크립트에 비밀 없음).
+- (대안) **GitHub Actions**: `.github/workflows/thumbs.yml`(로컬에 준비됨) + 리포 Secret `SUPABASE_SERVICE_ROLE_KEY`(등록됨)로 클라우드 스케줄 실행 가능. 단, 워크플로 파일 push에는 gh 토큰 `workflow` 스코프가 필요(`gh auth refresh -s workflow` 후 push).
 
 ## 동작 원리
 1. `service_role`로 매직링크(`generateLink`) 발급 → `verifyOtp`로 세션 생성(비번 없이).

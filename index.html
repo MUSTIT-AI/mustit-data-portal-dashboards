@@ -250,10 +250,10 @@
     var tags = (d.tags && d.tags.length) ? ('<div class="gtags">' + d.tags.map(function (t) { return '<span class="tg">#' + esc(t) + '</span>'; }).join('') + '</div>') : '';
     var owner = d.owner_name ? esc(d.owner_name) : '';
     var dt = d.date ? ('갱신 ' + fmtDT(d.date)) : '';
-    return '<div class="gcard" data-href="' + href + '">' + thumb +
+    return '<div class="gcard" data-href="' + href + '" data-file="' + esc(d.file) + '">' + thumb +
       '<div class="gmeta"><div class="gname">' + esc(d.title || d.file) + '</div>' +
       (d.short ? '<div class="gdesc">' + esc(d.short) + '</div>' : '') + tags +
-      '<div class="ginfo"><span>' + owner + (owner && dt ? ' · ' : '') + dt + '</span></div></div></div>';
+      '<div class="ginfo"><span>' + owner + '</span><span class="gdate">' + dt + '</span></div></div></div>';
   }
   function gallery(arr) { return '<div class="gallery">' + arr.map(card).join('') + '</div>'; }
 
@@ -296,8 +296,8 @@
 
   function toggleFav(file) {
     var on = !FAVS[file]; if (on) FAVS[file] = true; else delete FAVS[file];
-    render();
-    rpc('dash_fav_set', { p_file: file, p_on: on }).catch(function () { if (on) delete FAVS[file]; else FAVS[file] = true; render(); });
+    render(); saveCache();
+    rpc('dash_fav_set', { p_file: file, p_on: on }).catch(function () { if (on) delete FAVS[file]; else FAVS[file] = true; render(); saveCache(); });
   }
 
   // ── 폴더 담기 모달 ──
@@ -320,7 +320,7 @@
         rpc('dash_folder_set', { p_file: FD_FILE, p_folder_id: Number(fid), p_on: on }).then(function () {
           var f = folderById(fid); if (!f) return; f.files = f.files || [];
           if (on) { if (f.files.indexOf(FD_FILE) < 0) f.files.push(FD_FILE); } else { f.files = f.files.filter(function (x) { return x !== FD_FILE; }); }
-          renderBar(); render();
+          renderBar(); render(); saveCache();
         }).catch(function (e) { $('fd_msg').style.color = '#c8102e'; $('fd_msg').textContent = '실패: ' + (e.message || e); cb.checked = !on; });
       };
     });
@@ -417,7 +417,7 @@
     $('mg_savemeta').disabled = true;
     fn({ action: 'dash_meta_set', file: MG_FILE, title: t, short: $('mg_short').value.trim(), tags: parseTags($('mg_tags').value) }).then(function () {
       var it = ITEMS.filter(function (x) { return x.file === MG_FILE; })[0]; if (it) { it.title = t; it.short = $('mg_short').value.trim(); it.tags = parseTags($('mg_tags').value); }
-      $('mg_metamsg').style.color = '#2e7d32'; $('mg_metamsg').textContent = '저장됨 ✓'; render();
+      $('mg_metamsg').style.color = '#2e7d32'; $('mg_metamsg').textContent = '저장됨 ✓'; render(); saveCache();
     }).catch(function (e) { $('mg_metamsg').style.color = '#c8102e'; $('mg_metamsg').textContent = e.message || e; }).finally(function () { $('mg_savemeta').disabled = false; });
   };
   $('mg_transfer').onclick = function () {
@@ -480,8 +480,26 @@
   }
 
   // ── 로드 ──
+  // ── 캐시(재방문 즉시 표시) ──
+  function cacheKey() { return 'home:' + ((window.MUSTIT.user && window.MUSTIT.user() && window.MUSTIT.user().email) || 'anon'); }
+  function saveCache() { try { localStorage.setItem(cacheKey(), JSON.stringify({ items: ITEMS, favs: FAVS, folders: FOLDERS, ts: Date.now() })); } catch (e) {} }
+  function loadCacheObj() { try { return JSON.parse(localStorage.getItem(cacheKey()) || 'null'); } catch (e) { return null; } }
+  function sigAll() {
+    var s = ITEMS.map(function (d) { return d.file + '|' + (d.built ? 1 : 0) + '|' + (d.title || '') + '|' + (d.short || '') + '|' + ((d.tags || []).join(',')) + '|' + (d.restricted ? 1 : 0); }).join(';');
+    return s + '##' + Object.keys(FAVS).sort().join(',') + '##' + FOLDERS.map(function (f) { return f.id + ':' + (f.files || []).length; }).join(',');
+  }
+  function prevDate(file) { for (var i = 0; i < ITEMS.length; i++) if (ITEMS[i].file === file) return ITEMS[i].date; return null; }
+  function patchDates() {
+    ITEMS.forEach(function (it) { if (!it.date) return; var e = document.querySelector('.gcard[data-file="' + it.file + '"] .gdate'); if (e) e.textContent = '갱신 ' + fmtDT(it.date); });
+  }
   function refreshAll() {
     var el = $('cards');
+    // 1) 캐시 즉시 표시(재방문)
+    var c = loadCacheObj(); var hadCache = !!(c && c.items && c.items.length);
+    if (hadCache) { ITEMS = c.items; FAVS = c.favs || {}; FOLDERS = c.folders || []; renderBar(); render(); }
+    else { el.innerHTML = '<div class="empty">불러오는 중…</div>'; }
+    var beforeSig = hadCache ? sigAll() : '';
+    // 2) 최신 목록 → 존재확인까지만 기다려 렌더(빠름). GitHub 커밋일은 백그라운드 패치
     return Promise.all([
       rpc('dash_list', {}),
       rpc('dash_favs', {}).catch(function () { return []; }),
@@ -490,17 +508,22 @@
       var list = r[0] || [], favs = r[1] || [];
       FAVS = {}; favs.forEach(function (f) { FAVS[f] = true; });
       renderBar();
-      if (!list.length) { el.innerHTML = '<div class="empty">열람 가능한 대시보드가 없습니다.</div>'; return; }
+      if (!list.length) { ITEMS = []; el.innerHTML = '<div class="empty">열람 가능한 대시보드가 없습니다.</div>'; saveCache(); return; }
       return Promise.all(list.map(function (d) { return fileExists(d.file); })).then(function (exists) {
-        return Promise.all(list.map(function (d, i) { return exists[i] ? ghDate(d.file) : Promise.resolve(null); })).then(function (dates) {
-          ITEMS = list.map(function (d, i) {
-            return { file: d.file, title: d.title, short: d.short, icon: d.icon, tags: d.tags || [], owner_name: d.owner_name, owner_email: d.owner_email, manage: d.manage, built: exists[i], restricted: !!d.restricted, date: dates[i] || d.updated_at || d.created_at || null };
-          });
-          // 관리 가능한 대시보드의 지정열람 여부 표시(자물쇠)
-          render();
+        ITEMS = list.map(function (d, i) {
+          return { file: d.file, title: d.title, short: d.short, icon: d.icon, tags: d.tags || [], owner_name: d.owner_name, owner_email: d.owner_email, manage: d.manage, built: exists[i], restricted: !!d.restricted, date: prevDate(d.file) || d.updated_at || d.created_at || null };
+        });
+        // 바뀐 게 없으면 재렌더(썸네일 재로딩) 생략 — 날짜만 패치
+        if (!hadCache || sigAll() !== beforeSig) render(); else patchDates();
+        saveCache();
+        // 3) GitHub 최종 커밋일 백그라운드 → 날짜 텍스트만 갱신(썸네일 유지)
+        Promise.all(list.map(function (d, i) { return exists[i] ? ghDate(d.file) : Promise.resolve(null); })).then(function (dates) {
+          var any = false;
+          list.forEach(function (d, i) { if (dates[i]) { for (var k = 0; k < ITEMS.length; k++) if (ITEMS[k].file === d.file) { ITEMS[k].date = dates[i]; any = true; } } });
+          if (any) { patchDates(); saveCache(); }
         });
       });
-    }).catch(function () { el.innerHTML = '<div class="empty">목록을 불러오지 못했습니다.</div>'; });
+    }).catch(function () { if (!hadCache) el.innerHTML = '<div class="empty">목록을 불러오지 못했습니다.</div>'; });
   }
   window.addEventListener('resize', scaleThumbs);
   $('q').oninput = function () { SEARCH = $('q').value; render(); };

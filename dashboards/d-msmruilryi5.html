@@ -209,6 +209,18 @@
         <button class="csvbtn" data-csv="cross">CSV</button></span></h3>
     <div class="grid2"><div class="chart tall" id="c_cross"></div><div class="tblscroll"><table class="mini" id="t_cross"><tbody></tbody></table></div></div><div class="aihint" id="ai_cross"></div>
   </div>
+
+  <div class="sechd">5 · PRODUCT <span class="tag">OpenAPI</span></div>
+  <div class="card"><h3>상품 랭킹 <span class="mut">판매 상품 · 오픈API 카탈로그 순위</span><span class="tools"><button class="csvbtn" data-csv="prodrank">CSV</button></span></h3>
+    <div class="grid2"><div class="chart tall" id="c_prod"></div><div class="tblscroll"><table class="mini" id="t_prod"><tbody></tbody></table></div></div><div class="aihint" id="ai_prod"></div></div>
+  <div class="card"><h3>브랜드 등록 상품 마스터 <span class="mut">OpenAPI · 등록 상품수 · 평균 판매가</span><span class="tools"><button class="csvbtn" data-csv="prodbrand">CSV</button></span></h3>
+    <div class="grid2"><div class="chart tall" id="c_prodbrand"></div><div class="tblscroll"><table class="mini" id="t_prodbrand"><tbody></tbody></table></div></div><div class="aihint" id="ai_prodbrand"></div></div>
+
+  <div class="sechd">6 · USER OPT-IN <span class="tag">OpenAPI</span></div>
+  <div class="card"><h3>유저 옵트인 <span class="mut" id="optin_sub">조회기간 가입 회원 기준</span><span class="tools"><button class="csvbtn" data-csv="optin">CSV</button></span></h3>
+    <div class="kpis" id="optin_kpi" style="grid-template-columns:repeat(7,1fr)"></div>
+    <div class="grid2" style="margin-top:12px"><div class="chart" id="c_optin"></div><div class="tblscroll"><table class="mini" id="t_optin_attr"><tbody></tbody></table></div></div>
+    <div class="aihint" id="ai_optin"></div></div>
 </div>
 
 <div class="loading" id="loading">불러오는 중…</div>
@@ -217,7 +229,8 @@
 <script>
 (function(){
 "use strict";
-var BUILD="v7";
+var BUILD="v8";
+var PROD={rank:[],brand:[]}, OPTIN=null;
 var $=function(id){return document.getElementById(id);};
 var FILE="d-msmruilryi5.html", AIDASH="커머스 주요 실적";
 var THUMB=/(?:^|[#&])thumb/.test(location.hash);
@@ -560,7 +573,49 @@ function exportCSV(kind){
   else if(kind==="daebun"){var cm=cmp&&tm?idx(tm.daebun):null,tot=sumG(tc.daebun);dl("대분류",["대분류","GMV","수량","비중","거래단가"].concat(cmp?["비교GMV"]:[]),tc.daebun.map(function(r){var a=[r.k,r.gmv,r.qty,tot?r.gmv/tot:0,r.tx?r.gmv/r.tx:0];if(cmp)a.push(cm&&cm[r.k]?cm[r.k].gmv:0);return a;}));}
   else if(kind==="seller"){var cm=cmp&&tm?idx(tm.seller):null,tot=sumG(tc.seller);dl("판매자",["판매자ID","GMV","수량","비중"].concat(cmp?["비교GMV"]:[]),tc.seller.map(function(r){var a=[r.k,r.gmv,r.qty,tot?r.gmv/tot:0];if(cmp)a.push(cm&&cm[r.k]?cm[r.k].gmv:0);return a;}));}
   else if(kind.indexOf("crm_")===0){var key=kind.slice(4),arr=key==="ct"?cr.ct:(key==="mg"?cr.mg:cr.ab),arrM=cmp&&crM?(key==="ct"?crM.ct:(key==="mg"?crM.mg:crM.ab)):null,mm=arrM?idx(arrM):null,lbl=key==="ct"?"거래구분":(key==="mg"?"회원등급":"연령대");dl("CRM_"+lbl,[lbl,"구매자수","거래건수","거래단가","GMV","TOP상품"].concat(cmp?["비교GMV"]:[]),arr.map(function(s){var a=[s.k,s.hasBuyer?s.buyers:"",s.tx,Math.round(s.aov),s.gmv,s.top?s.top.k:""];if(cmp)a.push(mm&&mm[s.k]?mm[s.k].gmv:0);return a;}));}
+  else if(kind==="prodrank")dl("상품랭킹",["#","상품명","브랜드","대분류","수량","GMV","카탈로그순위"],(PROD.rank||[]).slice(0,50).map(function(r,i){return [i+1,r.product_name,r.brand,r.category_l,r.quantity,r.gmv,r.catalog_rank];}));
+  else if(kind==="prodbrand")dl("브랜드등록상품",["#","브랜드","등록상품수","평균판매가"],(PROD.brand||[]).map(function(r,i){return [i+1,r.brand_kor||r.brand_eng||("#"+r.brand_code),r.product_count,r.avg_price];}));
+  else if(kind==="optin"){if(!OPTIN||!OPTIN.items){alert("옵트인 데이터 없음");return;}var it=OPTIN.items,tot=it.length;function cc(f){return it.filter(function(m){return agree(m[f]);}).length;}dl("유저옵트인",["구분","값","비율"],[["가입자수",OPTIN.totalCount||tot,""],["마케팅동의",cc("marketingConsent"),(cc("marketingConsent")/tot)],["SMS",cc("smsConsent"),cc("smsConsent")/tot],["이메일",cc("emailConsent"),cc("emailConsent")/tot],["카카오",cc("kakaoConsent"),cc("kakaoConsent")/tot],["앱푸시",cc("pushConsent"),cc("pushConsent")/tot],["야간푸시",cc("nightPushConsent"),cc("nightPushConsent")/tot]]);}
   else if(kind==="cross"){var t=$("t_cross"),tb=t.querySelectorAll("tr");var out=[];[].forEach.call(tb,function(tr){var cells=tr.querySelectorAll("th,td");var row=[];[].forEach.call(cells,function(cc){row.push(cc.textContent);});out.push(row);});dl("교차분석_"+CXSEG,out[0]||[],out.slice(1));}
+}
+
+/* ── PRODUCT (OpenAPI) ── */
+function renderProduct(){
+  var rank=(PROD.rank||[]);var top=rank.slice(0,15);
+  grpBar("c_prod",top.map(function(r){return trim(r.product_name||String(r.product_id),14);}),top.map(function(r){return Number(r.gmv)||0;}),null,true);
+  $("t_prod").innerHTML='<thead><tr><th>#</th><th>상품 · 브랜드</th><th>대분류</th><th>수량</th><th>GMV</th><th>카탈로그순위</th></tr></thead><tbody>'+
+    rank.slice(0,20).map(function(r,i){return '<tr><td>'+(i+1)+'</td><td class="name">'+esc(trim(r.product_name||"",26))+' <span style="color:#a7a49c">'+esc(r.brand||"")+'</span></td><td>'+esc(r.category_l||"")+'</td><td>'+won(r.quantity)+'</td><td>'+won(r.gmv)+'</td><td>'+(r.catalog_rank!=null?won(r.catalog_rank):"–")+'</td></tr>';}).join("")+'</tbody>';
+  $("ai_prod").innerHTML='<b>AI</b> 판매 1위 = '+(rank[0]?esc(trim(rank[0].product_name||"",24))+' ('+won(rank[0].gmv)+'원)':'-')+'. 카탈로그순위=오픈API 기준.';
+  var br=(PROD.brand||[]);var bt=br.slice(0,15);
+  grpBar("c_prodbrand",bt.map(function(r){return trim(r.brand_kor||r.brand_eng||("#"+r.brand_code),12);}),bt.map(function(r){return Number(r.product_count)||0;}),null,true);
+  $("t_prodbrand").innerHTML='<thead><tr><th>#</th><th>브랜드</th><th>등록 상품수</th><th>평균 판매가</th></tr></thead><tbody>'+
+    br.slice(0,20).map(function(r,i){return '<tr><td>'+(i+1)+'</td><td class="name">'+esc(r.brand_kor||r.brand_eng||("#"+r.brand_code))+'</td><td>'+won(r.product_count)+'</td><td>'+won(r.avg_price)+'원</td></tr>';}).join("")+'</tbody>';
+  $("ai_prodbrand").innerHTML='<b>AI</b> 등록 상품수 1위 = '+(br[0]?esc(br[0].brand_kor||br[0].brand_eng||("#"+br[0].brand_code))+' ('+won(br[0].product_count)+'개, 평균 '+won(br[0].avg_price)+'원)':'-')+'.';
+}
+/* ── USER OPT-IN (OpenAPI) ── */
+function agree(v){return v==="Y"||v===true||v==="true"||v==="동의"||v==="1";}
+function renderOptin(){
+  if(!OPTIN||!OPTIN.items){$("optin_kpi").innerHTML='<div class="kpi"><div class="l">유저 옵트인</div><div class="v" style="font-size:13px;color:#a7a49c">데이터 없음</div></div>';$("t_optin_attr").innerHTML="";$("ai_optin").textContent="";$("optin_sub").textContent="";return;}
+  var it=OPTIN.items,tot=it.length;
+  function cnt(f){return it.filter(function(m){return agree(m[f]);}).length;}
+  var mk=cnt("marketingConsent"),sm=cnt("smsConsent"),em=cnt("emailConsent"),ka=cnt("kakaoConsent"),pu=cnt("pushConsent"),np=cnt("nightPushConsent");
+  function ot(l,n,noPct){return '<div class="kpi"><div class="l">'+l+'</div><div class="v">'+won(n)+'</div>'+(noPct?'':'<div class="bw">'+pct(tot?n/tot:0)+'</div>')+'</div>';}
+  $("optin_kpi").innerHTML=ot("가입자수",OPTIN.totalCount||tot,1)+ot("마케팅동의",mk)+ot("SMS",sm)+ot("이메일",em)+ot("카카오",ka)+ot("앱푸시",pu)+ot("야간푸시",np);
+  grpBar("c_optin",["마케팅","SMS","이메일","카카오","앱푸시","야간푸시"],[mk,sm,em,ka,pu,np],null,false);
+  function dist(f){var g={};it.forEach(function(m){var k=m[f]||"(미상)";g[k]=(g[k]||0)+1;});return Object.keys(g).map(function(k){return {k:k,v:g[k]};}).sort(function(a,b){return b.v-a.v;});}
+  function seg(title,rows){return '<tr><th colspan="2" style="text-align:left">'+title+'</th></tr>'+rows.slice(0,6).map(function(r){return '<tr><td>'+esc(r.k)+'</td><td>'+won(r.v)+' ('+pct(tot?r.v/tot:0)+')</td></tr>';}).join("");}
+  $("t_optin_attr").innerHTML='<tbody>'+seg("성별",dist("gender"))+seg("연령대",dist("ageGroup"))+seg("등급",dist("buyerGrade"))+'</tbody>';
+  $("optin_sub").textContent="조회기간 가입 회원 "+won(OPTIN.totalCount||tot)+"명 기준"+(OPTIN.truncated?" · 최대 1만 표본":"");
+  $("ai_optin").innerHTML='<b>AI</b> 가입 회원 동의율 — 마케팅 '+pct(tot?mk/tot:0)+' · 앱푸시 '+pct(tot?pu/tot:0)+' · 야간푸시 '+pct(tot?np/tot:0)+'. (전체 회원 상시 기준은 member_status_daily 읽기 RPC 추가 시 확장 가능)';
+}
+function fetchExtras(from,to){
+  $("ai_prod").textContent="불러오는 중…";$("ai_optin").textContent="회원 데이터 불러오는 중… (수 초)";
+  var pp={from:from,to:to,filters:{}};
+  Promise.all([
+    window.MUSTIT.rpc("dash_product_rank",{p:pp,p_limit:200}).then(function(r){return Array.isArray(r)?r:[];}).catch(function(){return [];}),
+    window.MUSTIT.rpc("mustit_products_by_brand",{p_limit:100}).then(function(r){return Array.isArray(r)?r:[];}).catch(function(){return [];})
+  ]).then(function(x){PROD={rank:x[0],brand:x[1]};renderProduct();}).catch(function(){});
+  window.MUSTIT.fn("member-list",{joinedFrom:from,joinedTo:to,withPurchases:false}).then(function(r){OPTIN=(r&&!r.error)?r:null;renderOptin();}).catch(function(e){OPTIN=null;renderOptin();});
 }
 
 /* ── 파이프라인 ── */
@@ -587,7 +642,7 @@ function refresh(){
   $("perf_sub").textContent="· "+from+"~"+to+(MODE==="cmp"?(" vs 비교 "+$("cfrom").value+"~"+$("cto").value):"");
   if(MODE==="cmp")$("cmpnote").innerHTML="비교모드 · <b>조회</b> "+from+"~"+to+" vs <b>비교</b> "+$("cfrom").value+"~"+$("cto").value+" (막대 빨강=조회·파랑=비교, 표엔 비교값 열)";
   var jobs=[fetchRows(from,to)];if(MODE==="cmp")jobs.push(fetchRows($("cfrom").value,$("cto").value));
-  Promise.all(jobs).then(function(res){RAWCUR=res[0]||[];RAWCMP=res[1]||[];populateDyn(RAWCUR.concat(RAWCMP));render();})
+  Promise.all(jobs).then(function(res){RAWCUR=res[0]||[];RAWCMP=res[1]||[];populateDyn(RAWCUR.concat(RAWCMP));render();if(!THUMB)fetchExtras(from,to);})
    .catch(function(e){$("err").textContent="오류: "+e.message;}).finally(function(){$("loading").classList.remove("on");});
 }
 

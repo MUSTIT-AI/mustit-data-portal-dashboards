@@ -70,12 +70,12 @@
   .note{color:var(--sub);font-size:11px;margin:10px 2px 0}
   .btn.csv{background:#1f8a4c;color:#fff}
   .btn.csv:disabled{background:#c7ccc8;cursor:default}
+  .topscroll{overflow-x:auto;overflow-y:hidden;height:14px}
+  .topscroll-inner{height:1px}
   .tblscroll{overflow-x:auto;border:1px solid var(--border);border-radius:8px;background:#fff}
   table.sumtbl{border-collapse:collapse;white-space:nowrap;font-size:12.5px;width:100%}
-  table.sumtbl th{background:#f4f3ef;color:#33322f;padding:7px 10px;text-align:right;border-bottom:1px solid #e2e0da;position:sticky;top:0;font-weight:700;cursor:pointer;user-select:none}
-  table.sumtbl th.txt,table.sumtbl td.txt{text-align:left}
-  table.sumtbl th:first-child,table.sumtbl td:first-child{position:sticky;left:0;background:#fff;box-shadow:1px 0 0 var(--border)}
-  table.sumtbl th:first-child{background:#f4f3ef}
+  table.sumtbl th{background:#f4f3ef;color:#33322f;padding:7px 10px;text-align:right;border-bottom:1px solid #e2e0da;position:sticky;top:0;font-weight:700;cursor:pointer;user-select:none;z-index:10}
+  table.sumtbl th.txt,table.sumtbl td.txt{text-align:left;overflow:hidden;text-overflow:ellipsis}
   table.sumtbl td{padding:6px 10px;border-bottom:1px solid #f0efe9;text-align:right;font-variant-numeric:tabular-nums}
   table.sumtbl tr:hover td{background:#fafaf7}
   table.sumtbl tr.tot td{background:#f8f7f3;font-weight:700}
@@ -84,6 +84,18 @@
   table.sumtbl th[data-nosort]{cursor:default}
   table.sumtbl th.sortasc:after{content:" ▲"}
   table.sumtbl th.sortdesc:after{content:" ▼"}
+  /* 누적거래액까지(1~6열) 고정, 일별 컬럼(7열~)만 가로 스크롤 */
+  table.sumtbl th:nth-child(-n+6),table.sumtbl td:nth-child(-n+6){ position:sticky; box-sizing:border-box }
+  table.sumtbl td:nth-child(-n+6){ background:#fff; z-index:2 }
+  table.sumtbl th:nth-child(-n+6){ background:#f4f3ef; z-index:15 }
+  table.sumtbl tr:hover td:nth-child(-n+6){ background:#fafaf7 }
+  table.sumtbl tr.tot td:nth-child(-n+6){ background:#f8f7f3 }
+  table.sumtbl th:nth-child(1),table.sumtbl td:nth-child(1){ left:0; width:150px; min-width:150px; max-width:150px }
+  table.sumtbl th:nth-child(2),table.sumtbl td:nth-child(2){ left:150px; width:70px; min-width:70px; max-width:70px }
+  table.sumtbl th:nth-child(3),table.sumtbl td:nth-child(3){ left:220px; width:115px; min-width:115px; max-width:115px }
+  table.sumtbl th:nth-child(4),table.sumtbl td:nth-child(4){ left:335px; width:105px; min-width:105px; max-width:105px }
+  table.sumtbl th:nth-child(5),table.sumtbl td:nth-child(5){ left:440px; width:68px; min-width:68px; max-width:68px }
+  table.sumtbl th:nth-child(6),table.sumtbl td:nth-child(6){ left:508px; width:105px; min-width:105px; max-width:105px; box-shadow:2px 0 0 var(--border) }
 </style>
 </head>
 <body>
@@ -124,7 +136,8 @@
       </div>
       <button class="btn csv" id="csv" disabled>⬇ CSV 다운로드</button>
     </div>
-    <div class="tblscroll"><table class="sumtbl" id="piv"></table></div>
+    <div class="topscroll" id="topscroll"><div class="topscroll-inner" id="topscrollInner"></div></div>
+    <div class="tblscroll" id="tblscroll"><table class="sumtbl" id="piv"></table></div>
   </div>
   <p class="note">* 패키지·담당MD·목표액은 <code>그로스 패키지 가입 셀러 리스트</code> 시트에서 가져온 스냅샷입니다(매월 갱신 필요). 당월 달성율·누적 거래액·일별 추이는 <code>orders_secure</code>를 판매자ID로 좁혀 실시간 조회한 값입니다(개인정보 없이 판매자ID·주문일자·거래액만 조회, 로그인 계정 권한 내에서 자동 마스킹).</p>
 </div>
@@ -297,6 +310,17 @@ function sortRows(rows){
   });
 }
 
+// 표가 길어서 아래쪽 가로 스크롤바가 화면 밖일 때도 스크롤할 수 있도록, 표 위쪽에 미러 스크롤바를 두고 서로 동기화
+var SYNCING_SCROLL = false;
+function syncTopScroll(){
+  var top = $("topscroll"), inner = $("topscrollInner"), tbl = $("tblscroll");
+  inner.style.width = tbl.querySelector("table").scrollWidth+"px";
+  if(top.dataset.wired) return;
+  top.dataset.wired = "1";
+  top.addEventListener("scroll", function(){ if(SYNCING_SCROLL) return; SYNCING_SCROLL=true; tbl.scrollLeft=top.scrollLeft; SYNCING_SCROLL=false; });
+  tbl.addEventListener("scroll", function(){ if(SYNCING_SCROLL) return; SYNCING_SCROLL=true; top.scrollLeft=tbl.scrollLeft; SYNCING_SCROLL=false; });
+}
+
 var WD = ["일","월","화","수","목","금","토"];
 function dayLabel(dateStr){
   var d = new Date(dateStr+"T00:00:00");
@@ -351,6 +375,7 @@ function render(){
     })()+
     "</tbody>";
   $("piv").innerHTML = thead+tbody;
+  syncTopScroll();
 
   [].forEach.call(document.querySelectorAll("#piv th[data-k]"), function(th){
     if(th.getAttribute("data-nosort")) return;

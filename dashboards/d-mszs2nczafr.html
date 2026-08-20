@@ -86,6 +86,10 @@
   table.sumtbl tr.tot td{background:#f8f7f3;font-weight:700}
   table.sumtbl td.rate.ok{color:#1f8a4c;font-weight:700}
   table.sumtbl td.rate.bad{color:var(--red)}
+  /* 누적거래액 강조 (한눈에 안 들어온다는 피드백 반영) */
+  #piv td:nth-child(6){ font-weight:800; color:#1a56c4 }
+  #unjoinedTbl td:nth-child(4){ font-weight:800; color:#1a56c4 }
+  #piv td:nth-child(6).clk:hover,#unjoinedTbl td:nth-child(4).clk:hover{ color:var(--red) }
   table.sumtbl th[data-nosort]{cursor:default}
   table.sumtbl td.clk{cursor:pointer}
   table.sumtbl td.clk:hover{text-decoration:underline;color:var(--red)}

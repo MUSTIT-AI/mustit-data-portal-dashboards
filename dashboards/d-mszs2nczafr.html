@@ -112,7 +112,7 @@
   <div class="fld"><label>조회 월</label><select id="f_month"></select></div>
   <div class="fld"><label>담당 MD</label><select id="f_md"><option value="">전체</option></select></div>
   <div class="fld"><label>패키지</label><select id="f_pkg"><option value="">전체</option></select></div>
-  <div class="fld"><label>판매자ID 검색</label><input type="text" id="f_search" placeholder="판매자ID로 검색"></div>
+  <div class="fld"><label>판매자ID 검색</label><input type="text" id="f_search" placeholder="쉼표로 여러 개, 예: mxnitaly1,KKODOLSHOP"></div>
   <div class="btns">
     <button class="btn go" id="refreshbtn">새로고침</button>
     <button class="btn reset" id="reset">초기화</button>
@@ -290,11 +290,16 @@ function buildJoined(){
 }
 
 function applyFilters(){
-  var md=$("f_md").value, pkg=$("f_pkg").value, q=$("f_search").value.trim().toLowerCase();
+  var md=$("f_md").value, pkg=$("f_pkg").value;
+  // "mxnitaly1,KKODOLSHOP" 처럼 쉼표로 여러 판매자ID 검색 — 하나라도 부분일치하면 포함(OR)
+  var terms = $("f_search").value.split(",").map(function(s){return s.trim().toLowerCase();}).filter(Boolean);
   return JOINED.filter(function(r){
     if(md && r.md!==md) return false;
     if(pkg && r.package!==pkg) return false;
-    if(q && r.seller_id.toLowerCase().indexOf(q)<0) return false;
+    if(terms.length){
+      var sid = r.seller_id.toLowerCase();
+      if(!terms.some(function(t){ return sid.indexOf(t)>=0; })) return false;
+    }
     return true;
   });
 }

@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<title>[카탈로그] 매칭 현황 · MUST IT</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../auth.js"></script>
+<style>
+  :root{
+    --red:#c8102e; --bar:#ee3b52; --ink:#1c1b19; --sub:#6b6a66; --line:#111;
+    --bg:#eef0f2; --panel:#fff; --border:#e2e0da; --grid:#eceae4;
+    --c1:#7b9ff2; --c2:#8fd3c7; --c3:#f2937f; --c4:#2fae8f; --c5:#f2c94c; --c6:#9b8cf2; --c7:#e88fbf;
+    --ok:#1f8a4c; --warn:#b4523a;
+  }
+  *{box-sizing:border-box}
+  body{font-family:'Pretendard','Malgun Gothic',system-ui,sans-serif;margin:0;background:var(--bg);color:var(--ink);font-size:13px}
+  a{color:inherit}
+  .topbar{display:flex;align-items:center;gap:14px;background:#fbfbfc;border-bottom:1px solid var(--border);padding:8px 16px;position:sticky;top:0;z-index:40}
+  .topbar .logo{font-weight:800;color:#232a33;display:flex;align-items:center;gap:6px;text-decoration:none;cursor:pointer}
+  .topbar .logo:hover{color:var(--red)}
+  .topbar .right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .topbar .owner{color:var(--ink);font-size:12.5px;font-weight:700;white-space:nowrap}
+  .topbar #dashnav{border:1px solid #d6d4ce;border-radius:7px;padding:5px 9px;font-size:12.5px;background:#fff;max-width:230px}
+  .topbar .editbtn{border:1px solid #c8102e;background:#fff;color:#c8102e;border-radius:7px;padding:4px 11px;font-size:12px;font-weight:700;cursor:pointer}
+  .topbar .editbtn:hover{background:#c8102e;color:#fff}
+  .modal{display:none;position:fixed;inset:0;z-index:200;background:rgba(20,18,15,.4);align-items:flex-start;justify-content:center;padding:60px 16px}
+  .modalbox{background:#fff;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.25);width:560px;max-width:100%;max-height:80vh;overflow:auto;padding:20px 22px}
+  .modalbox .mhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+  .modalbox .mhead b{font-size:16px}
+  .modalbox .mhead button{border:0;background:transparent;font-size:18px;cursor:pointer;color:#888}
+  .modalbox .mrow{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+  .modalbox .mrow label{width:70px;font-size:12.5px;color:var(--sub);font-weight:600}
+  .modalbox .mrow input{flex:1;border:1px solid #d6d4ce;border-radius:8px;padding:8px 10px;font-size:13.5px}
+  .modalbox h4{margin:18px 0 4px;font-size:13.5px}
+  .modalbox .mhint{margin:0 0 10px;font-size:11.5px;color:#8a8880}
+  .modalbox .mmsg{font-size:12.5px;color:#1f8a4c;margin-left:8px}
+  .mtbl{width:100%;border-collapse:collapse;font-size:12.5px}
+  .mtbl th{background:#f4f3ef;text-align:left;padding:6px 8px;border-bottom:1px solid #e2e0da;font-size:11.5px}
+  .mtbl td{padding:6px 8px;border-bottom:1px solid #f0efe9}
+  .filters{background:#fff;border-bottom:1px solid var(--border);padding:8px 12px;display:flex;flex-wrap:wrap;gap:7px 10px;align-items:flex-end;position:sticky;top:39px;z-index:30}
+  .fld{display:flex;flex-direction:column;gap:3px}
+  .fld label{font-size:10.5px;color:var(--sub);font-weight:600;letter-spacing:.02em}
+  .fld select,.fld input[type=text]{border:1px solid #d6d4ce;border-radius:6px;padding:5px 7px;font-size:12px;background:#fff;height:29px}
+  .fld input[type=text]{width:150px}
+  .btns{display:flex;gap:6px;margin-left:auto}
+  .btn{border:0;border-radius:7px;padding:6px 15px;font-size:12.5px;font-weight:700;cursor:pointer;height:29px}
+  .btn.go{background:var(--red);color:#fff}
+  .btn.reset{background:#e9e7e1;color:#333}
+  .btn.csv{background:#1f8a4c;color:#fff}
+  .wrap{max-width:100%;padding:14px 20px}
+  .note{color:var(--sub);font-size:11.5px;margin:0 0 10px;line-height:1.6}
+  .note b{color:var(--ink)}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px}
+  @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:#fff;padding:14px 16px;text-align:center}
+  .kpi .l{color:var(--sub);font-size:11.5px;margin-bottom:6px}
+  .kpi .v{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .kpi .v.rate{color:var(--red)}
+  .kpi .v.warn{color:var(--warn)}
+  .grid2{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px}
+  @media(max-width:1000px){.grid2{grid-template-columns:1fr}}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px 6px}
+  .card h3{margin:0 0 2px;font-size:13.5px;font-weight:700}
+  .card .h-sub{color:var(--sub);font-size:10.5px;margin:0 0 4px;display:block}
+  .chart{width:100%;height:280px}
+  .tblwrap{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:30px}
+  .tblhead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+  .tblhead h3{margin:0;font-size:14px}
+  .tblcount{color:var(--sub);font-size:12px}
+  .tblscroll{overflow-x:auto;border:1px solid var(--border);border-radius:8px}
+  table.sellers{border-collapse:collapse;width:100%;white-space:nowrap;font-size:12px}
+  table.sellers th{background:#f4f3ef;color:#33322f;padding:7px 10px;text-align:left;border-bottom:1px solid #e2e0da;position:sticky;top:0;font-weight:700;cursor:pointer;user-select:none}
+  table.sellers th:hover{background:#ece9e2}
+  table.sellers th .arrow{opacity:.4;margin-left:3px;font-size:10px}
+  table.sellers td{padding:6px 10px;border-bottom:1px solid #f0efe9;font-variant-numeric:tabular-nums}
+  table.sellers td.num{text-align:right}
+  table.sellers tr:hover td{background:#fafaf7}
+  table.sellers tr.risk td{background:#fdf0ee}
+  table.sellers tr.risk:hover td{background:#fbe4e0}
+  .pager{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:10px;font-size:12.5px;color:var(--sub)}
+  .pager button{border:1px solid #d6d4ce;background:#fff;border-radius:7px;padding:5px 12px;font-size:12.5px;cursor:pointer;font-weight:600}
+  .pager button:disabled{opacity:.4;cursor:default}
+  .pager .pp{font-variant-numeric:tabular-nums;min-width:92px;text-align:center}
+  .loading{position:fixed;inset:0;background:rgba(255,255,255,.55);display:none;align-items:center;justify-content:center;z-index:80;font-weight:700;color:var(--red)}
+  .loading.on{display:flex}
+  .err{color:var(--red);padding:10px 14px;font-size:12.5px}
+  .badge{display:inline-block;background:#f4f3ef;border:1px solid #e2e0da;border-radius:6px;padding:1px 7px;font-size:10.5px;color:var(--sub);margin-left:6px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a class="logo" href="../index.html">🛍️ Data Portal</a>
+  <div class="right">
+    <span class="owner" id="dashowner"></span>
+    <button class="editbtn" id="editdash" style="display:none">수정</button>
+    <select id="dashnav" title="대시보드 이동"></select>
+  </div>
+</div>
+
+<div class="filters" id="filters">
+  <div class="fld"><label>조회 기간</label>
+    <select id="weeks">
+      <option value="8">최근 8주</option>
+      <option value="12" selected>최근 12주</option>
+      <option value="26">최근 26주</option>
+      <option value="52">최근 52주</option>
+    </select>
+  </div>
+  <div class="fld"><label>판매자 검색</label><input type="text" id="sellerq" placeholder="판매자ID 검색"></div>
+  <div class="btns">
+    <button class="btn go" id="go">조회</button>
+    <button class="btn csv" id="csv">⬇ 판매자별 CSV</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <p class="note">
+    <b>매칭 정의</b>: 머스트잇 Open API(<code>/catalogs/matched-items</code>)가 실시간 계산하는 <b>matchedItemCount</b>(카탈로그당 매칭 상품 수)가 2개 이상이면 <b>매칭</b>, 1개 이하(자기 자신뿐 또는 카탈로그 미배정)면 <b>미매칭</b>.
+    ① <b>DB 파트</b>(신규등록 추이·판매자별 현황)는 Open API 상품 목록(<code>/products?queryType=CREATED</code>)으로 가져온 신규 등록 상품을 위 기준으로 판정해 <code>catalog-matching-sync</code> Edge Function이 주기적으로 집계·적재한 값입니다(근사치 아님, 실측값). 최신 동기화 시각은 판매자 테이블에서 확인.
+    ② <b>앰플리튜드 파트</b>는 PDP(상품상세) 조회 이벤트의 가격비교 매칭 상품 수(<code>count_price_comparison</code>≥2)로 판정하며, <b>조회(uniques) 기준 추이</b>로 근사한 것입니다(Amplitude 원본 대시보드의 상품 고유수 수식은 이 프록시로 재현 불가).
+    <b>카탈로그 등록 처리자(관리자/AI/자동동기화) 구분</b>은 Open API 응답에 없어 제외되었습니다.
+  </p>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="grid2">
+    <div class="card"><h3>주간 신규 카탈로그 등록 · 매칭 추이</h3><span class="h-sub">Open API 실측 (catalogs/matched-items) · 등록일 기준</span><div id="c_weekly" class="chart"></div></div>
+    <div class="card"><h3>PDP 조회 기준 매칭·미매칭 추이</h3><span class="h-sub">Amplitude · view_product_detail (uniques, 봇 제외)</span><div id="c_amp" class="chart"></div></div>
+  </div>
+
+  <div class="tblwrap">
+    <div class="tblhead">
+      <h3>판매자별 매칭 현황 <span class="badge">등록 많은데 매칭률 낮은 판매자 확인용</span></h3>
+      <span class="tblcount" id="sellercount"></span>
+    </div>
+    <p class="note" style="margin:0 0 8px" id="sellernote">가장 최근 동기화 기준(동기화 대상 기간은 배치 설정값) · 매칭률 낮은 순 정렬(헤더 클릭으로 재정렬) · 매칭률 20% 미만 &amp; 등록 10건 이상은 빨간 배경으로 표시.</p>
+    <div class="tblscroll"><table class="sellers" id="sellers"></table></div>
+    <div class="pager" id="pager"></div>
+  </div>
+</div>
+
+<div class="modal" id="editmodal">
+  <div class="modalbox">
+    <div class="mhead"><b>대시보드 설정</b><button id="m_close">✕</button></div>
+    <div class="mrow"><label>이름</label><input id="m_title" type="text"></div>
+    <div><button class="btn" id="m_save" style="padding:8px 16px">이름 저장</button><span class="mmsg" id="m_msg"></span></div>
+    <h4>보기 / 수정 권한</h4>
+    <p class="mhint">체크하면 바로 저장됩니다. 기본은 <b>로그인 전원 열람</b>. <b>열람</b>을 아무도 체크 안 하면 전원 열람이고, 한 명이라도 체크하면 그 계정만 열람. <b>수정</b>만 줘도 열람은 안 막힙니다. 관리자는 항상 전체.</p>
+    <table class="mtbl"><thead><tr><th>이메일</th><th>메모</th><th style="text-align:center">열람</th><th style="text-align:center">수정</th></tr></thead>
+      <tbody id="m_acl"><tr><td colspan="4" style="color:#999">불러오는 중…</td></tr></tbody></table>
+    <div id="m_delwrap" style="display:none;margin-top:18px;border-top:1px solid #eee;padding-top:14px">
+      <button class="btn" id="m_del" style="background:#c8102e;color:#fff;padding:8px 16px">이 대시보드 삭제</button>
+      <span style="font-size:11.5px;color:#8a8880;margin-left:8px">생성자만 · 목록에서 삭제 · 되돌릴 수 없음</span>
+    </div>
+  </div>
+</div>
+
+<div class="loading" id="loading">불러오는 중…</div>
+<div class="err" id="err"></div>
+
+<script>
+(function(){
+"use strict";
+function rpc(fn, body){ return window.MUSTIT.rpc(fn, body); }
+var $ = function(id){ return document.getElementById(id); };
+function won(n){ return (Number(n)||0).toLocaleString("ko-KR"); }
+function pct(n){ return n==null ? "-" : ((Number(n)||0)*100).toFixed(1)+"%"; }
+function ymd(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function ymdCompact(d){ return d.getFullYear()+String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0"); }
+function mondayOf(d){ var x=new Date(d); var day=(x.getDay()+6)%7; x.setDate(x.getDate()-day); x.setHours(0,0,0,0); return x; }
+
+// ── THUMB (홈 썸네일) — 무거운 조회 스킵 ──
+var THUMB = location.hash.indexOf("thumb") >= 0;
+
+// ── ECharts ──
+var CH = {};
+function chart(id){ if(!CH[id]) CH[id]=echarts.init($(id)); return CH[id]; }
+window.addEventListener("resize", function(){ Object.keys(CH).forEach(function(k){ CH[k].resize(); }); });
+var GRID = { left:46, right:46, top:34, bottom:38 };
+var TIP = { trigger:"axis", confine:true, textStyle:{fontSize:11} };
+function catAxis(dates){ return { type:"category", data:dates, axisLabel:{fontSize:9,color:"#999",rotate:32}, axisTick:{show:false}, axisLine:{lineStyle:{color:"#ddd"}} }; }
+function valAxisCnt(){ return { type:"value", axisLabel:{fontSize:9,color:"#999"}, splitLine:{lineStyle:{color:"#eee"}} }; }
+function valAxisPct(){ return { type:"value", position:"right", max:1, axisLabel:{formatter:function(v){return (v*100).toFixed(0)+"%";},fontSize:9,color:"#999"}, splitLine:{show:false} }; }
+function legend(names){ return { data:names, top:2, left:2, itemWidth:12, itemHeight:8, itemGap:8, textStyle:{fontSize:10,color:"#555"} }; }
+
+function renderWeeklyChart(rows){
+  var dates = rows.map(function(r){ return r.week_start; });
+  chart("c_weekly").setOption({
+    grid:GRID, tooltip:TIP, legend:legend(["신규 등록","매칭","미매칭","매칭률"]),
+    xAxis:catAxis(dates),
+    yAxis:[valAxisCnt(), valAxisPct()],
+    series:[
+      { name:"매칭", type:"bar", stack:"s", data:rows.map(function(r){return r.matched;}), itemStyle:{color:"#2fae8f"}, barMaxWidth:30 },
+      { name:"미매칭", type:"bar", stack:"s", data:rows.map(function(r){return r.unmatched;}), itemStyle:{color:"#ee3b52"}, barMaxWidth:30 },
+      { name:"신규 등록", type:"line", data:rows.map(function(r){return r.new_items;}), symbol:"circle", symbolSize:4, lineStyle:{color:"#111",width:1.4}, itemStyle:{color:"#111"} },
+      { name:"매칭률", type:"line", yAxisIndex:1, data:rows.map(function(r){ return r.new_items ? r.matched/r.new_items : 0; }), symbol:"none", lineStyle:{color:"#7b9ff2",width:1.6,type:"dashed"} }
+    ]
+  }, true);
+}
+
+function renderAmpChart(dates, matched, unmatched){
+  chart("c_amp").setOption({
+    grid:GRID, tooltip:TIP, legend:legend(["매칭(조회)","미매칭(조회)"]),
+    xAxis:catAxis(dates), yAxis:[valAxisCnt()],
+    series:[
+      { name:"매칭(조회)",   type:"line", data:matched,   symbol:"circle", symbolSize:4, lineStyle:{color:"#2fae8f",width:1.6}, itemStyle:{color:"#2fae8f"} },
+      { name:"미매칭(조회)", type:"line", data:unmatched, symbol:"circle", symbolSize:4, lineStyle:{color:"#ee3b52",width:1.6}, itemStyle:{color:"#ee3b52"} }
+    ]
+  }, true);
+}
+
+// ── KPI ──
+function renderKPI(weekly, sellers){
+  var last = weekly[weekly.length-1], prev = weekly[weekly.length-2];
+  var lastRate = last && last.new_items ? last.matched/last.new_items : null;
+  var prevRate = prev && prev.new_items ? prev.matched/prev.new_items : null;
+  var deltaItems = (last && prev) ? (last.new_items - prev.new_items) : null;
+  var riskCount = (sellers||[]).filter(function(s){ return s.new_items>=10 && (s.match_rate==null || s.match_rate<0.2); }).length;
+  var items = [
+    { l:"최근 주 신규 등록", v: last ? won(last.new_items)+"건" : "-" },
+    { l:"최근 주 매칭률", v: pct(lastRate), rate:1 },
+    { l:"전주 대비 등록 증감", v: deltaItems==null ? "-" : (deltaItems>=0?"+":"")+won(deltaItems)+"건"+(prevRate!=null?" (매칭률 "+(lastRate>prevRate?"▲":lastRate<prevRate?"▼":"-")+")":"") },
+    { l:"매칭률 20% 미만·등록 10건↑ 판매자", v: won(riskCount)+"명", warn: riskCount>0 }
+  ];
+  $("kpis").innerHTML = items.map(function(k){
+    return '<div class="kpi"><div class="l">'+k.l+'</div><div class="v'+(k.rate?" rate":"")+(k.warn?" warn":"")+'">'+k.v+'</div></div>';
+  }).join("");
+}
+
+// ── 판매자 테이블 ──
+var SELLERS = [];
+var SORT = { key:"match_rate", dir:"asc" };
+var PAGE_SIZE = 30, PAGE = 0;
+var COLS = [
+  ["seller_id","판매자ID"], ["new_items","신규 등록"], ["matched","매칭"], ["unmatched","미매칭"], ["match_rate","매칭률"]
+];
+function sortSellers(){
+  var k = SORT.key, dir = SORT.dir==="asc" ? 1 : -1;
+  SELLERS.sort(function(a,b){
+    var av=a[k], bv=b[k];
+    if(av==null && bv==null) return 0;
+    if(av==null) return 1; if(bv==null) return -1;
+    if(typeof av === "string") return dir*String(av).localeCompare(String(bv));
+    return dir*(av-bv);
+  });
+}
+function filteredSellers(){
+  var q = $("sellerq").value.trim().toLowerCase();
+  return q ? SELLERS.filter(function(s){ return String(s.seller_id||"").toLowerCase().indexOf(q)>=0; }) : SELLERS;
+}
+function paintSellers(){
+  var rows = filteredSellers();
+  var total = rows.length;
+  var pages = Math.max(1, Math.ceil(total/PAGE_SIZE));
+  if(PAGE > pages-1) PAGE = pages-1; if(PAGE<0) PAGE=0;
+  var slice = rows.slice(PAGE*PAGE_SIZE, PAGE*PAGE_SIZE+PAGE_SIZE);
+  var thead = "<thead><tr>"+COLS.map(function(c){
+    var arrow = SORT.key===c[0] ? (SORT.dir==="asc"?"▲":"▼") : "";
+    return '<th data-k="'+c[0]+'">'+c[1]+'<span class="arrow">'+arrow+'</span></th>';
+  }).join("")+"</tr></thead>";
+  var tbody = "<tbody>"+slice.map(function(r){
+    var risk = r.new_items>=10 && (r.match_rate==null || r.match_rate<0.2);
+    return '<tr class="'+(risk?"risk":"")+'">'+
+      '<td>'+(r.seller_id==null?"":r.seller_id)+'</td>'+
+      '<td class="num">'+won(r.new_items)+'</td>'+
+      '<td class="num">'+won(r.matched)+'</td>'+
+      '<td class="num">'+won(r.unmatched)+'</td>'+
+      '<td class="num">'+pct(r.match_rate)+'</td>'+
+    '</tr>';
+  }).join("")+"</tbody>";
+  $("sellers").innerHTML = thead+tbody;
+  [].forEach.call($("sellers").querySelectorAll("th"), function(th){
+    th.onclick=function(){
+      var k = th.getAttribute("data-k");
+      SORT.dir = (SORT.key===k && SORT.dir==="asc") ? "desc" : "asc";
+      SORT.key = k; sortSellers(); PAGE=0; paintSellers();
+    };
+  });
+  $("sellercount").textContent = "총 "+won(total)+"명";
+  var from = total===0?0:PAGE*PAGE_SIZE+1, to = Math.min(total,(PAGE+1)*PAGE_SIZE);
+  $("pager").innerHTML =
+    '<button id="pgprev"'+(PAGE<=0?" disabled":"")+'>◀ 이전</button>'+
+    '<span class="pp">'+from+'–'+to+' / '+won(total)+'</span>'+
+    '<button id="pgnext"'+(PAGE>=pages-1?" disabled":"")+'>다음 ▶</button>';
+  var pv=$("pgprev"), nx=$("pgnext");
+  if(pv) pv.onclick=function(){ PAGE--; paintSellers(); };
+  if(nx) nx.onclick=function(){ PAGE++; paintSellers(); };
+}
+function csvCell(v){ v=(v==null?"":String(v)); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+function downloadCSV(){
+  var rows = filteredSellers();
+  if(!rows.length) return;
+  var head = COLS.map(function(c){return csvCell(c[1]);}).join(",");
+  var body = rows.map(function(r){ return COLS.map(function(c){ return csvCell(r[c[0]]); }).join(","); }).join("\r\n");
+  var blob = new Blob(["﻿"+head+"\r\n"+body], {type:"text/csv;charset=utf-8;"});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a"); a.href=url; a.download="카탈로그매칭_판매자별.csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+}
+
+// ── Amplitude: PDP 조회 기준 매칭/미매칭 주간 추이 ──
+function fetchAmpWeekly(weeks){
+  var end = new Date(); // 오늘까지
+  var start = mondayOf(new Date(end.getTime() - weeks*7*86400000));
+  var BOT_SEG = [JSON.stringify([{prop:"os",op:"does not contain",values:["yeti","bot","headless"]}])];
+  var eMatched   = JSON.stringify({event_type:"view_product_detail", filters:[{subprop_type:"event",subprop_key:"count_price_comparison",subprop_op:"greater or equal",subprop_value:["2"]}]});
+  var eUnmatched = JSON.stringify({event_type:"view_product_detail", filters:[{subprop_type:"event",subprop_key:"count_price_comparison",subprop_op:"is",subprop_value:["0","(none)","1"]}]});
+  return window.MUSTIT.fn("amplitude-proxy", { endpoint:"events/segmentation", params:{
+    e:[eMatched, eUnmatched], m:"uniques", i:7,
+    start:ymdCompact(start), end:ymdCompact(end),
+    s:BOT_SEG
+  }});
+}
+
+// ── DB 캐시 테이블 (supabase/functions/catalog-matching-sync 가 적재) ──
+// mustit_api.products 실시간 근사치가 아니라, 머스트잇 Open API
+// /catalogs/matched-items 의 matchedItemCount 실측값 기반 집계.
+function fetchWeeklyFromCache(){
+  return window.MUSTIT.client.from("catalog_matching_weekly")
+    .select("week_start,week_end,new_items,matched,unmatched")
+    .order("week_start", {ascending:true})
+    .then(function(r){ if(r.error) throw r.error; return r.data||[]; });
+}
+function fetchSellersFromCache(){
+  // window_days 는 동기화 배치가 마지막으로 채운 값을 그대로 쓴다(가장 최근 synced_at 기준).
+  return window.MUSTIT.client.from("catalog_matching_by_seller")
+    .select("seller_id,new_items,matched,unmatched,match_rate,window_days,synced_at")
+    .then(function(r){
+      if(r.error) throw r.error;
+      var rows = r.data||[];
+      if(!rows.length) return rows;
+      var latestSynced = rows.reduce(function(a,b){ return (b.synced_at>a) ? b.synced_at : a; }, rows[0].synced_at);
+      var latestWin = rows.filter(function(x){ return x.synced_at===latestSynced; })[0].window_days;
+      return rows.filter(function(x){ return x.window_days===latestWin; });
+    });
+}
+
+// ── refresh ──
+function refresh(){
+  var weeks = Number($("weeks").value)||12;
+  $("loading").classList.add("on"); $("err").textContent="";
+
+  var calls = [
+    fetchWeeklyFromCache(),
+    THUMB ? Promise.resolve([]) : fetchSellersFromCache(),
+    THUMB ? Promise.resolve(null) : fetchAmpWeekly(weeks).catch(function(e){ return null; })
+  ];
+
+  Promise.all(calls).then(function(res){
+    var weeklyAll = res[0]||[], sellers = res[1]||[], amp = res[2];
+    var weekly = weeklyAll.slice(Math.max(0, weeklyAll.length-weeks));
+    SELLERS = sellers; sortSellers(); PAGE=0;
+    renderKPI(weekly, sellers);
+    renderWeeklyChart(weekly);
+    if(!THUMB){
+      if(sellers.length){
+        var wd = sellers[0].window_days, syncedAt = sellers[0].synced_at;
+        $("sellernote").textContent = "최근 "+wd+"일 신규 등록 기준(동기화: "+(syncedAt?new Date(syncedAt).toLocaleString("ko-KR"):"-")+") · 매칭률 낮은 순 정렬(헤더 클릭으로 재정렬) · 매칭률 20% 미만 & 등록 10건 이상은 빨간 배경으로 표시.";
+      }
+      paintSellers();
+      if(amp && amp.data && amp.data.data){
+        var d = amp.data.data;
+        renderAmpChart(d.xValues||[], (d.series&&d.series[0])||[], (d.series&&d.series[1])||[]);
+      } else {
+        $("c_amp").innerHTML = '<div style="color:var(--sub);font-size:12px;padding:20px">앰플리튜드 데이터를 불러오지 못했습니다.</div>';
+      }
+    }
+  })
+  .catch(function(e){ $("err").textContent = "오류: "+e.message; })
+  .finally(function(){ $("loading").classList.remove("on"); });
+}
+
+$("go").onclick=refresh;
+$("csv").onclick=downloadCSV;
+$("sellerq").addEventListener("input", function(){ PAGE=0; paintSellers(); });
+$("sellerq").addEventListener("keydown", function(e){ if(e.key==="Enter") refresh(); });
+
+// ── 대시보드 설정 모달 / 상단바 (공통 패턴) ──
+$("editdash").onclick=openEditModal;
+$("m_close").onclick=function(){ $("editmodal").style.display="none"; };
+$("m_save").onclick=saveMeta;
+$("editmodal").onclick=function(e){ if(e.target===$("editmodal")) $("editmodal").style.display="none"; };
+
+var ACCESS=null;
+function blockNoAccess(msg){
+  document.body.innerHTML='<div style="font-family:Pretendard,\'Malgun Gothic\',system-ui,sans-serif;max-width:520px;margin:90px auto;padding:28px;background:#fff;border:1px solid #e2e0da;border-radius:12px;text-align:center;color:#6b6a66">'+
+    '<h2 style="margin:0 0 8px;color:#1c1b19">열람 권한이 없습니다</h2>'+
+    '<p style="margin:0 0 6px">이 대시보드를 볼 권한이 없습니다. 관리자에게 요청하세요.</p>'+
+    (msg?'<p style="font-size:12px;color:#a7a49c">'+msg+'</p>':'')+
+    '<p style="margin-top:16px"><a href="../index.html" style="color:#c8102e">← 대시보드 목록</a></p></div>';
+}
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+var CUR_FILE = decodeURIComponent(location.pathname.split("/").pop()||"");
+var CUR_META = null;
+function setupTopbar(){
+  window.MUSTIT.rpc("dash_list",{}).then(function(list){
+    list = list||[];
+    var cur = list.filter(function(d){ return d.file===CUR_FILE; })[0];
+    CUR_META = cur;
+    if(cur){ $("dashowner").textContent = (cur.title||"") + (cur.owner_name?(" · "+cur.owner_name):""); document.title="Data Portal - "+(cur.title||CUR_FILE); }
+    var sel=$("dashnav");
+    sel.innerHTML = list.map(function(d){
+      var href = '_starter.html?f='+encodeURIComponent(d.file);
+      return '<option value="'+href+'" data-file="'+esc(d.file)+'"'+(d.file===CUR_FILE?' selected':'')+'>'+esc(d.title||d.file)+'</option>';
+    }).join("");
+    sel.onchange=function(){ var o=sel.options[sel.selectedIndex]; if(o && o.getAttribute('data-file')!==CUR_FILE) location.href=o.value; };
+    if(cur && cur.manage){ $("editdash").style.display=""; }
+  }).catch(function(){});
+}
+function openEditModal(){
+  $("m_msg").textContent="";
+  $("m_title").value = (CUR_META&&CUR_META.title)||"";
+  $("editmodal").style.display="flex";
+  var meEmail=((window.MUSTIT.user&&window.MUSTIT.user()&&window.MUSTIT.user().email)||"").toLowerCase();
+  var isOwner = !!(CUR_META && CUR_META.owner_email && String(CUR_META.owner_email).toLowerCase()===meEmail);
+  $("m_delwrap").style.display = isOwner ? "" : "none";
+  $("m_del").onclick = function(){ deleteDash((CUR_META&&CUR_META.title)||CUR_FILE); };
+  $("m_acl").innerHTML='<tr><td colspan="4" style="color:#999">불러오는 중…</td></tr>';
+  window.MUSTIT.fn("admin-users",{action:"acl_list",dashboard:CUR_FILE}).then(function(res){
+    var rows=res.rows||[];
+    $("m_acl").innerHTML = rows.map(function(r){
+      var dis = r.role==='admin' ? ' disabled' : '';
+      var adm = r.role==='admin' ? ' <span style="color:#999;font-size:11px">(관리자)</span>' : '';
+      return '<tr><td>'+esc(r.email)+adm+'</td><td>'+esc(r.note||'')+'</td>'+
+        '<td style="text-align:center"><input type="checkbox" class="mv" data-email="'+esc(r.email)+'"'+(r.can_view?' checked':'')+dis+'></td>'+
+        '<td style="text-align:center"><input type="checkbox" class="me" data-email="'+esc(r.email)+'"'+(r.can_edit?' checked':'')+dis+'></td></tr>';
+    }).join("");
+    [].forEach.call(document.querySelectorAll(".mv,.me"),function(cb){
+      cb.addEventListener("change",function(){
+        var email=cb.getAttribute("data-email");
+        var v=document.querySelector('.mv[data-email="'+email+'"]').checked;
+        var e=document.querySelector('.me[data-email="'+email+'"]').checked;
+        cb.disabled=true;
+        window.MUSTIT.fn("admin-users",{action:"acl_set",dashboard:CUR_FILE,email:email,can_view:v,can_edit:e})
+          .then(function(){cb.disabled=false;}).catch(function(err){alert("저장 실패: "+err.message);openEditModal();});
+      });
+    });
+  }).catch(function(e){ $("m_acl").innerHTML='<tr><td colspan="4" style="color:#c8102e">'+esc(e.message)+'</td></tr>'; });
+}
+function saveMeta(){
+  window.MUSTIT.fn("admin-users",{action:"dash_meta_set",file:CUR_FILE,title:$("m_title").value})
+    .then(function(){ $("m_msg").textContent="저장되었습니다."; setupTopbar(); })
+    .catch(function(e){ $("m_msg").style.color="#c8102e"; $("m_msg").textContent="실패: "+e.message; });
+}
+function deleteDash(name){
+  name=String(name||"").trim();
+  if(!confirm("“"+name+"” 대시보드를 삭제할까요?\n목록에서 사라지며 되돌릴 수 없습니다.")) return;
+  var email=((window.MUSTIT.user()&&window.MUSTIT.user().email)||"");
+  var pw=prompt("확인을 위해 로그인 계정("+email+") 비밀번호를 입력하세요:");
+  if(pw===null) return;
+  if(!pw){ alert("비밀번호를 입력하세요."); return; }
+  window.MUSTIT.client.auth.signInWithPassword({email:email,password:pw}).then(function(res){
+    if(res.error){ alert("비밀번호가 일치하지 않습니다. 삭제를 취소했습니다."); return; }
+    window.MUSTIT.fn("admin-users",{action:"dash_delete",file:CUR_FILE})
+      .then(function(r){ if(!r.ok) throw new Error(r.error||'실패'); alert("삭제했습니다."); location.href="../index.html"; })
+      .catch(function(e){ alert("삭제 실패: "+e.message); });
+  });
+}
+
+window.MUSTIT.ready(function(){
+  var DASH_FILE = decodeURIComponent(location.pathname.split("/").pop()||"");
+  window.MUSTIT.rpc("dash_access",{p_dashboard:DASH_FILE}).then(function(a){
+    if(!a || a.view===false){ blockNoAccess(); return; }
+    ACCESS=a;
+    setupTopbar();
+    refresh();
+  }).catch(function(e){ blockNoAccess(e.message); });
+});
+})();
+</script>
+</body>
+</html>

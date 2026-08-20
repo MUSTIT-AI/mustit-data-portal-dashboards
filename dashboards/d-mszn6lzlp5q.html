@@ -185,64 +185,12 @@ function dateOf(ts){ return String(ts||"").slice(0,10); }
 // 홈 갤러리 썸네일(iframe #thumb)에서는 무거운 orders_secure 조회를 가볍게: 최근 7일만, 1페이지만
 var THUMB = location.hash.indexOf("thumb") >= 0;
 
-// ── 카테고리 3단 트리(dash_filters().category_tree 에서 조립, 하드코딩 없음) ──
-var CAT_TREE = {};
-function buildCatTree(rows){
-  CAT_TREE = {};
-  (rows||[]).forEach(function(r){
-    if(!r || !r.l) return;
-    var m = r.m || "";
-    if(!CAT_TREE[r.l]) CAT_TREE[r.l] = {};
-    if(!CAT_TREE[r.l][m]) CAT_TREE[r.l][m] = [];
-    if(r.s && CAT_TREE[r.l][m].indexOf(r.s) < 0) CAT_TREE[r.l][m].push(r.s);
-  });
-}
-function catLOpts(){ return Object.keys(CAT_TREE).sort(); }
-function selectedLs(){ return (SEL.category_l && SEL.category_l.size) ? Array.from(SEL.category_l) : Object.keys(CAT_TREE); }
-function catMOpts(){
-  var out={};
-  selectedLs().forEach(function(l){ Object.keys(CAT_TREE[l]||{}).forEach(function(m){ if(m) out[m]=1; }); });
-  return Object.keys(out).sort();
-}
-function catSOpts(){
-  var msel = (SEL.category_m && SEL.category_m.size) ? SEL.category_m : null;
-  var out={};
-  selectedLs().forEach(function(l){
-    Object.keys(CAT_TREE[l]||{}).forEach(function(m){
-      if(msel && !msel.has(m)) return;
-      (CAT_TREE[l][m]||[]).forEach(function(s){ out[s]=1; });
-    });
-  });
-  return Object.keys(out).sort();
-}
-
-// 필터 정의 (label ↔ orders_secure 컬럼). category_m/s 는 상위 선택에 따라 목록이 좁혀진다(cascade).
+// 필터 정의 (label ↔ orders_secure 컬럼)
 var FDEFS = [
-  {key:"brand",            label:"브랜드"},
-  {key:"category_l",       label:"대분류", opts:catLOpts, cascade:["category_m","category_s"]},
-  {key:"category_m",       label:"중분류", opts:catMOpts, cascade:["category_s"]},
-  {key:"category_s",       label:"소분류", opts:catSOpts},
-  {key:"order_type",       label:"비즈니스 구분"},
-  {key:"product_division", label:"아울렛"},
-  {key:"platform",         label:"결제기기"},
   {key:"payment_method",   label:"결제수단"},
-  {key:"member_grade",     label:"구매자등급"},
-  {key:"customer_type",    label:"거래구분"},
-  {key:"seller_grade",     label:"판매자등급"},
-  {key:"ship_origin",      label:"배송구분"},
-  {key:"courier",          label:"배송회사"},
-  {key:"naver_discount_applied", label:"네이버CPS 분담"}
+  {key:"ship_origin",      label:"배송구분"}
 ];
-function defOf(key){ for(var i=0;i<FDEFS.length;i++){ if(FDEFS[i].key===key) return FDEFS[i]; } return null; }
-function optionsFor(def){ return def.opts ? def.opts() : (OPTS[def.key]||[]); }
-function pruneCascade(def){
-  (def.cascade||[]).forEach(function(k){
-    var child = defOf(k); if(!child || !SEL[k]) return;
-    var valid = {}; optionsFor(child).forEach(function(v){ valid[v]=1; });
-    Array.from(SEL[k]).forEach(function(v){ if(!valid[v]) SEL[k]["delete"](v); });
-    if(child._updateBtn) child._updateBtn();
-  });
-}
+function optionsFor(def){ return OPTS[def.key]||[]; }
 var OPTS = {};   // key -> [values] (dash_filters 결과)
 var SEL  = {};   // key -> Set(선택값)
 
@@ -264,7 +212,7 @@ function buildDropdowns(){
     function renderList(q){
       list.innerHTML="";
       var vals = optionsFor(def);
-      if(!vals.length){ list.innerHTML='<div style="padding:6px;color:#999;font-size:11.5px">'+(def.opts?'상위 분류를 먼저 선택하세요':'옵션 없음')+'</div>'; return; }
+      if(!vals.length){ list.innerHTML='<div style="padding:6px;color:#999;font-size:11.5px">옵션 없음</div>'; return; }
       vals.filter(function(v){ return !q || String(v).toLowerCase().indexOf(q.toLowerCase())>=0; })
           .slice(0,500)
           .forEach(function(v){
@@ -272,7 +220,7 @@ function buildDropdowns(){
         var cb = document.createElement("input"); cb.type="checkbox"; cb.checked=SEL[def.key].has(v);
         cb.onchange=function(){
           if(cb.checked)SEL[def.key].add(v); else SEL[def.key]["delete"](v);
-          updateBtn(); pruneCascade(def);
+          updateBtn();
         };
         row.appendChild(cb); row.appendChild(document.createTextNode(" "+v));
         list.appendChild(row);
@@ -604,7 +552,7 @@ window.MUSTIT.ready(function(){
     ACCESS=a;
     setupTopbar();
     window.MUSTIT.rpc("dash_filters",{}).then(function(o){
-      OPTS=o||{}; buildCatTree(OPTS.category_tree); buildDropdowns();
+      OPTS=o||{}; buildDropdowns();
     }).catch(function(){ buildDropdowns(); })
       .finally(refresh);
   }).catch(function(e){ blockNoAccess(e.message); });

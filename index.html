@@ -20,6 +20,8 @@
   .badge-prep{position:absolute;top:8px;left:8px;font-size:11px;font-weight:700;color:#b26a00;background:#fff3e0;border-radius:20px;padding:2px 9px;z-index:2}
   .star{position:absolute;top:8px;right:8px;z-index:3;width:30px;height:30px;border-radius:50%;border:0;background:rgba(255,255,255,.92);cursor:pointer;font-size:16px;line-height:30px;text-align:center;box-shadow:0 1px 5px rgba(0,0,0,.18);padding:0}
   .star.on{color:#f5a623}.star.off{color:#c4c2bb}.star:hover{background:#fff}
+  .fldbtn{position:absolute;top:8px;right:44px;z-index:3;width:30px;height:30px;border-radius:50%;border:0;background:rgba(255,255,255,.92);cursor:pointer;font-size:14px;line-height:30px;text-align:center;box-shadow:0 1px 5px rgba(0,0,0,.18);padding:0;color:#7a7770}
+  .fldbtn:hover{background:#fff;color:#c8102e}
   .cog{position:absolute;top:8px;left:8px;z-index:3;width:30px;height:30px;border-radius:50%;border:0;background:rgba(255,255,255,.92);cursor:pointer;font-size:14px;line-height:30px;text-align:center;box-shadow:0 1px 5px rgba(0,0,0,.18);padding:0}
   .cog:hover{background:#fff}
   .lock{position:absolute;bottom:8px;left:8px;z-index:2;font-size:10.5px;font-weight:700;color:#8a5a00;background:#fff6e0;border-radius:20px;padding:2px 8px}
@@ -111,7 +113,7 @@
       </div>
       <div id="nd_aclwrap" style="display:none">
         <p class="hint">체크한 계정만 <b>열람</b>합니다. <b>수정</b>만 필요하면 수정만 체크(만든 사람=소유자는 항상 접근).</p>
-        <table class="mtbl"><thead><tr><th>계정</th><th style="text-align:center">열람</th><th style="text-align:center">수정</th></tr></thead><tbody id="nd_acl"></tbody></table>
+        <table class="mtbl"><thead><tr><th>계정</th><th style="text-align:center">열람<br><label style="font-weight:400;font-size:10.5px;color:#8a8880"><input type="checkbox" id="nd_allv"> 전체</label></th><th style="text-align:center">수정<br><label style="font-weight:400;font-size:10.5px;color:#8a8880"><input type="checkbox" id="nd_alle"> 전체</label></th></tr></thead><tbody id="nd_acl"></tbody></table>
       </div>
       <div style="margin-top:16px"><button class="btn pri" id="nd_save">생성</button><span id="nd_msg" class="msg" style="color:#c8102e"></span></div>
     </div>
@@ -138,7 +140,7 @@
         </div>
         <div id="mg_aclwrap" style="display:none">
           <p class="hint">체크를 켜고 끄면 <b>즉시 반영</b>됩니다.</p>
-          <table class="mtbl"><thead><tr><th>계정</th><th style="text-align:center">열람</th><th style="text-align:center">수정</th></tr></thead><tbody id="mg_acl"></tbody></table>
+          <table class="mtbl"><thead><tr><th>계정</th><th style="text-align:center">열람<br><label style="font-weight:400;font-size:10.5px;color:#8a8880"><input type="checkbox" id="mg_allv"> 전체</label></th><th style="text-align:center">수정<br><label style="font-weight:400;font-size:10.5px;color:#8a8880"><input type="checkbox" id="mg_alle"> 전체</label></th></tr></thead><tbody id="mg_acl"></tbody></table>
         </div>
         <span id="mg_aclmsg" class="msg"></span>
       </div>
@@ -181,6 +183,8 @@
   var fn = function (a) { return window.MUSTIT.fn('admin-users', a); };
   var TAG_SUGGEST = ['주문', '행동', '카탈로그', '상품', '마케팅', '회원', '전환', '매출'];
   function fmtDate(s) { try { return new Date(s).toLocaleDateString('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit' }); } catch (e) { return (s || '').slice(0, 10); } }
+  // 날짜 + 시:분 (KST) 한 줄 요약 — 예: 2026.08.20 14:31
+  function fmtDT(s) { try { return new Date(s).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\.\s*$/, ''); } catch (e) { return (s || '').slice(0, 16).replace('T', ' '); } }
   function parseTags(s) { return String(s || '').split(/[,#\s]+/).map(function (t) { return t.trim(); }).filter(Boolean); }
   function scaleThumbs() { [].forEach.call(document.querySelectorAll('.thumb iframe'), function (f) { var w = f.parentNode.clientWidth; if (w) f.style.transform = 'scale(' + (w / 1280) + ')'; }); }
   function fileExists(file) { return fetch('dashboards/' + encodeURIComponent(file), { method: 'HEAD', cache: 'no-store' }).then(function (r) { return r.ok; }).catch(function () { return false; }); }
@@ -224,19 +228,19 @@
     var href = built ? ('dashboards/' + encodeURIComponent(d.file)) : ('dashboards/_starter.html?f=' + encodeURIComponent(d.file));
     var on = !!FAVS[d.file];
     var star = '<button class="star act ' + (on ? 'on' : 'off') + '" data-star="' + esc(d.file) + '" title="즐겨찾기">' + (on ? '★' : '☆') + '</button>';
+    var fld = '<button class="fldbtn act" data-folder="' + esc(d.file) + '" title="폴더에 저장">📁</button>';
     var cog = d.manage ? '<button class="cog act" data-cog="' + esc(d.file) + '" title="관리·공유">⚙️</button>' : '';
     var lock = (d.manage && d.restricted) ? '<span class="lock">🔒 지정 열람</span>' : '';
     var thumb = built
-      ? '<div class="thumb">' + star + cog + lock + '<iframe loading="lazy" scrolling="no" tabindex="-1" src="dashboards/' + encodeURIComponent(d.file) + '#thumb"></iframe></div>'
-      : '<div class="thumb">' + star + cog + '<span class="badge-prep">준비중</span><div class="ph"><span class="pico">' + esc(d.icon || '📊') + '</span><span>준비중</span></div></div>';
+      ? '<div class="thumb">' + fld + star + cog + lock + '<iframe loading="lazy" scrolling="no" tabindex="-1" src="dashboards/' + encodeURIComponent(d.file) + '#thumb"></iframe></div>'
+      : '<div class="thumb">' + fld + star + cog + '<span class="badge-prep">준비중</span><div class="ph"><span class="pico">' + esc(d.icon || '📊') + '</span><span>준비중</span></div></div>';
     var tags = (d.tags && d.tags.length) ? ('<div class="gtags">' + d.tags.map(function (t) { return '<span class="tg">#' + esc(t) + '</span>'; }).join('') + '</div>') : '';
     var owner = d.owner_name ? esc(d.owner_name) : '';
-    var dt = d.date ? ('업데이트 ' + fmtDate(d.date)) : '';
+    var dt = d.date ? ('업데이트 ' + fmtDT(d.date)) : '';
     return '<div class="gcard" data-href="' + href + '">' + thumb +
       '<div class="gmeta"><div class="gname">' + esc(d.title || d.file) + '</div>' +
       (d.short ? '<div class="gdesc">' + esc(d.short) + '</div>' : '') + tags +
-      '<div class="ginfo"><span>' + owner + (owner && dt ? ' · ' : '') + dt + '</span>' +
-      '<button class="fbtn act" data-folder="' + esc(d.file) + '">📁 폴더</button></div></div></div>';
+      '<div class="ginfo"><span>' + owner + (owner && dt ? ' · ' : '') + dt + '</span></div></div></div>';
   }
   function gallery(arr) { return '<div class="gallery">' + arr.map(card).join('') + '</div>'; }
 
@@ -343,6 +347,8 @@
       $('mg_to').innerHTML = '<option value="">이관할 계정 선택…</option>' + ACCOUNTS.filter(function (a) { return a.email !== (d.owner_email || ''); }).map(function (a) { return '<option value="' + esc(a.email) + '">' + esc(a.note || a.email) + ' · ' + esc(a.email) + '</option>'; }).join('');
       setScope(restricted ? 'picked' : 'all');
       renderMgAcl();
+      $('mg_allv').onchange = function () { bulkAcl('view', $('mg_allv').checked); };
+      $('mg_alle').onchange = function () { bulkAcl('edit', $('mg_alle').checked); };
       var r = document.querySelector('input[name=mg_scope][value=' + (restricted ? 'picked' : 'all') + ']'); if (r) r.checked = true;
     }).catch(function (e) { $('mg_aclmsg').style.color = '#c8102e'; $('mg_aclmsg').textContent = e.message || e; });
   }
@@ -365,6 +371,17 @@
         }).catch(function (e) { $('mg_aclmsg').style.color = '#c8102e'; $('mg_aclmsg').textContent = e.message || e; });
       };
     });
+    $('mg_allv').checked = ACCOUNTS.length > 0 && ACCOUNTS.every(function (a) { return a.can_view; });
+    $('mg_alle').checked = ACCOUNTS.length > 0 && ACCOUNTS.every(function (a) { return a.can_edit; });
+  }
+  // 일괄 적용(열람/수정 전체 계정) — 즉시 저장
+  function bulkAcl(col, on) {
+    $('mg_aclmsg').style.color = '#6b6a66'; $('mg_aclmsg').textContent = '일괄 적용 중…';
+    var jobs = ACCOUNTS.map(function (a) {
+      var cv = col === 'view' ? on : a.can_view, ce = col === 'edit' ? on : a.can_edit;
+      return fn({ action: 'acl_set', dashboard: MG_FILE, email: a.email, can_view: cv, can_edit: ce }).then(function () { a.can_view = cv; a.can_edit = ce; });
+    });
+    Promise.all(jobs).then(function () { renderMgAcl(); markRestricted(); $('mg_aclmsg').style.color = '#2e7d32'; $('mg_aclmsg').textContent = '일괄 적용됨 ✓'; }).catch(function (e) { $('mg_aclmsg').style.color = '#c8102e'; $('mg_aclmsg').textContent = e.message || e; });
   }
   function setScope(mode) { $('mg_aclwrap').style.display = mode === 'picked' ? 'block' : 'none'; }
   function markRestricted() {
@@ -427,6 +444,9 @@
           '<td style="text-align:center"><input type="checkbox" class="ndv" data-email="' + esc(r.email) + '"></td>' +
           '<td style="text-align:center"><input type="checkbox" class="nde" data-email="' + esc(r.email) + '"></td></tr>';
       }).join('');
+      $('nd_allv').checked = false; $('nd_alle').checked = false;
+      $('nd_allv').onchange = function () { [].forEach.call(document.querySelectorAll('.ndv'), function (c) { c.checked = $('nd_allv').checked; }); };
+      $('nd_alle').onchange = function () { [].forEach.call(document.querySelectorAll('.nde'), function (c) { c.checked = $('nd_alle').checked; }); };
     }).catch(function (e) { $('nd_acl').innerHTML = '<tr><td colspan="3" style="color:#c8102e">' + esc(e.message) + '</td></tr>'; });
   }
   [].forEach.call(document.querySelectorAll('input[name=nd_scope]'), function (r) { r.onchange = function () { $('nd_aclwrap').style.display = (document.querySelector('input[name=nd_scope]:checked').value === 'picked') ? 'block' : 'none'; }; });

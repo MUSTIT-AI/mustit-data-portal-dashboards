@@ -337,9 +337,9 @@ var WKEY = "auc_widgets_"+FILE;
 var WIDGETS = [];
 function defaultWidgets(){
   return [
-    {id:"w_dau", title:"DAU", note:"일 단위 Any Active Event 순유저(기본 1일)", event:"_active", vis:"bar", days:1, gran:1, compare:"prev_period", groupBy:[{op:"AND",key:""}], filters:[null,null,null], showRevenue:false},
-    {id:"w_wau", title:"WAU", note:"주 단위 Any Active Event 순유저(기본 7일)", event:"_active", vis:"bar", days:7, gran:1, compare:"prev_period", groupBy:[{op:"AND",key:""}], filters:[null,null,null], showRevenue:false},
-    {id:"w_mau", title:"MAU (+ARPU·ARPPU)", note:"월 단위 Any Active Event 순유저(기본 30일) · 매출은 주문DB 순매출", event:"_active", vis:"bar", days:30, gran:1, compare:"prev_period", groupBy:[{op:"AND",key:""}], filters:[null,null,null], showRevenue:true}
+    {id:"w_dau", title:"DAU", note:"일 단위 Any Active Event 순유저(기본 1일)", event:"_active", vis:"bar", days:1, gran:1, compare:"none", groupBy:[{op:"AND",key:""}], filters:[null,null,null], showRevenue:false},
+    {id:"w_wau", title:"WAU", note:"주 단위 Any Active Event 순유저(기본 7일)", event:"_active", vis:"bar", days:7, gran:1, compare:"none", groupBy:[{op:"AND",key:""}], filters:[null,null,null], showRevenue:false},
+    {id:"w_mau", title:"MAU (+ARPU·ARPPU)", note:"월 단위 Any Active Event 순유저(기본 30일) · 매출은 주문DB 순매출", event:"_active", vis:"bar", days:30, gran:1, compare:"none", groupBy:[{op:"AND",key:""}], filters:[null,null,null], showRevenue:true}
   ];
 }
 function loadWidgets(){
@@ -745,7 +745,7 @@ function refresh(){
       });
     });
   });
-  Promise.all([
+  return Promise.all([
     window.MUSTIT.rpc("dash_daily_conversion", {p:p}),
     ampChain
   ]).then(function(res){
@@ -856,8 +856,8 @@ window.MUSTIT.ready(function(){
     if(!a || a.view===false){ $("block").style.display="grid"; return; }
     setupTopbar();
     buildAUComponents();
-    refresh();
-    refreshAllAUComponents();
+    // 요약 조회 → 위젯 조회 순서를 강제(동시 실행 시 앰플리튜드 429·재시도로 오히려 더 느려짐)
+    refresh().then(refreshAllAUComponents);
   }).catch(function(e){ $("block").style.display="grid"; });
 });
 })();

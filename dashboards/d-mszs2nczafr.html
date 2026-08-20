@@ -84,6 +84,8 @@
   table.sumtbl td.rate.ok{color:#1f8a4c;font-weight:700}
   table.sumtbl td.rate.bad{color:var(--red)}
   table.sumtbl th[data-nosort]{cursor:default}
+  table.sumtbl td.clk{cursor:pointer}
+  table.sumtbl td.clk:hover{text-decoration:underline;color:var(--red)}
   table.sumtbl th.sortasc:after{content:" ▲"}
   table.sumtbl th.sortdesc:after{content:" ▼"}
   /* #piv: 누적거래액까지(1~6열) 고정, 일별 컬럼(7열~)만 가로 스크롤 */
@@ -181,6 +183,15 @@
       <button class="btn" id="m_del" style="background:#c8102e;color:#fff;padding:8px 16px">이 대시보드 삭제</button>
       <span style="font-size:11.5px;color:#8a8880;margin-left:8px">생성자만 · 목록에서 삭제 · 되돌릴 수 없음</span>
     </div>
+  </div>
+</div>
+
+<!-- 판매자·거래액 클릭 시 상품별 거래액 -->
+<div class="modal" id="prodmodal">
+  <div class="modalbox" style="width:640px">
+    <div class="mhead"><b>상품별 거래액</b><button id="prod_close">✕</button></div>
+    <p class="mhint" id="prodSub"></p>
+    <div class="tblscroll" style="max-height:50vh"><table class="mtbl" id="prodTbl"></table></div>
   </div>
 </div>
 
@@ -310,12 +321,13 @@ function renderUnjoined(){
     return '<th class="'+cls.trim()+'" data-k="'+h.k+'"'+(h.nosort?' data-nosort="1"':'')+'>'+h.label+'</th>';
   }).join("")+"</tr></thead>";
   var tbody = "<tbody>"+rows.map(function(r){
-    var dayCells = r.daily.map(function(v){ return "<td>"+won(v)+"</td>"; }).join("");
+    var sid = esc(r.seller_id);
+    var dayCells = r.daily.map(function(v,i){ return '<td class="clk" data-seller="'+sid+'" data-date="'+days[i]+'">'+won(v)+"</td>"; }).join("");
     return "<tr>"+
       '<td class="txt">'+esc(r.md||"")+'</td>'+
-      '<td class="txt">'+esc(r.seller_id)+'</td>'+
+      '<td class="txt clk" data-seller="'+sid+'">'+sid+'</td>'+
       '<td>'+won(r.ref_target)+'</td>'+
-      '<td>'+won(r.cum)+'</td>'+
+      '<td class="clk" data-seller="'+sid+'">'+won(r.cum)+'</td>'+
       dayCells+
       "</tr>";
   }).join("")+"</tbody>";
@@ -378,6 +390,60 @@ function fetchAllPages(ids, range){
   }
   return loadPage(0);
 }
+
+// ── 판매자ID·거래액 클릭 시 상품별 거래액(판매자 1명 단위라 소량이라 페이지네이션 없이도 충분) ──
+function fetchProductRows(sellerId, range){
+  return window.MUSTIT.client.from("orders_secure")
+    .select("product_name,quantity,total_purchase")
+    .eq("seller_id", sellerId)
+    .gte("order_datetime", range.start)
+    .lt("order_datetime", range.end)
+    .limit(5000)
+    .then(function(res){
+      if(res.error) throw new Error(res.error.message);
+      return res.data||[];
+    });
+}
+function openProductModal(sellerId, dateStr){
+  var range = dateStr ? { start:dateStr, end:nextDay(dateStr) } : monthRangeFor(SELECTED_MONTH);
+  var label = sellerId+" · "+(dateStr || (SELECTED_MONTH+" 전체"));
+  $("prodSub").textContent = label+" — 불러오는 중…";
+  $("prodTbl").innerHTML = "";
+  $("prodmodal").style.display = "flex";
+  fetchProductRows(sellerId, range).then(function(rows){
+    var byProd = {};
+    rows.forEach(function(r){
+      var name = r.product_name || "(상품명 없음)";
+      if(!byProd[name]) byProd[name] = { qty:0, gmv:0 };
+      byProd[name].qty += Number(r.quantity)||0;
+      byProd[name].gmv += Number(r.total_purchase)||0;
+    });
+    var list = Object.keys(byProd).map(function(name){ return { name:name, qty:byProd[name].qty, gmv:byProd[name].gmv }; })
+      .sort(function(a,b){ return b.gmv-a.gmv; });
+    var totQty=0, totGmv=0;
+    list.forEach(function(x){ totQty+=x.qty; totGmv+=x.gmv; });
+    $("prodSub").textContent = label+" — 상품 "+list.length+"종 · 총 "+won(totGmv)+"원 ("+won(totQty)+"개)";
+    if(!list.length){
+      $("prodTbl").innerHTML = '<tbody><tr><td style="color:#999;padding:12px 4px">해당 기간에 판매 내역이 없습니다.</td></tr></tbody>';
+      return;
+    }
+    var thead = '<thead><tr><th>상품명</th><th style="text-align:right">수량</th><th style="text-align:right">거래액</th></tr></thead>';
+    var tbody = "<tbody>"+list.map(function(x){
+      return "<tr><td>"+esc(x.name)+'</td><td style="text-align:right">'+won(x.qty)+'</td><td style="text-align:right">'+won(x.gmv)+"</td></tr>";
+    }).join("")+
+      '<tr style="font-weight:700;background:#f8f7f3"><td>합계</td><td style="text-align:right">'+won(totQty)+'</td><td style="text-align:right">'+won(totGmv)+"</td></tr>"+
+      "</tbody>";
+    $("prodTbl").innerHTML = thead+tbody;
+  }).catch(function(e){ $("prodSub").textContent = "오류: "+e.message; });
+}
+$("prod_close").onclick=function(){ $("prodmodal").style.display="none"; };
+$("prodmodal").onclick=function(e){ if(e.target===$("prodmodal")) $("prodmodal").style.display="none"; };
+document.addEventListener("click", function(e){
+  var td = e.target.closest && e.target.closest("td.clk");
+  if(!td) return;
+  var seller = td.getAttribute("data-seller");
+  if(seller) openProductModal(seller, td.getAttribute("data-date"));
+});
 
 // ── 데이터 로드: 매핑된 모든 판매자ID를 선택 월(월초~오늘/말일)로 좁혀 조회(1,000행 단위 페이지네이션) → 클라이언트에서 판매자별 재집계 ──
 function loadData(){
@@ -488,14 +554,15 @@ function render(){
   }).join("")+"</tr></thead>";
   var tbody = "<tbody>"+rows.map(function(r){
     var rc = r.rate==null ? "" : (r.rate>=1 ? "rate ok" : "rate bad");
-    var dayCells = r.daily.map(function(v){ return "<td>"+won(v)+"</td>"; }).join("");
+    var sid = esc(r.seller_id);
+    var dayCells = r.daily.map(function(v,i){ return '<td class="clk" data-seller="'+sid+'" data-date="'+days[i]+'">'+won(v)+"</td>"; }).join("");
     return "<tr>"+
       '<td class="txt">'+esc(r.package)+'</td>'+
       '<td class="txt">'+esc(r.md)+'</td>'+
-      '<td class="txt">'+esc(r.seller_id)+'</td>'+
+      '<td class="txt clk" data-seller="'+sid+'">'+sid+'</td>'+
       '<td>'+won(r.target)+'</td>'+
       '<td class="'+rc+'">'+pct(r.rate)+'</td>'+
-      '<td>'+won(r.cum)+'</td>'+
+      '<td class="clk" data-seller="'+sid+'">'+won(r.cum)+'</td>'+
       dayCells+
       "</tr>";
   }).join("")+

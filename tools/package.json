@@ -1,0 +1,12 @@
+{
+  "name": "dash-thumbs",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "thumbs": "node gen-thumbs.mjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.45.0",
+    "playwright": "^1.47.0"
+  }
+}

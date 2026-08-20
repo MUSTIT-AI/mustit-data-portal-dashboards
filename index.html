@@ -16,6 +16,7 @@
   .gcard:hover{border-color:#c8102e;box-shadow:0 8px 22px rgba(0,0,0,.09)}
   .thumb{position:relative;width:100%;aspect-ratio:1/1;overflow:hidden;background:#f4f4f5;border-bottom:1px solid #eee}
   .thumb iframe{position:absolute;top:0;left:0;width:1280px;height:1280px;border:0;transform-origin:top left;pointer-events:none;background:#fff}
+  .thumb .thumbpic{position:absolute;top:0;left:0;width:100%;height:100%;object-fit:cover;object-position:top;background:#fff}
   .thumb .ph{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;color:#9a927f}
   .thumb .ph .pico{font-size:44px}
   .badge-prep{position:absolute;top:8px;left:8px;font-size:11px;font-weight:700;color:#b26a00;background:#fff3e0;border-radius:20px;padding:2px 9px;z-index:2}
@@ -193,6 +194,41 @@
   function fmtDT(s) { try { return new Date(s).toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\.\s*$/, ''); } catch (e) { return (s || '').slice(0, 16).replace('T', ' '); } }
   function parseTags(s) { return String(s || '').split(/[,#\s]+/).map(function (t) { return t.trim(); }).filter(Boolean); }
   function scaleThumbs() { [].forEach.call(document.querySelectorAll('.thumb iframe'), function (f) { var w = f.parentNode.clientWidth; if (w) f.style.transform = 'scale(' + (w / 1280) + ')'; }); }
+  // 스냅샷(비공개 스토리지) 서명 URL — 성공/실패 모두 캐시(불필요 재요청 방지)
+  function thumbUrl(file) {
+    var key = 'tu:' + file;
+    try { var c = JSON.parse(localStorage.getItem(key) || 'null'); if (c && c.exp > Date.now()) return Promise.resolve(c.url); } catch (e) {}
+    return window.MUSTIT.client.storage.from('dash-thumbs').createSignedUrl(file + '.png', 21600).then(function (res) {
+      var url = (res && res.data && res.data.signedUrl) ? res.data.signedUrl : null;
+      var ttl = url ? (21600000 - 60000) : 1800000; // 있으면 6h, 없으면 30분 후 재확인
+      try { localStorage.setItem(key, JSON.stringify({ url: url, exp: Date.now() + ttl })); } catch (e) {}
+      return url;
+    }).catch(function () { return null; });
+  }
+  function injectIframe(el, file) {
+    if (el.querySelector('iframe')) return;
+    var f = document.createElement('iframe'); f.loading = 'lazy'; f.scrolling = 'no'; f.tabIndex = -1;
+    f.src = 'dashboards/' + encodeURIComponent(file) + '#thumb';
+    el.appendChild(f); setTimeout(scaleThumbs, 30);
+  }
+  function loadThumb(el) {
+    if (el.getAttribute('data-loaded')) return; el.setAttribute('data-loaded', '1');
+    if (el.getAttribute('data-built') !== '1') return;
+    var file = el.getAttribute('data-file');
+    thumbUrl(file).then(function (url) {
+      if (!url) { injectIframe(el, file); return; }
+      var img = new Image(); img.className = 'thumbpic'; img.alt = '';
+      img.onerror = function () { try { localStorage.removeItem('tu:' + file); } catch (e) {} img.remove(); injectIframe(el, file); };
+      img.src = url; el.appendChild(img);
+    });
+  }
+  var thumbObs = null;
+  function observeThumbs() {
+    if (!('IntersectionObserver' in window)) { [].forEach.call(document.querySelectorAll('.thumb[data-file]'), loadThumb); return; }
+    if (thumbObs) thumbObs.disconnect();
+    thumbObs = new IntersectionObserver(function (ents) { ents.forEach(function (en) { if (en.isIntersecting) { loadThumb(en.target); thumbObs.unobserve(en.target); } }); }, { rootMargin: '250px' });
+    [].forEach.call(document.querySelectorAll('.thumb[data-file]'), function (t) { thumbObs.observe(t); });
+  }
   function fileExists(file) { return fetch('dashboards/' + encodeURIComponent(file), { method: 'HEAD', cache: 'no-store' }).then(function (r) { return r.ok; }).catch(function () { return false; }); }
   var GH_REPO = 'MUSTIT-AI/mustit-data-portal-dashboards';
   function ghDate(file) {
@@ -244,9 +280,10 @@
     var fld = '<button class="fldbtn act ' + (foldered ? 'on' : 'off') + '" data-folder="' + esc(d.file) + '" title="폴더에 저장">' + folderSvg(foldered) + '</button>';
     var cog = d.manage ? '<button class="cog act" data-cog="' + esc(d.file) + '" title="관리·공유">⚙️</button>' : '';
     var lock = (d.manage && d.restricted) ? '<span class="lock">🔒 지정 열람</span>' : '';
-    var thumb = built
-      ? '<div class="thumb">' + fld + star + cog + lock + '<iframe loading="lazy" scrolling="no" tabindex="-1" src="dashboards/' + encodeURIComponent(d.file) + '#thumb"></iframe></div>'
-      : '<div class="thumb">' + fld + star + cog + '<span class="badge-prep">준비중</span><div class="ph"><span class="pico">' + esc(d.icon || '📊') + '</span><span>준비중</span></div></div>';
+    var prep = built ? '' : '<span class="badge-prep">준비중</span>';
+    var ph = '<div class="ph"><span class="pico">' + esc(d.icon || '📊') + '</span>' + (built ? '' : '<span>준비중</span>') + '</div>';
+    // 썸네일은 화면에 보일 때 지연 로드(스냅샷 우선 → 없으면 iframe 폴백)
+    var thumb = '<div class="thumb" data-file="' + esc(d.file) + '" data-built="' + (built ? 1 : 0) + '">' + fld + star + cog + prep + lock + ph + '</div>';
     var tags = (d.tags && d.tags.length) ? ('<div class="gtags">' + d.tags.map(function (t) { return '<span class="tg">#' + esc(t) + '</span>'; }).join('') + '</div>') : '';
     var owner = d.owner_name ? esc(d.owner_name) : '';
     var dt = d.date ? ('갱신 ' + fmtDT(d.date)) : '';
@@ -282,7 +319,7 @@
       html += '<div class="sec-h">' + (favs2.length ? '전체 대시보드' : '대시보드') + ' <span class="cnt">' + rest.length + '</span></div>' + (rest.length ? gallery(rest) : '<div class="empty">' + (q ? '검색 결과가 없습니다.' : '열람 가능한 대시보드가 없습니다.') + '</div>');
     }
     el.innerHTML = html;
-    setTimeout(scaleThumbs, 30);
+    observeThumbs();
   }
 
   // 카드 영역 클릭 위임

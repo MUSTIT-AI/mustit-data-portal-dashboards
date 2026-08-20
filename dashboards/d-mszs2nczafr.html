@@ -112,6 +112,16 @@
   #unjoinedTbl th:nth-child(2),#unjoinedTbl td:nth-child(2){ left:70px; width:115px; min-width:115px; max-width:115px }
   #unjoinedTbl th:nth-child(3),#unjoinedTbl td:nth-child(3){ left:185px; width:105px; min-width:105px; max-width:105px }
   #unjoinedTbl th:nth-child(4),#unjoinedTbl td:nth-child(4){ left:290px; width:105px; min-width:105px; max-width:105px; box-shadow:2px 0 0 var(--border) }
+  /* 행 구분용 줄무늬(짝수 행) — 합계 행은 제외, 고정열도 같은 색으로 맞춤 */
+  #piv tbody tr:nth-child(even):not(.tot) td{ background:#f5f6f9 }
+  #piv tbody tr:nth-child(even):not(.tot) td:nth-child(-n+6){ background:#f5f6f9 }
+  #unjoinedTbl tbody tr:nth-child(even):not(.tot) td{ background:#f5f6f9 }
+  #unjoinedTbl tbody tr:nth-child(even):not(.tot) td:nth-child(-n+4){ background:#f5f6f9 }
+  /* 마우스 오버는 줄무늬보다 우선(위 규칙과 동일한 우선순위라 소스 순서상 나중이 이김) */
+  #piv tbody tr:hover:not(.tot) td{ background:#fafaf7 }
+  #piv tbody tr:hover:not(.tot) td:nth-child(-n+6){ background:#fafaf7 }
+  #unjoinedTbl tbody tr:hover:not(.tot) td{ background:#fafaf7 }
+  #unjoinedTbl tbody tr:hover:not(.tot) td:nth-child(-n+4){ background:#fafaf7 }
 </style>
 </head>
 <body>

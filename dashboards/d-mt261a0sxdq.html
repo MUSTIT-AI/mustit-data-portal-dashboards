@@ -10,6 +10,7 @@
 <style>
 :root{--bg:#f3f4f6;--card:#fff;--line:#e6e6e6;--text:#171717;--muted:#72767c;--red:#c91f35;--blue:#7888bd;--green:#1f8a4c;--soft:#faf9f7}
 *{box-sizing:border-box}
+html{scroll-behavior:smooth}
 body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Pretendard","Malgun Gothic","Segoe UI",sans-serif;color:var(--text);font-size:13px}
 .top{height:42px;background:#fff;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:12px;padding:0 16px;font-weight:900}
 .top .logo{text-decoration:none;color:#171717;cursor:pointer}
@@ -19,7 +20,10 @@ body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,
 .top .editbtn:hover{background:var(--red);color:#fff}
 .top select{border:1px solid #d6d4ce;border-radius:7px;padding:5px 9px;font-size:12px;background:#fff;max-width:210px}
 .tabs{position:sticky;top:0;z-index:50;background:#fff;border-bottom:1px solid var(--line);padding:8px 14px;display:flex;gap:7px;overflow-x:auto;white-space:nowrap}
-.tab{border:1px solid #ddd;background:#fff;border-radius:18px;padding:8px 16px;font-weight:800;cursor:pointer;flex:0 0 auto}.tab.active{background:#111;color:#fff;border-color:#111}
+.tab{border:1px solid #ddd;background:#fff;border-radius:18px;padding:8px 16px;font-weight:800;cursor:pointer;flex:0 0 auto;text-decoration:none;color:#171717}.tab.active{background:#111;color:#fff;border-color:#111}
+.modewrap{margin-left:auto;display:flex;gap:5px;align-items:center;flex:0 0 auto}.pill.mode{height:30px;padding:0 12px;font-size:12px}.pill.mode.active{background:#111;border-color:#111;color:#fff}
+.panel-sec{display:block;scroll-margin-top:96px}
+body.hide-compare .cmp-only{display:none!important}
 .filters{background:#fff;border-bottom:1px solid var(--line);padding:10px 14px}
 .row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px}.row:last-child{margin-bottom:0}
 .f{min-width:115px}.f.wide{min-width:210px}.f label{display:block;font-size:11px;font-weight:800;margin-bottom:4px}
@@ -89,7 +93,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:8px 9px;border-bottom:1p
 <body>
 <div class="top">
   <a class="logo" href="../index.html">📊 Data Portal</a>
-  <span>· Q3 GP Commerce Control Tower</span>
+  <span>· Q3 목표 관리</span>
   <div class="right">
     <span class="owner" id="dashowner"></span>
     <button class="editbtn" id="editdash">수정</button>
@@ -97,17 +101,20 @@ table{width:100%;border-collapse:collapse}th,td{padding:8px 9px;border-bottom:1p
   </div>
 </div>
 
-<div class="tabs" id="tabs">
- <button class="tab active" data-sec="all">전체</button>
- <button class="tab" data-sec="repeat">재구매</button>
- <button class="tab" data-sec="new">신규</button>
- <button class="tab" data-sec="aff">CPS·제휴</button>
+<div class="tabs" id="anchors">
+ <a class="tab active" href="#sec-all">전체</a>
+ <a class="tab" href="#sec-repeat">재구매</a>
+ <a class="tab" href="#sec-new">신규</a>
+ <a class="tab" href="#sec-aff">CPS·제휴</a>
+ <span class="modewrap"><span class="small" style="font-weight:800;color:#666">모드</span>
+  <button class="pill mode active" data-mode="compare">비교</button>
+  <button class="pill mode" data-mode="view">조회</button></span>
 </div>
 
 <div class="filters">
  <div class="row">
   <div class="f wide"><label>조회기간 (주문일)</label><div class="date"><input type="date" id="vfrom"><span>~</span><input type="date" id="vto"></div></div>
-  <div class="f wide"><label>비교기간</label><div class="date"><input type="date" id="cfrom"><span>~</span><input type="date" id="cto"></div></div>
+  <div class="f wide cmp-only"><label>비교기간</label><div class="date"><input type="date" id="cfrom"><span>~</span><input type="date" id="cto"></div></div>
   <div class="f wide"><label>빠른 기간</label><div class="quick" id="quick">
     <button class="pill" data-q="prev">전일</button><button class="pill active" data-q="7d">최근 7일</button>
     <button class="pill" data-q="1m">최근 1개월</button><button class="pill" data-q="tm">이번 달</button><button class="pill" data-q="pm">전월</button>
@@ -270,8 +277,11 @@ var OKR={
   "new":{name:"신규 첫구매", base:3264698581, target:3644462669}, // GU-02 (신규+기존첫구매)
   cps:{name:"CPS·제휴",    base:931629188,  target:1082130612}  // GU-03 (매출코드 partner77 주력)
 };
-var ONSITE_ORDER_TYPE="일반";        // 온사이트(사이트 내) 기준
-var CPS_MAIN="mustit_partner_77";    // CPS 주력 매출코드
+/* 온사이트(사이트 내) = 결제수단 non-external + order_type≠CJ API.
+   (검증: Q2 재구매 GMV 69.39억 = OKR Baseline 정확 일치) */
+var OFFSITE_ORDER_TYPES=["CJ API"];  // order_type 제외 대상(현재 데이터 미존재→실질 전체)
+var EXTERNAL_PAY_RE=/external/i;      // 결제수단 external 제외
+var CPS_MAIN="mustit_partner_77";    // CPS 주력 매출코드(제휴)
 var MODE="compare";                  // compare(조회+비교) | view(조회만)
 /* 이상징후 임계 (spec §6 Step1) */
 var TH={ gmv:0.05, buyers:0.05, signup:0.05, rate:0.01, aov:0.05, cancel:0.03, seg:0.08 };
@@ -322,7 +332,9 @@ function buildMS(key){
 document.addEventListener("click",function(){document.querySelectorAll(".ms.open").forEach(function(o){o.classList.remove("open");});});
 function buildAllMS(){ALL_KEYS.forEach(buildMS);}
 function serverFilters(){var f={};SERVER_KEYS.forEach(function(k){if(SEL[k]&&SEL[k].size)f[k]=Array.from(SEL[k]);});var sid=$("seller_id").value.trim();if(sid)f.seller_id=sid.split(",").map(function(s){return s.trim();}).filter(Boolean);
-  if(!f.order_type) f.order_type=[ONSITE_ORDER_TYPE]; // 온사이트(사이트 내) 기본
+  // 온사이트: order_type≠CJ API + 결제수단 non-external (사용자가 직접 선택 시 그 값 우선)
+  if(!f.order_type){ var ot=(OPTS.order_type||[]).filter(function(v){return OFFSITE_ORDER_TYPES.indexOf(v)<0;}); if(ot.length) f.order_type=ot; }
+  if(!f.payment_method){ var pm=(OPTS.payment_method||[]).filter(function(v){return !EXTERNAL_PAY_RE.test(v);}); if(pm.length) f.payment_method=pm; }
   return f;}
 function clientFilterPass(row){return CLIENT_KEYS.every(function(k){if(!SEL[k]||!SEL[k].size)return true;return SEL[k].has(row[k]);});}
 
@@ -378,7 +390,6 @@ function isRep(r){return r.customer_type==="기존(재구매)";}
 function isNew(r){return r.customer_type==="신규";}                                   // 신규 가입 코호트(첫구매 시점 분석용)
 function isFirstBuy(r){return r.customer_type==="신규"||r.customer_type==="기존(첫구매)";} // 신규 첫구매 KR
 function isCps(r){return r.sales_code!=null&&String(r.sales_code)!=="";}
-function onSite(r){return r.order_type===ONSITE_ORDER_TYPE;}
 function groupSum(rows,keyFn,valFn){var m={};rows.forEach(function(r){var k=keyFn(r);if(k==null||k==="")k="(미상)";m[k]=(m[k]||0)+(valFn?valFn(r):num(r.total_purchase));});return m;}
 function groupBuyers(rows,keyFn){var m={};rows.forEach(function(r){var k=keyFn(r);if(k==null||k==="")k="(미상)";(m[k]=m[k]||{})[r.buyer_hash]=1;});var o={};Object.keys(m).forEach(function(k){o[k]=Object.keys(m[k]).length;});return o;}
 
@@ -613,8 +624,10 @@ function renderAff(view,cmp){
     ["취소율",pct(cancelRate),chgPpHtml(cancelRate,cancelRateC)]
   ].map(function(k){return '<div class="kpi"><div class="n">'+k[0]+'</div><div class="v">'+k[1]+'</div><div>'+k[2]+'</div></div>';}).join("");
 
-  // 파트너(유입) 단위
-  function partnerKey(r){return r.inflow||r.sales_code||"(미상)";}
+  // 파트너 단위 = 매출코드(partner77 등), 보조 유입정보
+  function partnerKey(r){return r.sales_code||r.inflow||"(미상)";}
+  // partner77(주력) 실측
+  var p77v=filt(cv,function(r){return r.sales_code===CPS_MAIN;}), p77a=agg(p77v);
   var pV=groupSum(cv,partnerKey), pC=groupSum(cc,partnerKey), pB=groupBuyers(cv,partnerKey);
   var pNewB=(function(){var m={};cv.forEach(function(r){var k=partnerKey(r);if(isNew(r))(m[k]=m[k]||{})[r.buyer_hash]=1;});var o={};Object.keys(m).forEach(function(k){o[k]=Object.keys(m[k]).length;});return o;})();
   var pCancel=(function(){var g={},c={};cv.forEach(function(r){var k=partnerKey(r);g[k]=(g[k]||0)+num(r.total_purchase);if(CANCEL3[r.order_status])c[k]=(c[k]||0)+num(r.total_purchase);});var o={};Object.keys(g).forEach(function(k){o[k]=g[k]?(c[k]||0)/g[k]:0;});return o;})();
@@ -662,7 +675,7 @@ function renderAff(view,cmp){
   if(!aa.length) aa.push(["p1","제휴 성과 유지·모니터링","전 파트너 안정","이상징후 없음","주간 GMV·취소율 유지"]);
   $("af_actions").querySelector("tbody").innerHTML=aa.slice(0,4).map(function(a){return '<tr><td><span class="priority '+a[0]+'">'+a[0].toUpperCase()+'</span></td><td>'+esc(a[1])+'</td><td>'+esc(a[2])+'</td><td>'+esc(a[3])+'</td><td>'+esc(a[4])+'</td></tr>';}).join("");
 
-  $("af_ai").innerHTML='<div class="title">🤖 AI SUMMARY · CPS·제휴</div>연관 GMV '+eok(av.gmv)+' ('+(ratio(av.gmv,ac.gmv)*100).toFixed(1)+'%). 재구매 비중 '+(comp["기존(재구매)"]/ct*100).toFixed(0)+'%, 신규 비중 '+pct(newShare)+', 취소율 '+pct(cancelRate)+'. '+
+  $("af_ai").innerHTML='<div class="title">🤖 AI SUMMARY · CPS·제휴</div>연관 GMV '+eok(av.gmv)+' ('+(ratio(av.gmv,ac.gmv)*100).toFixed(1)+'%). <b>주력 매출코드 '+esc(CPS_MAIN)+' '+eok(p77a.gmv)+' / '+won(p77a.rowsN)+'건</b>. 재구매 비중 '+(comp["기존(재구매)"]/ct*100).toFixed(0)+'%, 신규 비중 '+pct(newShare)+', 취소율 '+pct(cancelRate)+'. '+
     (expand.length?'<b>확대 후보: '+esc(expand.join(", "))+'</b>. ':'')+(risky.length?'<b>축소 검토: '+esc(risky[0])+'</b> (취소율 '+pct(pCancel[risky[0]])+'). ':'')+
     '<div class="action">금주 액션 제안</div><ul>'+aa.slice(0,3).map(function(a){return '<li><b>'+esc(a[1])+'</b> — '+esc(a[2])+'</li>';}).join("")+'</ul>';
   LAST.afRows=cv;
@@ -687,7 +700,7 @@ function refresh(){
   if(!vf||!vt||!cf||!ct){return;}
   var sf=serverFilters(), pn=""; // product_name 미사용
   $("loading").classList.add("on"); $("err").textContent="";
-  $("notice").textContent="조회 "+vf+"~"+vt+(MODE==="compare"?(" · 비교 "+cf+"~"+ct):" · (조회 모드)")+" · Q3 누적(고정) "+Q3_START+"~"+Q3_FINAL+" · 온사이트("+ONSITE_ORDER_TYPE+")·GMV 기준 · KST";
+  $("notice").textContent="조회 "+vf+"~"+vt+(MODE==="compare"?(" · 비교 "+cf+"~"+ct):" · (조회 모드)")+" · Q3 누적(고정) "+Q3_START+"~"+Q3_FINAL+" · 온사이트(external결제·CJ API 제외)·GMV 기준 · KST";
 
   var jobs=[
     rpc("dash_summary",{p:{from:Q3_START,to:Q3_FINAL,filters:sf}}),                                                                   // 전체 거래실적(온사이트)
@@ -756,17 +769,20 @@ function aiInsight(){
     .catch(function(e){ $("ct_ai").innerHTML='<div class="title">🤖 AI 총평</div><span class="muted-block">AI 인사이트 호출 실패: '+esc(e.message)+'</span>'; });
 }
 
-/* ---------- 탭 ---------- */
-function showSec(sec){ ["all","repeat","new","aff"].forEach(function(s){var el=$("sec-"+s);if(el)el.style.display=(s===sec?"block":"none");});
-  [].forEach.call(document.querySelectorAll(".tab"),function(t){t.classList.toggle("active",t.getAttribute("data-sec")===sec);}); }
+/* ---------- 앵커 / 조회·비교 모드 ---------- */
+function applyMode(){ document.body.classList.toggle("hide-compare", MODE==="view");
+  [].forEach.call(document.querySelectorAll(".pill.mode"),function(b){b.classList.toggle("active",b.getAttribute("data-mode")===MODE);}); }
+function setActiveAnchor(id){ [].forEach.call(document.querySelectorAll("#anchors .tab"),function(a){a.classList.toggle("active",a.getAttribute("href")==="#"+id);}); }
+window.addEventListener("scroll",function(){ var secs=["sec-all","sec-repeat","sec-new","sec-aff"],cur=secs[0];
+  secs.forEach(function(id){var el=$(id); if(el && el.getBoundingClientRect().top<=140) cur=id;}); setActiveAnchor(cur); });
 
 /* ---------- 이벤트 ---------- */
 $("go").onclick=refresh;
-$("reset").onclick=function(){ALL_KEYS.forEach(function(k){SEL[k]=new Set();var h=$("ms_"+k);if(h&&h._upd)h._upd();});$("seller_id").value="";defaultPeriod();[].forEach.call(document.querySelectorAll(".pill"),function(p){p.classList.toggle("active",p.getAttribute("data-q")==="7d");});refresh();};
+$("reset").onclick=function(){ALL_KEYS.forEach(function(k){SEL[k]=new Set();var h=$("ms_"+k);if(h&&h._upd)h._upd();});$("seller_id").value="";defaultPeriod();[].forEach.call($("quick").querySelectorAll(".pill"),function(p){p.classList.toggle("active",p.getAttribute("data-q")==="7d");});refresh();};
 $("aibtn").onclick=aiInsight;
 $("csvall").onclick=function(){handleCsv("all");};
-$("quick").onclick=function(e){var b=e.target.closest(".pill");if(!b)return;[].forEach.call(document.querySelectorAll(".pill"),function(p){p.classList.remove("active");});b.classList.add("active");quickPeriod(b.getAttribute("data-q"));refresh();};
-$("tabs").onclick=function(e){var t=e.target.closest(".tab");if(t)showSec(t.getAttribute("data-sec"));};
+$("quick").onclick=function(e){var b=e.target.closest(".pill");if(!b)return;[].forEach.call($("quick").querySelectorAll(".pill"),function(p){p.classList.remove("active");});b.classList.add("active");quickPeriod(b.getAttribute("data-q"));refresh();};
+$("anchors").addEventListener("click",function(e){var m=e.target.closest(".pill.mode");if(m){MODE=m.getAttribute("data-mode");applyMode();return;}var a=e.target.closest(".tab");if(a)setActiveAnchor(a.getAttribute("href").slice(1));});
 document.addEventListener("click",function(e){var b=e.target.closest("[data-csv]");if(b)handleCsv(b.getAttribute("data-csv"));});
 $("seller_id").addEventListener("keydown",function(e){if(e.key==="Enter")refresh();});
 
@@ -784,7 +800,7 @@ function blockNoAccess(msg){document.body.innerHTML='<div style="font-family:Pre
 /* ---------- init ---------- */
 defaultPeriod();
 buildAllMS();
-showSec("all");
+applyMode();
 window.MUSTIT.ready(function(){
   window.MUSTIT.rpc("dash_access",{p_dashboard:CUR_FILE}).then(function(a){
     if(!a||a.view===false){ blockNoAccess(); return; }

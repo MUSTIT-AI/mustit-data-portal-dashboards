@@ -213,7 +213,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:8px 9px;border-bottom:1p
  </div>
  <div class="grid2">
   <div class="card box"><div class="head"><h3>③ 신규 첫구매 브랜드</h3><button class="csv" data-csv="nw_brand">CSV</button></div><table id="nw_brand"><thead><tr><th>브랜드</th><th>구매자</th><th>GMV</th><th>증감</th></tr></thead><tbody></tbody></table></div>
-  <div class="card box"><div class="head"><h3>④ 수신동의 구조 <span class="small">(회원 API)</span></h3><button class="csv" data-csv="nw_consent">CSV</button></div><div id="nw_consent"></div></div>
+  <div class="card box"><div class="head"><h3>④ 수신동의 현황 <span class="small">(회원 집계뷰·전체)</span></h3><button class="csv" data-csv="nw_consent">CSV</button></div><div id="nw_consent"></div></div>
  </div>
  <div class="grid3">
   <div class="card box"><div class="head"><h3>⑤ 연령/성별 구매</h3><button class="csv" data-csv="nw_ag">CSV</button></div><table id="nw_ag"><thead><tr><th>구분</th><th>구매자</th><th>GMV</th></tr></thead><tbody></tbody></table></div>
@@ -375,10 +375,24 @@ function cpsCumulative(from,to,sf){
     .catch(function(e){ console.warn("cps chunk fail",c,e.message); /* 일부 청크 실패해도 진행 */ }); }); });
   return seq.then(function(){return total;});
 }
-function memberList(vf,vt){
-  return window.MUSTIT.fn("member-list",{joinedFrom:vf,joinedTo:vt,withPurchases:false})
-    .then(function(res){ var arr=res&&(res.rows||res.members||res.data||res); if(!Array.isArray(arr))arr=[]; return arr; })
-    .catch(function(){ return null; });
+/* 회원 집계 뷰(용민님 안내): public.mustit_member_status_daily — 일자별 가입/수신동의 스냅샷.
+   OpenAPI member-list 반복조회 대신 authenticated로 읽기. agg_date=KST 날짜. */
+function memberDaily(from,to){
+  var cols='agg_date,member_reg_cnt,member_man_reg_cnt,member_woman_reg_cnt,member_etc_reg_cnt,member_age_10_reg_cnt,member_age_20_reg_cnt,member_age_30_reg_cnt,member_age_40_reg_cnt,member_age_50_reg_cnt,member_age_60_reg_cnt,act_cnt,app_push_cnt,kakao_cnt,email_cnt,sms_cnt';
+  return Promise.resolve(window.MUSTIT.client.from('mustit_member_status_daily').select(cols).gte('agg_date',from).lte('agg_date',to).order('agg_date'))
+    .then(function(r){ return (r&&r.data)||[]; }, function(){ return null; });
+}
+function memberAgg(rows,vf,vt,cf,ct){
+  if(!rows) return null;
+  var o={signupView:0,signupCmp:0,reg:{남:0,여:0,기타:0},age:{},consent:null};
+  var ages=["10","20","30","40","50","60"];
+  rows.forEach(function(r){ var d=String(r.agg_date).slice(0,10);
+    if(d>=vf&&d<=vt){ o.signupView+=num(r.member_reg_cnt); o.reg["남"]+=num(r.member_man_reg_cnt); o.reg["여"]+=num(r.member_woman_reg_cnt); o.reg["기타"]+=num(r.member_etc_reg_cnt);
+      ages.forEach(function(a){ o.age[a+"대"]=(o.age[a+"대"]||0)+num(r["member_age_"+a+"_reg_cnt"]); }); }
+    if(d>=cf&&d<=ct) o.signupCmp+=num(r.member_reg_cnt);
+  });
+  for(var i=rows.length-1;i>=0;i--){ var rr=rows[i]; if(String(rr.agg_date).slice(0,10)<=vt){ o.consent={app_push:num(rr.app_push_cnt),kakao:num(rr.kakao_cnt),email:num(rr.email_cnt),sms:num(rr.sms_cnt),total:num(rr.act_cnt),date:String(rr.agg_date).slice(0,10)}; break; } }
+  return o;
 }
 
 /* ---------- 집계 유틸(행 배열) ---------- */
@@ -533,10 +547,11 @@ function renderRepeat(view,cmp){
 }
 
 /* ---------- 신규 ---------- */
-function renderNew(view,cmp,mList){
+function renderNew(view,cmp,mAgg){
   var nv=filt(view,isNew), nc=filt(cmp,isNew);
   var av=agg(nv), ac=agg(nc);
-  var signup = mList? mList.length : null;
+  var signup = mAgg? mAgg.signupView : null;
+  var signupC = mAgg? mAgg.signupCmp : null;
   var convRate = signup? av.buyersN/signup : null;
   var aov = av.buyersN? av.gmv/av.buyersN : 0, aovC=ac.buyersN?ac.gmv/ac.buyersN:0;
   // 가입후 첫구매 경과
@@ -545,7 +560,7 @@ function renderNew(view,cmp,mList){
   var d7share = av.buyersN? (tv.arr.filter(function(d){return d<=7;}).length/av.buyersN) : 0;
   var d7shareC = (function(){var t=timing(nc);return ac.buyersN? t.arr.filter(function(d){return d<=7;}).length/ac.buyersN:0;})();
   $("nw_kpis").innerHTML=[
-    ["신규 가입자", signup!=null?won(signup):"—", signup!=null?'<span class="small">회원 API</span>':'<span class="small">연동 필요</span>'],
+    ["신규 가입자", signup!=null?won(signup):"—", signup!=null?chgPctHtml(signup,signupC):'<span class="small">집계뷰 필요</span>'],
     ["신규 구매자",won(av.buyersN),chgPctHtml(av.buyersN,ac.buyersN)],
     ["신규 첫구매 GMV",eok(av.gmv),chgPctHtml(av.gmv,ac.gmv)],
     ["가입→구매율", convRate!=null?pct(convRate):"—", convRate!=null?'<span class="small">구매자/가입자</span>':'<span class="small">연동 필요</span>'],
@@ -566,17 +581,16 @@ function renderNew(view,cmp,mList){
   var brK=Object.keys(brV).sort(function(a,b){return brV[b]-brV[a];}).slice(0,6);
   $("nw_brand").querySelector("tbody").innerHTML=brK.map(function(k){return '<tr><td>'+esc(k)+'</td><td>'+won(brB[k]||0)+'</td><td>'+mil(brV[k])+'</td><td>'+chgPctHtml(brV[k],brC[k]||0)+'</td></tr>';}).join("")||'<tr><td colspan="4" class="small">신규 구매 없음</td></tr>';
 
-  // 수신동의(회원 API)
-  if(mList){ var f={marketing:0,sms:0,email:0,kakao:0,push:0,nightPushConsent:0}; mList.forEach(function(m){Object.keys(f).forEach(function(k){if(m[k])f[k]++;});});
-    var n=mList.length||1;
-    $("nw_consent").innerHTML='<div><b>신규 가입자 '+won(mList.length)+'명 기준</b></div>'+
+  // 수신동의(회원 집계 뷰 · 전체 회원 스냅샷)
+  if(mAgg&&mAgg.consent){ var cs=mAgg.consent; var tot=cs.total||1;
+    $("nw_consent").innerHTML='<div><b>전체 회원 수신동의</b> <span class="small">('+cs.date+' 스냅샷·총 '+won(cs.total)+'명)</span></div>'+
       '<table><tbody>'+
-      '<tr><td>마케팅 수신</td><td>'+won(f.marketing)+'명</td><td>'+pct(f.marketing/n)+'</td></tr>'+
-      '<tr><td>앱푸시 수신</td><td>'+won(f.push)+'명</td><td>'+pct(f.push/n)+'</td></tr>'+
-      '<tr><td>야간푸시 수신</td><td>'+won(f.nightPushConsent)+'명</td><td>'+pct(f.nightPushConsent/n)+'</td></tr>'+
-      '<tr><td>SMS / 이메일 / 카카오</td><td colspan="2">'+won(f.sms)+' / '+won(f.email)+' / '+won(f.kakao)+'명</td></tr>'+
-      '</tbody></table>';
-  } else { $("nw_consent").innerHTML='<div class="muted-block">수신동의 구조는 회원 API(member-list) 응답이 필요합니다. — 추가 데이터 필요</div>'; }
+      '<tr><td>앱푸시</td><td>'+won(cs.app_push)+'명</td><td>'+pct(cs.app_push/tot)+'</td></tr>'+
+      '<tr><td>카카오</td><td>'+won(cs.kakao)+'명</td><td>'+pct(cs.kakao/tot)+'</td></tr>'+
+      '<tr><td>이메일</td><td>'+won(cs.email)+'명</td><td>'+pct(cs.email/tot)+'</td></tr>'+
+      '<tr><td>SMS</td><td>'+won(cs.sms)+'명</td><td>'+pct(cs.sms/tot)+'</td></tr>'+
+      '</tbody></table><div class="small" style="margin-top:6px">※ 전체 회원 기준 스냅샷 · 신규 코호트별 동의는 회원 원장 연동 시 세분화.</div>';
+  } else { $("nw_consent").innerHTML='<div class="muted-block">수신동의: 회원 집계 뷰 응답 필요 — 추가 데이터 필요</div>'; }
 
   // 연령/성별, 유입, 결제
   function tbl(id,gmv,buy){var k=Object.keys(gmv).sort(function(a,b){return gmv[b]-gmv[a];}).slice(0,6);$(id).querySelector("tbody").innerHTML=k.map(function(x){return '<tr><td>'+esc(x)+'</td><td>'+won(buy[x]||0)+'</td><td>'+mil(gmv[x])+'</td></tr>';}).join("")||'<tr><td colspan="3" class="small">데이터 없음</td></tr>';}
@@ -708,10 +722,11 @@ function refresh(){
     rpc("dash_summary",{p:{from:Q3_START,to:Q3_FINAL,filters:Object.assign({},sf,{customer_type:["신규","기존(첫구매)"]})}}),           // 신규 첫구매
     loadRawUnion(cf,vt,sf,pn),
     THUMB?Promise.resolve(0):cpsCumulative(Q3_START,Q3_FINAL,sf),
-    THUMB?Promise.resolve(null):memberList(vf,vt)
+    THUMB?Promise.resolve(null):memberDaily(Q3_START,vt)
   ];
   Promise.all(jobs).then(function(res){
-    var sTot=res[0]||{}, sRep=res[1]||{}, sNew=res[2]||{}, rows=res[3]||[], cpsCum=res[4]||0, mList=res[5];
+    var sTot=res[0]||{}, sRep=res[1]||{}, sNew=res[2]||{}, rows=res[3]||[], cpsCum=res[4]||0, mData=res[5];
+    var mAgg=memberAgg(mData,vf,vt,cf,ct);
     // inflow/sales_code 옵션(전체 원본 기준)으로 드롭다운 채우기 — 필터 적용 전에
     ["inflow","sales_code"].forEach(function(k){var s={};rows.forEach(function(r){if(r[k]!=null&&r[k]!=="")s[r[k]]=1;});var merged={};(OPTS[k]||[]).forEach(function(x){merged[x]=1;});Object.keys(s).forEach(function(x){merged[x]=1;});OPTS[k]=Object.keys(merged).sort();buildMS(k);});
     // 클라이언트 필터(inflow/sales_code) 적용
@@ -728,7 +743,7 @@ function refresh(){
 
     // 렌더 (각 섹션 독립 try)
     try{ renderRepeat(RAW_VIEW,RAW_CMP); renderRepeatSpark(RAW_VIEW,RAW_CMP,vf,cf); }catch(e){console.error("repeat",e);}
-    try{ renderNew(RAW_VIEW,RAW_CMP,mList); }catch(e){console.error("new",e);}
+    try{ renderNew(RAW_VIEW,RAW_CMP,mAgg); }catch(e){console.error("new",e);}
     try{ renderAff(RAW_VIEW,RAW_CMP); }catch(e){console.error("aff",e);}
     var drill=null; try{ drill=segDrilldown(RAW_VIEW,RAW_CMP); }catch(e){console.error("drill",e);}
     try{ renderControlTower(cum,v,c); }catch(e){console.error("ct",e);}
@@ -736,7 +751,7 @@ function refresh(){
 
     var warn=[];
     if(!PII_OK) warn.push("개인정보 열람 권한이 없어 연령·성별·재구매간격·가입경과 등 일부 지표가 제한됩니다(dash_raw 폴백).");
-    if(!mList&&!THUMB) warn.push("회원 API(member-list) 응답이 없어 신규 가입자수·수신동의 구조가 비어 있습니다.");
+    if(!mAgg&&!THUMB) warn.push("회원 집계 뷰(mustit_member_status_daily) 응답이 없어 신규 가입자수·수신동의가 비어 있습니다.");
     if(rows.length>=100000) warn.push("행 상한 도달 — 기간을 좁히세요.");
     var nEl=document.querySelectorAll(".gap-note"); nEl.forEach(function(e){e.remove();});
     if(warn.length){ var g=document.createElement("div"); g.className="gap-note"; g.innerHTML="⚠ "+warn.join(" "); $("notice").after(g); }

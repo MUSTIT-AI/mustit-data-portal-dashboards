@@ -26,6 +26,8 @@
   .rng{display:flex;gap:4px;align-items:center}
   .rng input[type=date]{border:1px solid #d6d4ce;border-radius:6px;padding:5px 7px;font-size:12.5px;height:30px}
   .rng span{color:#aaa}
+  .qbtn{height:30px;border:1px solid #d6d4ce;border-radius:6px;background:#fff;cursor:pointer;padding:0 10px;font-size:12px;color:#444;margin-left:3px}
+  .qbtn:hover{border-color:var(--red);color:var(--red)}
   .swapbtn{align-self:flex-end;height:30px;border:1px solid #d6d4ce;border-radius:6px;background:#fff;cursor:pointer;padding:0 11px;font-size:15px;color:#555}
   .swapbtn:hover{border-color:var(--red);color:var(--red)}
   .fltrs{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}
@@ -74,7 +76,7 @@
   <div class="right"><span class="owner" id="dashowner"></span><select id="dashnav" title="대시보드 이동"></select></div>
 </div>
 <div class="ctrlbar">
-  <div class="fld"><label>조회기간</label><div class="rng"><input type="date" id="date_from"><span>~</span><input type="date" id="date_to"></div></div>
+  <div class="fld"><label>조회기간</label><div class="rng"><input type="date" id="date_from"><span>~</span><input type="date" id="date_to"><button class="qbtn" id="q_today" type="button">오늘</button><button class="qbtn" id="q_yday" type="button">어제</button></div></div>
   <button class="swapbtn" id="swap" title="조회 ↔ 비교 반전">⇄</button>
   <div class="fld"><label>비교기간</label><div class="rng"><input type="date" id="cmp_from"><span>~</span><input type="date" id="cmp_to"></div></div>
   <div class="fld"><label>빠른비교</label>
@@ -154,6 +156,10 @@
     [].forEach.call(document.querySelectorAll('input[name=cmp]'),function(r){r.onchange=function(){applyNday(Number(r.value));};});
     $("swap").onclick=function(){var a=$("date_from").value,b=$("date_to").value; $("date_from").value=$("cmp_from").value; $("date_to").value=$("cmp_to").value; $("cmp_from").value=a; $("cmp_to").value=b; clearN();};
     $("go").onclick=function(){ refresh(); };
+    // 조회기간 빠른 버튼(오늘/어제) — 클릭 즉시 조회. 빠른비교 라디오가 켜져있으면 비교기간도 자동 이동
+    function pickDay(d){ $("date_from").value=d; $("date_to").value=d; var n=checkedN(); if(n) applyNday(n); refresh(); }
+    $("q_today").onclick=function(){ pickDay(kstToday()); };
+    $("q_yday").onclick=function(){ pickDay(shift(kstToday(),-1)); };
     $("ai").onclick=aiInsight;
     $("aihist").onclick=aiHistory;
   }

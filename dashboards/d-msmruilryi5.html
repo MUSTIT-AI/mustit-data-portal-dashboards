@@ -224,8 +224,10 @@
     <div class="kpis" id="optin_kpi" style="grid-template-columns:repeat(7,1fr)"></div>
     <div class="grid2" style="margin-top:12px"><div class="chart" id="c_optin"></div><div class="tblscroll"><table class="mini" id="t_optin_attr"><tbody></tbody></table></div></div>
     <div class="aihint" id="ai_optin"></div></div>
-  <div class="card"><h3>② 전체 회원 기준 옵트인 <span class="mut">현재 전체 회원 스냅샷</span></h3>
-    <div class="aihint" id="optin_all">전체 회원 기준 옵트인 총계는 집계 테이블 <code>member_status_daily</code>(가입·로그인·이메일·SMS·카카오·앱푸시 base 총계)의 <b>읽기 RPC</b>가 필요합니다. 관리자가 RPC를 추가하면 이 카드에 자동 표시됩니다. (※ 야간푸시는 이 집계 테이블에 없어 가입자 기준①에서만 제공)</div></div>
+  <div class="card"><h3>② 전체 회원 기준 옵트인 <span class="mut" id="optin_all_sub">현재 전체 회원 스냅샷</span></h3>
+    <div class="kpis" id="optin_all_kpi" style="grid-template-columns:repeat(6,1fr)"></div>
+    <div class="chart" id="c_optin_all" style="margin-top:12px"></div>
+    <div class="aihint" id="ai_optin_all"></div></div>
 </div>
 
 <div class="loading" id="loading">불러오는 중…</div>
@@ -234,8 +236,8 @@
 <script>
 (function(){
 "use strict";
-var BUILD="v12";
-var OPTIN=null, OPTIN_LOGIN=null, OPTIN_M=null, OPTIN_LOGIN_M=null;
+var BUILD="v13";
+var OPTIN=null, MEMROWS=null, PUSHAGG=null;
 var $=function(id){return document.getElementById(id);};
 var FILE="d-msmruilryi5.html", AIDASH="커머스 주요 실적";
 var THUMB=/(?:^|[#&])thumb/.test(location.hash);
@@ -446,23 +448,42 @@ function renderPerfDetail(){var d=$("perf_detail");if(!LAST||d.style.display==="
 
 /* ── 주요실적 3줄(회원·구매자) ── */
 function segB(arr,name){if(!arr)return null;for(var i=0;i<arr.length;i++)if(arr[i].k===name)return arr[i].buyers;return 0;}
-function optC(o,f){if(!o||!o.items)return null;return o.items.filter(function(mm){return agree(mm[f]);}).length;}
-function optTot(o){return o?(o.totalCount||(o.items?o.items.length:0)):null;}
+function aggd(r){return String(r.agg_date).slice(0,10);}
+function memSum(from,to,field){if(!MEMROWS)return null;var s=0;MEMROWS.forEach(function(r){var d=aggd(r);if(d>=from&&d<=to)s+=Number(r[field])||0;});return s;}
+function pushAggNight(){if(!PUSHAGG||!PUSHAGG.length)return null;var md=PUSHAGG[0].agg_date,s=0;PUSHAGG.forEach(function(r){if(r.agg_date===md&&(r.night_app_push_consent===true||r.night_app_push_consent==="true"))s+=Number(r.user_count)||0;});return s;}
 function renderKpi3(){
   var ct=(LAST&&LAST.crm)?LAST.crm.ct:null, ctM=(LAST&&LAST.crmM)?LAST.crmM.ct:null, cmp=(MODE==="cmp");
-  function T(l,cur,cmpv){
-    if(cur==null)return '<div class="kpi"><div class="l">'+esc(l)+'</div><div class="v"><span style="color:#a7a49c;font-size:13px">…</span></div></div>';
-    return tile(l,won(cur),{cmp:(cmp&&cmpv!=null)?won(cmpv):null,curNum:cur,cmpNum:cmpv});
+  var from=$("from").value,to=$("to").value,cf=$("cfrom").value,cto=$("cto").value;
+  var L=(MEMROWS&&MEMROWS.length)?MEMROWS[0]:null;
+  function T(l,cur,cmpv,bw){
+    if(cur==null)return '<div class="kpi"><div class="l">'+esc(l)+'</div><div class="v"><span style="color:#a7a49c;font-size:13px">…</span></div>'+(bw?'<div class="bw">'+bw+'</div>':'')+'</div>';
+    return tile(l,won(cur),{cmp:(cmp&&cmpv!=null)?won(cmpv):null,curNum:cur,cmpNum:cmpv,bw:bw});
   }
   $("kpi_bot3").innerHTML=
-    '<div class="kpi"><div class="l">전체 유저수</div><div class="v"><span style="color:#a7a49c;font-size:13px">–</span></div><div class="bw">D-1·RPC 필요</div></div>'+
-    T("기간 가입자수",optTot(OPTIN),optTot(OPTIN_M))+
-    T("기간 로그인수",optTot(OPTIN_LOGIN),optTot(OPTIN_LOGIN_M))+
+    T("전체 유저수",L?Number(L.act_cnt):null,null,L?("기준 "+aggd(L)):"")+
+    T("기간 가입자수",memSum(from,to,"member_reg_cnt"),cmp?memSum(cf,cto,"member_reg_cnt"):null)+
+    T("기간 로그인수",memSum(from,to,"member_login_cnt"),cmp?memSum(cf,cto,"member_login_cnt"):null)+
     T("기존 재구매자수",segB(ct,"기존(재구매)"),cmp?segB(ctM,"기존(재구매)"):null)+
     T("기존 첫구매자수",segB(ct,"기존(첫구매)"),cmp?segB(ctM,"기존(첫구매)"):null)+
     T("신규 구매자수",segB(ct,"신규"),cmp?segB(ctM,"신규"):null)+
-    T("APP PUSH 동의",optC(OPTIN,"pushConsent"),cmp?optC(OPTIN_M,"pushConsent"):null)+
-    T("야간 수신동의",optC(OPTIN,"nightPushConsent"),cmp?optC(OPTIN_M,"nightPushConsent"):null);
+    T("APP PUSH 동의(전체)",L?Number(L.app_push_cnt):null,null)+
+    T("야간 수신동의(전체)",pushAggNight(),null);
+}
+/* ── ② 전체 회원 기준 옵트인 (public 뷰) ── */
+function renderOptinAll(){
+  if(!MEMROWS||!MEMROWS.length){$("optin_all_kpi").innerHTML='<div class="kpi"><div class="l">전체 옵트인</div><div class="v" style="font-size:13px;color:#a7a49c">불러오는 중…</div></div>';return;}
+  var L=MEMROWS[0],tot=Number(L.act_cnt)||0,night=pushAggNight();
+  function ot(l,n){return '<div class="kpi"><div class="l">'+l+'</div><div class="v">'+won(n)+'</div><div class="bw">'+pct(tot?n/tot:0)+'</div></div>';}
+  $("optin_all_kpi").innerHTML='<div class="kpi"><div class="l">전체 회원(활성)</div><div class="v">'+won(tot)+'</div><div class="bw">act_cnt</div></div>'+
+    ot("이메일",L.email_cnt)+ot("SMS",L.sms_cnt)+ot("카카오",L.kakao_cnt)+ot("앱푸시",L.app_push_cnt)+ot("야간푸시",night==null?0:night);
+  var rows=MEMROWS.slice(0,60).slice().reverse();
+  ch("c_optin_all").setOption({grid:{left:52,right:16,top:24,bottom:34},tooltip:{trigger:"axis",valueFormatter:function(v){return won(v);}},legend:{data:["앱푸시","이메일","카카오"],top:0,right:0,itemWidth:10,itemHeight:8,textStyle:{fontSize:10}},
+    xAxis:{type:"category",data:rows.map(aggd),axisLabel:{fontSize:8,color:"#999",rotate:38,interval:Math.max(0,Math.floor(rows.length/10))}},yAxis:{type:"value",axisLabel:{fontSize:9,color:"#999",formatter:axM},splitLine:{lineStyle:{color:"#eee"}}},
+    series:[{name:"앱푸시",type:"line",symbol:"none",data:rows.map(function(r){return Number(r.app_push_cnt)||0;}),lineStyle:{color:"#ee3b52"},itemStyle:{color:"#ee3b52"}},
+      {name:"이메일",type:"line",symbol:"none",data:rows.map(function(r){return Number(r.email_cnt)||0;}),lineStyle:{color:"#7a8bbf"},itemStyle:{color:"#7a8bbf"}},
+      {name:"카카오",type:"line",symbol:"none",data:rows.map(function(r){return Number(r.kakao_cnt)||0;}),lineStyle:{color:"#2fae8f"},itemStyle:{color:"#2fae8f"}}]},true);
+  $("optin_all_sub").textContent="기준일 "+aggd(L)+" · 활성회원 "+won(tot)+"명";
+  $("ai_optin_all").innerHTML='<b>AI</b> 전체 회원(활성) '+won(tot)+'명 — 이메일 '+pct(tot?L.email_cnt/tot:0)+' · SMS '+pct(tot?L.sms_cnt/tot:0)+' · 카카오 '+pct(tot?L.kakao_cnt/tot:0)+' · 앱푸시 '+pct(tot?L.app_push_cnt/tot:0)+' · 야간 '+pct(tot&&night!=null?night/tot:0)+'.';
 }
 /* ── GMV 증감 분해(워터폴) ── */
 function renderWaterfall(c,m){
@@ -665,17 +686,17 @@ function renderOptin(){
   $("ai_optin").innerHTML='<b>AI</b> 가입 회원 동의율 — 마케팅 '+pct(tot?mk/tot:0)+' · 앱푸시 '+pct(tot?pu/tot:0)+' · 야간푸시 '+pct(tot?np/tot:0)+'. (전체 회원 상시 기준은 member_status_daily 읽기 RPC 추가 시 확장 가능)';
 }
 function fetchExtras(from,to){
-  OPTIN_M=null;OPTIN_LOGIN_M=null;
-  $("ai_optin").textContent="회원 데이터 불러오는 중… (수 초)";
+  // ① 가입 회원 옵트인(개별) — OpenAPI member-list (조회기간 가입, ≤1만)
+  $("ai_optin").textContent="가입 회원 옵트인 불러오는 중… (수 초)";
   window.MUSTIT.fn("member-list",{joinedFrom:from,joinedTo:to,withPurchases:false}).then(function(r){
-    if(r&&r.error){OPTIN=null;$("ai_optin").innerHTML='<b style="color:#c8102e">옵트인 조회 오류:</b> '+esc(r.error);}else OPTIN=r||null;
-    renderOptin();renderKpi3();
-  }).catch(function(e){OPTIN=null;$("ai_optin").innerHTML='<b style="color:#c8102e">옵트인 조회 실패:</b> '+esc(e&&e.message||e);renderOptin();renderKpi3();});
-  window.MUSTIT.fn("member-list",{lastLoginFrom:from,lastLoginTo:to,withPurchases:false}).then(function(r){OPTIN_LOGIN=(r&&!r.error)?r:null;renderKpi3();}).catch(function(){OPTIN_LOGIN=null;renderKpi3();});
-  if(MODE==="cmp"){var cf=$("cfrom").value,cto=$("cto").value;
-    window.MUSTIT.fn("member-list",{joinedFrom:cf,joinedTo:cto,withPurchases:false}).then(function(r){OPTIN_M=(r&&!r.error)?r:null;renderKpi3();}).catch(function(){OPTIN_M=null;renderKpi3();});
-    window.MUSTIT.fn("member-list",{lastLoginFrom:cf,lastLoginTo:cto,withPurchases:false}).then(function(r){OPTIN_LOGIN_M=(r&&!r.error)?r:null;renderKpi3();}).catch(function(){OPTIN_LOGIN_M=null;renderKpi3();});
-  }
+    if(r&&r.error){OPTIN=null;$("ai_optin").innerHTML='<b style="color:#c8102e">가입회원 옵트인 오류:</b> '+esc(r.error);}else OPTIN=r||null;renderOptin();
+  }).catch(function(e){OPTIN=null;$("ai_optin").innerHTML='<b style="color:#c8102e">가입회원 옵트인 실패:</b> '+esc(e&&e.message||e);renderOptin();});
+  // ② 전체 회원 · 기간 가입/로그인 — public 집계 뷰 직접조회
+  var C=window.MUSTIT.client;
+  C.from("mustit_member_status_daily").select("agg_date,member_reg_cnt,member_login_cnt,act_cnt,email_cnt,sms_cnt,kakao_cnt,app_push_cnt").order("agg_date",{ascending:false}).limit(400)
+    .then(function(res){MEMROWS=(res&&res.data)?res.data:[];renderKpi3();renderOptinAll();}).catch(function(){MEMROWS=[];renderKpi3();renderOptinAll();});
+  C.from("mustit_app_push_agg_daily").select("agg_date,night_app_push_consent,app_push_consent,user_count").order("agg_date",{ascending:false}).limit(600)
+    .then(function(res){PUSHAGG=(res&&res.data)?res.data:[];renderKpi3();renderOptinAll();}).catch(function(){PUSHAGG=[];renderKpi3();renderOptinAll();});
 }
 
 /* ── URL 상태(공유 링크) ── */
@@ -698,7 +719,7 @@ function render(){
   renderCRMAxis("c_crm_ct","t_crm_ct","ai_crm_ct",cr.ct,crM&&crM.ct,"거래구분");
   renderCRMAxis("c_crm_mg","t_crm_mg","ai_crm_mg",cr.mg,crM&&crM.mg,"회원등급");
   renderCRMAxis("c_crm_ab","t_crm_ab","ai_crm_ab",cr.ab,crM&&crM.ab,"연령대");
-  fillSeg();renderCross();renderPerfDetail();renderWaterfall(c,m);renderConcentration(c,tc);renderKpi3();
+  fillSeg();renderCross();renderPerfDetail();renderWaterfall(c,m);renderConcentration(c,tc);renderKpi3();renderOptinAll();
 }
 function refresh(){
   DAEDRILL=null;$("err").textContent="";$("loading").classList.add("on");

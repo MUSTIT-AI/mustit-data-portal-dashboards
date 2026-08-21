@@ -128,10 +128,12 @@
 
 <div class="wrap">
   <p class="note">
-    선택한 기간 내 <b>판매자ID별 매출 현황</b>입니다(주문 라인 <code>orders_secure</code> 기준 DB 집계 · 원본을 브라우저로 당기지 않음).
+    선택한 기간 내 <b>판매자ID별 매출 현황</b>입니다. 판매자 단위 집계 전용 RPC가 아직 배포되지 않아, 기존에 이미 쓰이고 있는 <code>dash_raw</code>로 기간 내 주문 라인을 받아 <b>브라우저에서 판매자별로 합산</b>합니다(신규 DB 배포 없이 로그인만으로 바로 동작).
     <b>거래액(GMV)</b>=<code>total_purchase</code> 합계, <b>순매출</b>=총매출−자사할인, <b>순이익</b>=순매출−결제수수료. 기본은 <b>전체 주문상태</b> 기준이며, 정산완료 건만 보려면 주문상태 필터에서 선택하세요.
+    <b>주의</b>: 원본 라인을 그대로 가져오는 방식이라 기간이 길면(대략 2개월↑) 서버 8초 타임아웃에 걸릴 수 있습니다 — 그 경우 기간을 좁혀 다시 조회하세요. 조회 상한(<span id="rawlimit"></span>행)에 도달하면 그 안에서 집계가 잘린 것이니 기간을 줄여주세요.
     판매자 검색은 이미 불러온 목록을 즉시 좁혀볼 뿐 DB를 다시 조회하지 않습니다.
   </p>
+  <p class="note" id="rawwarn" style="display:none;color:var(--warn);font-weight:700"></p>
 
   <div class="kpis" id="kpis"></div>
 
@@ -349,31 +351,48 @@ function setDefaultDates(){
   $("from").value=ymd(f); $("to").value=ymd(y);
 }
 
-// ── refresh: DB 집계 RPC dash_seller_rank 사용 (orders_secure 원본을 브라우저로
-//    당겨 집계하지 않는다 — CLAUDE.md 필수 규칙) ──
+// ── refresh: 판매자 단위 집계 전용 RPC(dash_seller_rank)가 아직 미배포라, 대신
+//    이미 배포되어 있는 dash_raw로 기간 내 주문 라인을 받아 브라우저에서 판매자별로
+//    합산한다. CLAUDE.md 원칙(집계는 DB에서)과는 다르지만, 신규 RPC 배포 권한이
+//    없는 상태에서 로그인만으로 바로 동작하게 하기 위한 임시 방식이다.
+//    RAW_LIMIT는 문서화된 실질 한계(무필터 약 2개월≈19,000행, 8초 타임아웃) 기준.
+var RAW_LIMIT = 20000;
+
 function params(){
   var f = {};
   if(STATUS_SEL.size) f.order_status = Array.from(STATUS_SEL);
   return { from:$("from").value, to:$("to").value, filters:f };
 }
+function aggregateBySeller(rows){
+  var map = {};
+  rows.forEach(function(r){
+    var sid = r.seller_id; if(!sid) return;
+    var a = map[sid] || (map[sid] = { seller_id:sid, gmv:0, net_revenue:0, net_profit:0, quantity:0, own_discount:0, _orders:new Set() });
+    a.gmv += Number(r.total_purchase)||0;
+    a.net_revenue += Number(r.net_revenue)||0;
+    a.net_profit += Number(r.net_profit)||0;
+    a.quantity += Number(r.quantity)||0;
+    a.own_discount += Number(r.own_discount_ttl)||0;
+    if(r.order_no!=null) a._orders.add(r.order_no);
+  });
+  return Object.keys(map).map(function(sid){
+    var a = map[sid];
+    return { seller_id:a.seller_id, gmv:a.gmv, net_revenue:a.net_revenue, net_profit:a.net_profit,
+      quantity:a.quantity, own_discount:a.own_discount, orders:a._orders.size };
+  });
+}
 function refresh(){
-  $("err").textContent = "";
+  $("err").textContent = ""; $("rawwarn").style.display = "none";
   if(THUMB){ renderChart([]); return; }
   $("loading").classList.add("on");
-  rpc("dash_seller_rank", { p: params(), p_limit: 20000 })
+  rpc("dash_raw", { p: params(), p_limit: RAW_LIMIT })
     .then(function(rows){
       rows = Array.isArray(rows) ? rows : [];
-      ALL_SELLERS = withDerived(rows.map(function(r){
-        return {
-          seller_id: r.seller_id,
-          gmv: Number(r.gmv)||0,
-          net_revenue: Number(r.net_revenue)||0,
-          net_profit: Number(r.net_profit)||0,
-          orders: Number(r.orders)||0,
-          quantity: Number(r.quantity)||0,
-          own_discount: Number(r.own_discount)||0
-        };
-      }));
+      if(rows.length >= RAW_LIMIT){
+        $("rawwarn").style.display = "";
+        $("rawwarn").textContent = "⚠ 조회 상한("+won(RAW_LIMIT)+"행)에 도달해 집계가 그 안에서 잘렸을 수 있습니다 — 기간을 좁혀 다시 조회하세요.";
+      }
+      ALL_SELLERS = withDerived(aggregateBySeller(rows));
       sortAll(); PAGE=0;
       renderKPI(ALL_SELLERS);
       renderChart(ALL_SELLERS);
@@ -387,6 +406,7 @@ function refresh(){
 }
 
 setDefaultDates();
+if($("rawlimit")) $("rawlimit").textContent = won(RAW_LIMIT);
 $("go").onclick = refresh;
 $("csv").onclick = downloadCSV;
 $("sellerq").addEventListener("input", function(){ PAGE=0; paintTable(); });

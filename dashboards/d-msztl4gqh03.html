@@ -108,12 +108,34 @@
   .kpigroup-op{flex:0 0 auto;font-size:15px;font-weight:800;color:#b9b6ad;padding:0 1px}
   @media(max-width:1100px){.kpigroup-inner{flex-wrap:wrap}.kpigroup-item{flex:1 1 140px}.kpigroup-op{display:none}}
   @media(max-width:640px){.kpirow{flex-direction:column}}
-  /* 가입 후 퍼널: Sankey(2) + 다른 행동 리스트(1) */
+  /* 가입 후 퍼널: 좌측 2 : 우측 1 비율 공용 grid(Sankey+다른행동, 단계별표+이탈구간 둘 다 재사용) */
   .fnrow{display:flex;gap:14px;align-items:stretch;margin-top:14px}
   .fnrow .fn-main{flex:2;min-width:0}
   .fnrow .fn-side{flex:1;min-width:0}
   .fnrow .fn-side table.chtbl{min-width:0}
+  .fnrow .fn-main .tblwrap{margin-top:0}
   @media(max-width:900px){.fnrow{flex-direction:column}}
+  /* 가입 후 다른 행동 / 마케팅 동의 (우측 패널 두 섹션) */
+  .fn-subhd{margin:14px 0 8px;font-size:11.5px;font-weight:800;color:var(--ink);display:flex;align-items:center;gap:4px}
+  .fn-subhd:first-child{margin-top:0}
+  .consent-row{padding:8px 2px;border-bottom:1px solid #f0efe9}
+  .consent-row:last-child{border-bottom:0}
+  .consent-label{font-size:11.5px;color:var(--sub);font-weight:600;margin-bottom:3px;display:flex;align-items:center;gap:4px}
+  .consent-value{font-size:16px;font-weight:800;color:var(--ink)}
+  .consent-sub{font-size:11px;color:var(--sub);margin-left:5px;font-weight:600}
+  /* 주요 이탈 구간 카드 */
+  .dropoff-summary{font-size:11.5px;font-weight:700;color:var(--ink);background:#fff3f0;border:1px solid #f3d5cc;border-radius:8px;padding:8px 10px;margin-bottom:8px}
+  .dropoff-summary b{color:#c8102e}
+  .dropoff-group-label{font-size:11px;font-weight:800;color:var(--sub);margin:12px 0 2px}
+  .dropoff-group-label:first-child{margin-top:0}
+  .dropoff-row{display:flex;justify-content:space-between;align-items:center;padding:7px 2px;border-bottom:1px solid #f0efe9;font-size:12px}
+  .dropoff-row:last-of-type{border-bottom:0}
+  .dropoff-row .dropoff-seg{color:var(--ink)}
+  .dropoff-row .dropoff-rate{font-weight:700;color:var(--sub)}
+  .dropoff-row.worst{background:#fff3f0;border-radius:6px;padding:7px 8px;margin:0 -6px}
+  .dropoff-row.worst .dropoff-rate{color:#c8102e}
+  .dropoff-final{margin-top:10px;padding-top:8px;border-top:1px solid var(--border);font-size:11.5px;color:var(--sub)}
+  .dropoff-final b{color:var(--ink)}
   .chg{font-size:11px;font-weight:800}
   .chg.up{color:var(--up)}.chg.down{color:var(--down)}.chg.flat{color:var(--sub)}
 
@@ -139,18 +161,18 @@
   .infoicon{cursor:help;color:var(--sub);font-weight:700;font-size:9.5px;border:1px solid #b7b3aa;border-radius:50%;width:13px;height:13px;display:inline-flex;align-items:center;justify-content:center;margin-left:3px;vertical-align:middle}
   .latestbadge{font-size:9px;font-weight:800;background:var(--ok);color:#fff;border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:middle;white-space:nowrap}
 
-  /* 퍼널 STEP 카드 */
-  .steprow{display:flex;align-items:center;gap:0;margin-bottom:10px}
-  .steprow .pathlabel{flex:0 0 auto;width:64px;font-size:11px;font-weight:800;padding-right:8px;text-align:right;line-height:1.3}
+  /* 퍼널 STEP 카드: 단계명 → 메인숫자(크게) → 전환율(작게) 위계, 카드 높이 확대 */
+  .steprow{display:flex;align-items:center;gap:0;margin-bottom:28px}
+  .steprow:last-child{margin-bottom:0}
+  .steprow .pathlabel{flex:0 0 auto;width:104px;font-size:13.5px;font-weight:800;padding-right:12px;text-align:right;line-height:1.3}
   .stepcards{display:flex;gap:0;flex:1;min-width:0}
-  .stepcard{flex:1;background:#fff;border:1px solid var(--border);border-radius:10px;padding:10px 8px;text-align:center;position:relative;min-width:0}
+  .stepcard{flex:1;background:#fff;border:1px solid var(--border);border-radius:10px;padding:18px 10px;text-align:center;position:relative;min-width:0;min-height:118px;display:flex;flex-direction:column;justify-content:center}
   .stepcard+.stepcard{margin-left:16px}
-  .stepcard::before{content:"›";position:absolute;left:-15px;top:50%;transform:translateY(-50%);color:#c9c7c0;font-size:16px;font-weight:800}
+  .stepcard::before{content:"›";position:absolute;left:-15px;top:50%;transform:translateY(-50%);color:#c9c7c0;font-size:18px;font-weight:800}
   .stepcard:first-child::before{content:none}
-  .steprow .stepcard .steplbl{font-size:9px;color:var(--sub);font-weight:800;letter-spacing:.05em}
-  .steprow .stepcard .stepname{font-size:11.5px;font-weight:700;margin:2px 0 7px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .steprow .stepcard .stepval{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums}
-  .steprow .stepcard .steppct{font-size:10.5px;color:var(--sub);margin-top:2px}
+  .steprow .stepcard .stepname{font-size:13px;font-weight:700;margin:0 0 10px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .steprow .stepcard .stepval{font-size:27px;font-weight:800;font-variant-numeric:tabular-nums;margin-bottom:7px}
+  .steprow .stepcard .steppct{font-size:11px;color:var(--sub);margin-top:0}
   @media(max-width:900px){.steprow{overflow-x:auto}.steprow .stepcards{min-width:560px}}
   @media(max-width:640px){.card>div[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr!important}}
 
@@ -268,19 +290,33 @@
         <div class="chart" id="c_funnel" style="height:380px"></div>
       </div>
       <div class="card fn-side">
-        <p class="csub">가입 후 다른 행동들 <span class="infoicon" title="구매 경로(장바구니/찜)와는 별개로, 가입 후 30일 내 신규 가입자 중 이 행동을 한 번이라도 한 유니크 사용자 비중입니다(Amplitude 이벤트 기준). 각 행동은 서로 독립적으로 집계되며 위 Sankey와 직접 합산되는 관계는 아닙니다.">ⓘ</span></p>
+        <div class="fn-subhd">가입 후 주요 행동 <span class="infoicon" title="구매 경로(장바구니/찜)와는 별개로, 가입 후 30일 내 신규 가입자 중 이 행동을 한 번이라도 한 유니크 사용자 비중입니다(Amplitude 이벤트 기준). 각 행동은 서로 독립적으로 집계되며 위 Sankey와 직접 합산되는 관계는 아닙니다. '특가상품 이용'은 상품 상세페이지에서 할인 적용가를 본 경우입니다(apply_discount 이벤트).">ⓘ</span></div>
         <table class="chtbl">
           <thead><tr><th>행동</th><th>비중</th></tr></thead>
           <tbody id="otheract_table_body"></tbody>
         </table>
+        <div class="fn-subhd">가입 후 마케팅 동의 <span class="infoicon" title="회원 데이터 조회 대시보드와 동일한 회원별 동의 데이터를 가입일(위 기간) 기준으로 직접 집계한 값입니다. Amplitude에는 이 값이 거의 안 찍혀서(최근 30일 가입자 중 1% 미만) 쓸 수 없어 이 방식을 사용합니다. 야간 수신 동의율의 분모는 전체 가입자가 아니라 '마케팅 동의자 수'입니다(야간 동의는 마케팅 동의자만 켤 수 있는 하위 옵션).">ⓘ</span></div>
+        <div id="pushconsent_list"></div>
       </div>
     </div>
-    <div class="tblwrap">
-      <table class="chtbl">
-        <thead><tr><th>단계</th><th style="color:#c8102e">장바구니 경로</th><th>이전 기간 대비</th><th style="color:#2f6fe8">찜 경로</th><th>이전 기간 대비</th></tr></thead>
-        <tbody id="funnel_table_body"></tbody>
-      </table>
+    <div class="fnrow" style="margin-top:14px">
+      <div class="card fn-main">
+        <div class="tblwrap">
+          <table class="chtbl">
+            <thead><tr><th>단계</th><th style="color:#c8102e">장바구니 경로</th><th>이전 기간 대비</th><th style="color:#2f6fe8">찜 경로</th><th>이전 기간 대비</th></tr></thead>
+            <tbody id="funnel_table_body"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card fn-side">
+        <div class="fn-subhd">주요 이탈 구간 <span class="infoicon" title="장바구니 경로(가입→상품조회→장바구니→결제시작→주문완료) 기준, 단계 사이 이탈률입니다. 이탈률 = 1 − (다음 단계 인원 ÷ 이전 단계 인원).">ⓘ</span></div>
+        <div id="funnel_dropoff"></div>
+      </div>
     </div>
+
+    <div class="sechd">첫구매 카테고리 TOP 5 <span class="badge real">주문DB 기준</span> <span class="n" id="topcat_period"></span></div>
+    <p class="csub">이 기간 발생한 첫구매 주문의 카테고리(대분류) 분포 · 각 항목을 누르면 그 카테고리에서 많이 팔린 제품 TOP 10이 보여요</p>
+    <div id="topcat_list"></div>
 
     <div class="sechd">인사이트 · 액션</div>
     <div id="ai_daily" class="ainote-wrap"></div>
@@ -348,10 +384,6 @@
       <p class="csub" id="dist_sub">불러오는 중…</p>
       <div class="chart" id="c_distribution" style="height:220px"></div>
     </div>
-
-    <div class="sechd">첫구매 카테고리 TOP 5 <span class="badge real">주문DB 기준</span> <span class="n" id="topcat_period"></span></div>
-    <p class="csub">이 기간 발생한 첫구매 주문의 카테고리(대분류) 분포 · 각 항목을 누르면 그 카테고리에서 많이 팔린 제품 TOP 10이 보여요</p>
-    <div id="topcat_list"></div>
 
     <div class="sechd">인사이트 · 액션</div>
     <div id="ai_cohort" class="ainote-wrap"></div>
@@ -502,8 +534,9 @@ function fetchCohortSegmentDaily(fromISO,toISO){
 }
 // 첫구매 카테고리 TOP5 + 카테고리별 상위 제품(주문DB 기준). order_datetime 기준으로 "이 기간에 실제 발생한
 // 첫구매들"의 카테고리 분포를 봄(가입일 코호트 아님) — dash_cohort_top_categories RPC 없으면 에러나서
-// "준비 중" 배너로 처리됨.
-function fetchCohortTopCategories(fromISO,toISO){
+// "준비 중" 배너로 처리됨. 신규 전환 현황 탭(퍼널 바로 아래)에 노출 — "무슨 카테고리가 첫구매를 만드는지"는
+// 코호트 전환 타이밍보다 데일리 운영/액션 관점에 더 가깝다고 판단해서 이 탭으로 옮김.
+function fetchTopCategories(fromISO,toISO){
   return rpc("dash_cohort_top_categories",{from:fromISO,to:toISO});
 }
 function esc2(s){ return esc(String(s==null?"":s)); }
@@ -513,7 +546,7 @@ function topcatProductRows(products){
       +'<td>'+won(p.cnt)+'건</td><td>'+moneySpan(p.revenue||0)+'</td></tr>';
   }).join("");
 }
-function renderCohortTopCategories(rows){
+function renderTopCategories(rows){
   var el=$("topcat_list"); if(!el) return;
   if(!rows || !rows.length){ el.innerHTML='<div class="secload">데이터가 없습니다.</div>'; return; }
   var maxCnt = Math.max.apply(null, rows.map(function(r){return Number(r.cnt)||0;}).concat([1]));
@@ -540,14 +573,13 @@ function toggleTopcatRow(rid){
   var row=$(rid); if(!row) return;
   row.classList.toggle("open");
 }
-function renderCohortTopCategoriesSection(){
-  var c=STATE.cohort; if(!c) return;
-  $("topcat_period").textContent="(주문일 "+c.curFrom+" ~ "+c.curTo+" 발생 첫구매 기준)";
-  if(c.topCats==null){
+function renderTopCategoriesSection(curFrom,curTo,topCats){
+  $("topcat_period").textContent="(주문일 "+curFrom+" ~ "+curTo+" 발생 첫구매 기준)";
+  if(topCats==null){
     $("topcat_list").innerHTML='<div class="secload">카테고리 데이터는 아직 준비 중이에요(주문DB 집계 RPC 설정 필요).</div>';
     return;
   }
-  renderCohortTopCategories(c.topCats);
+  renderTopCategories(topCats);
 }
 
 // ── 가입 후 구매 퍼널(Amplitude) ──
@@ -557,12 +589,13 @@ var FUNNEL_STEPS_CART=[["complete_signup","가입"],["view_product_detail","상�
 var FUNNEL_STEPS_WISH=[["complete_signup","가입"],["view_product_detail","상품 조회"],["add_to_wish","찜하기"],["view_order_form","결제 시작"],["complete_order","주문 완료"]];
 // 구매 경로(장바구니/찜)와 별개로 가입 후 자주 나오는 다른 행동들. 각각 "가입→해당 이벤트" 단순 2단계 funnel로
 // 독립 집계(서로 배타적이지 않음, 동시에 여러 개 할 수 있음). Amplitude 이벤트 목록에서 실제 존재/트래픽 확인된
-// 것만 선정(2026-07 최근 30일 기준 대략 검색 40%, 카테고리홈 16%, 찜함조회/푸시허용/브랜드홈 각 5% 내외).
+// 것만 선정(2026-07~08 최근 30일 기준 직접 검증: 검색 40%, 특가상품(할인적용) 52%, 카테고리홈 16%,
+// 관심상품(찜) 5.4%, 브랜드홈 4.6%). "특가상품 이용"=상품 상세페이지에서 할인 적용가를 본 경우(apply_discount).
 var OTHER_EARLY_ACTIONS=[
   ["view_search_result","검색 결과 조회"],
+  ["apply_discount","특가상품 이용"],
   ["view_category_home","카테고리 홈 조회"],
-  ["view_wish","관심상품함(찜) 조회"],
-  ["push_allowed","푸시 알림 허용"],
+  ["view_wish","관심상품(찜) 조회"],
   ["view_brand_home","브랜드 홈 조회"]
 ];
 // 위 각 행동에 대해 "가입 → 해당 행동" 2단계 funnel의 누적 전환율만 필요하므로 fetchFunnelCumulative를 재사용.
@@ -582,6 +615,36 @@ function renderOtherEarlyActions(actions){
   el.innerHTML = actions.map(function(a){
     return '<tr><td>'+esc(a.label)+'</td><td>'+(a.pct==null?"—":pct1(a.pct))+'</td></tr>';
   }).join("");
+}
+// 가입 후 마케팅 동의: "회원 데이터 조회" 대시보드(d-mt0vak2zxdo.html)가 쓰는 것과 동일한 member-list
+// 엣지펑션을 직접 호출한다. 회원별 실제 marketingConsent/nightPushConsent(Y/N) + joinedAt을 그대로 받아오므로,
+// 이전에 썼던 "FRIENDS 등급 전체 스냅샷"(가입일 코호트 아닌 근사치, dash_push_consent RPC) 대신 조회 중인
+// 가입일 코호트(curFrom~curTo) 기준 정확한 동의율을 계산할 수 있다. 야간 수신 동의는 마케팅 동의자만 켤 수
+// 있는 하위 옵션임을 별도로 확인했으므로(마케팅 미동의+야간동의 조합은 노이즈 수준) 분모를 마케팅 동의자
+// 수로 계산. member-list는 joinedFrom~joinedTo 축 최대 90일 제한(현재 30일 창이라 문제 없음)이 있고,
+// 응답 건수가 너무 많으면 res.truncated=true로 일부만 내려주므로 이 경우 화면에 경고를 표시한다.
+function fetchPushConsent(fromISO,toISO){
+  return window.MUSTIT.fn("member-list",{joinedFrom:fromISO, joinedTo:toISO}).then(function(res){
+    var items=(res&&res.items)||[];
+    var total=items.length;
+    var mktOn=items.filter(function(r){ return r.marketingConsent==="Y"; }).length;
+    var nightOnAmongMkt=items.filter(function(r){ return r.marketingConsent==="Y" && r.nightPushConsent==="Y"; }).length;
+    return { total:total, mkt_on:mktOn, night_on_among_mkt_on:nightOnAmongMkt, truncated:!!(res&&res.truncated) };
+  });
+}
+function renderPushConsent(d){
+  var el=$("pushconsent_list"); if(!el) return;
+  if(!d){ el.innerHTML='<div class="secload">데이터를 불러오지 못했어요.</div>'; return; }
+  var total=Number(d.total)||0, mktOn=Number(d.mkt_on)||0, nightOnAmongMkt=Number(d.night_on_among_mkt_on)||0;
+  var mktPct = total>0 ? mktOn/total : null;
+  var nightPct = mktOn>0 ? nightOnAmongMkt/mktOn : null;
+  var html="";
+  html += '<div class="consent-row"><div class="consent-label">마케팅 수신 동의</div>'
+    + '<div class="consent-value">'+(mktPct==null?"—":pct1(mktPct))+'<span class="consent-sub">· '+won(mktOn)+'명</span></div></div>';
+  html += '<div class="consent-row"><div class="consent-label">마케팅 동의자 중 야간 수신 동의율</div>'
+    + '<div class="consent-value">'+(nightPct==null?"—":pct1(nightPct))+'<span class="consent-sub">· '+won(nightOnAmongMkt)+'명</span></div></div>';
+  if(d.truncated){ html += '<div class="consent-sub" style="margin-top:6px;color:#c0392b;">⚠ 대상이 많아 일부만 집계된 값이에요(참고용)</div>'; }
+  el.innerHTML = html;
 }
 function sumRange(map,fromISO,toISO){
   var s=0; enumerateDates(fromISO,toISO).forEach(function(day){ s += (map[day]||0); });
@@ -692,8 +755,13 @@ function loadDailyFunnel(){
   $("funnel_period").textContent="("+curFrom+" ~ "+curTo+" 가입자, 이전 기간 "+prevFrom+" ~ "+prevTo+")";
   var totalCur=sumRange(d.signupMap,curFrom,curTo);
   var totalPrev=sumRange(d.signupMap,prevFrom,prevTo);
-  // 429(Amplitude rate limit) 방지 위해 4번 순차 호출(장바구니경로 이번/이전, 찜경로 이번/이전)
+  // 429(Amplitude rate limit) 방지 위해 순차 호출(장바구니경로 이번/이전, 찜경로 이번/이전, 다른 행동들)
   $("otheract_table_body").innerHTML='<tr><td colspan="2" class="secload">불러오는 중…</td></tr>';
+  $("pushconsent_list").innerHTML='<div class="secload">불러오는 중…</div>';
+  $("topcat_list").innerHTML='<div class="secload">불러오는 중…</div>';
+  fetchPushConsent(curFrom,curTo).then(renderPushConsent).catch(function(e){ console.error(e); renderPushConsent(null); });
+  fetchTopCategories(curFrom,curTo).then(function(rows){ renderTopCategoriesSection(curFrom,curTo,rows); })
+    .catch(function(e){ console.error(e); renderTopCategoriesSection(curFrom,curTo,null); });
   return fetchFunnelCumulative(FUNNEL_STEPS_CART,curFrom,curTo).then(function(cartCumCur){
     return fetchFunnelCumulative(FUNNEL_STEPS_CART,prevFrom,prevTo).then(function(cartCumPrev){
       return fetchFunnelCumulative(FUNNEL_STEPS_WISH,curFrom,curTo).then(function(wishCumCur){
@@ -708,13 +776,14 @@ function loadDailyFunnel(){
     $("funnel_sub").textContent="퍼널 데이터를 불러오지 못했어요.";
     $("c_funnel").innerHTML=""; $("funnel_table_body").innerHTML="";
     $("otheract_table_body").innerHTML='<tr><td colspan="2" class="secload">불러오지 못했습니다.</td></tr>';
+    $("funnel_dropoff").innerHTML='<div class="secload">불러오지 못했습니다.</div>';
   });
 }
 var FUNNEL_CART_COLOR="#c8102e", FUNNEL_WISH_COLOR="#2f6fe8", FUNNEL_SHARED_COLOR="#9a9992";
-// 스텝카드 1개 렌더링: STEP n / 단계명 / 인원수 / (STEP1 제외) 1단계 대비 누적 전환율
+// 스텝카드 1개 렌더링: 단계명 → 메인 숫자(크게) → 가입 대비 누적 전환율(작게) 위계
 function stepCardHTML(name,value,pctFrom1){
-  return '<div class="stepcard"><div class="steplbl">STEP</div><div class="stepname">'+esc(name)+'</div><div class="stepval">'+won(value)+'</div>'
-    + (pctFrom1==null? '' : '<div class="steppct">누적 '+pct1(pctFrom1)+'</div>') + '</div>';
+  return '<div class="stepcard"><div class="stepname">'+esc(name)+'</div><div class="stepval">'+won(value)+'명</div>'
+    + (pctFrom1==null? '' : '<div class="steppct">가입 대비 '+pct1(pctFrom1)+'</div>') + '</div>';
 }
 function renderFunnelStepCards(cartCur,wishCur,cartCumCur,wishCumCur){
   var el=$("funnel_stepcards"); if(!el) return;
@@ -725,6 +794,38 @@ function renderFunnelStepCards(cartCur,wishCur,cartCumCur,wishCumCur){
   el.innerHTML =
     '<div class="steprow"><div class="pathlabel" style="color:'+FUNNEL_CART_COLOR+'">장바구니<br>경로</div><div class="stepcards">'+cartHtml+'</div></div>'
     +'<div class="steprow"><div class="pathlabel" style="color:'+FUNNEL_WISH_COLOR+'">찜<br>경로</div><div class="stepcards">'+wishHtml+'</div></div>';
+}
+// 주요 이탈 구간: 장바구니/찜 두 경로 각각(가입→상품조회는 두 경로 공통 트렁크라 제외, 분기 이후인
+// 상품조회→장바구니/찜→결제시작→주문완료 구간만) 단계 사이 이탈률을 따로 보여준다.
+// 이탈률 = 1 - (다음 단계 인원 ÷ 이전 단계 인원). 경로별로 가장 이탈이 큰 구간을 강조 표시하고,
+// 하단에 가입→주문완료 최종 전환율(장바구니 vs 찜)을 한 줄로 비교한다.
+function dropoffSegs(vals,names){
+  var segs=[];
+  for(var i=1;i<vals.length;i++){
+    var prev=vals[i-1], cur=vals[i];
+    var rate = prev>0 ? Math.max(0,1-(cur/prev)) : null;
+    segs.push({label:names[i-1]+" → "+names[i], rate:rate});
+  }
+  return segs;
+}
+function dropoffGroupHTML(title,segs){
+  var maxIdx=0;
+  segs.forEach(function(s,i){ if((s.rate||0) > (segs[maxIdx].rate||0)) maxIdx=i; });
+  var rows = segs.map(function(s,i){
+    return '<div class="dropoff-row'+(i===maxIdx?' worst':'')+'"><span class="dropoff-seg">'+esc(s.label)+'</span><span class="dropoff-rate">'+(s.rate==null?"—":("이탈 "+pct1(s.rate)))+'</span></div>';
+  }).join("");
+  return '<div class="dropoff-group-label">'+esc(title)+'</div>'+rows;
+}
+function renderFunnelDropoff(cartCur,wishCur,cartOverall,wishOverall){
+  var el=$("funnel_dropoff"); if(!el) return;
+  var cartNames=["상품 조회","장바구니 담기","결제 시작","주문 완료"];
+  var wishNames=["상품 조회","찜하기","결제 시작","주문 완료"];
+  var cartSegs=dropoffSegs(cartCur.slice(1),cartNames);
+  var wishSegs=dropoffSegs(wishCur.slice(1),wishNames);
+  var html = dropoffGroupHTML("장바구니 경로",cartSegs) + dropoffGroupHTML("찜 경로",wishSegs);
+  var finalLine = (cartOverall==null||wishOverall==null) ? "" :
+    '<div class="dropoff-final">가입 → 주문완료: <b>장바구니 경로 '+pct1(cartOverall)+'</b> / <b>찜 경로 '+pct1(wishOverall)+'</b></div>';
+  el.innerHTML = html + finalLine;
 }
 function renderDailyFunnel(totalCur,totalPrev,cartCumCur,cartCumPrev,wishCumCur,wishCumPrev){
   if(cartCumCur==null || wishCumCur==null){
@@ -738,6 +839,7 @@ function renderDailyFunnel(totalCur,totalPrev,cartCumCur,cartCumPrev,wishCumCur,
   renderFunnelStepCards(cartCur,wishCur,cartCumCur,wishCumCur);
   var cartOverall=cartCumCur.length?cartCumCur[cartCumCur.length-1]:null;
   var wishOverall=wishCumCur.length?wishCumCur[wishCumCur.length-1]:null;
+  renderFunnelDropoff(cartCur,wishCur,cartOverall,wishOverall);
   $("funnel_sub").innerHTML = '가입 → 상품 조회까지는 동일 경로, 이후 <span style="color:'+FUNNEL_CART_COLOR+';font-weight:700">장바구니</span> / <span style="color:'+FUNNEL_WISH_COLOR+';font-weight:700">찜</span> 두 경로로 분기됩니다. 유니크 사용자 기준, 가입 후 30일 내 전환.'
     + (cartOverall!=null&&wishOverall!=null ? (' 최종 전환율은 장바구니 경로 '+pct1(cartOverall)+' vs 찜 경로 '+pct1(wishOverall)+' — 장바구니에 담은 사람이 훨씬 더 잘 삽니다.') : '');
 
@@ -1067,7 +1169,7 @@ function loadDailyAi(){
       +DAILY_LABELS.signup+"', '"+DAILY_LABELS.orders+"', '"+DAILY_LABELS.ratio+"', '"+DAILY_LABELS.revenue+"', '"+DAILY_LABELS.aov
       +"'. '유니크 구매 고객', '구매전환율'이라는 표현은 절대 쓰지 말 것 — "+DAILY_LABELS.orders+"는 주문 건수 기준이며 유니크 고객수 기준이 아니고, "
       +DAILY_LABELS.ratio+"는 동일 사용자 집단의 전환율이 아니라 건수/건수 비율이라 100%를 초과할 수 있음.", data:ctx,
-    question:"아래 데이터를 보고 [변화]→[가능한 원인]→[확인할 데이터] 3파트로 '---' 구분해서 각 1~2문장씩 써줘. 인과관계를 확신하듯 말하지 말고 '~일 가능성' 정도로. 특이 변화가 없으면 그렇다고 짧게 말해줘. "+TONE_GUIDE,
+    question:"아래 데이터를 보고 [변화]→[가능한 원인]→[확인할 데이터] 3파트로 '---' 구분해서 각 1~2문장씩 써줘. 인과관계를 확신하듯 말하지 말고 '~일 가능성' 정도로. 특이 변화가 없으면 그렇다고 짧게 말해줘. [가능한 원인]은 반드시 위에 주어진 데이터 안에서만 근거를 찾아서 말하고, 데이터에 없는 채널·캠페인·외부 요인을 사실처럼 단정하지 말 것 — 프로모션 등은 가능성으로 언급해도 되지만 '~프로모션 때문에'처럼 확정적으로 말하지 말 것. "+TONE_GUIDE,
     dashboard:"d-msztl4gqh03", params:{refdate:$("refdate").value}
   }).then(function(r){ renderTriNote("ai_daily", r.insight, ["변화","가능한 원인","확인할 데이터"]); })
     .catch(function(e){ renderAiNote("ai_daily",""); console.error(e); });
@@ -1094,18 +1196,17 @@ function loadCohortTab(){
     return Promise.all([
       fetchDistribution(distFrom,distTo).catch(function(){return null;}),
       fetchDistribution(distPrevFrom,distPrevTo).catch(function(){return null;}),
-      fetchCohortSegmentDaily(curFrom,curTo).catch(function(){return null;}),
-      fetchCohortTopCategories(curFrom,curTo).catch(function(){return null;})
+      fetchCohortSegmentDaily(curFrom,curTo).catch(function(){return null;})
     ]).then(function(res){
       STATE.cohort={ref:ref,cohortMap:cohortMap,curFrom:curFrom,curTo:curTo,prevFrom:prevFrom,prevTo:prevTo,
-        dist:res[0], distPrev:res[1], distFrom:distFrom, distTo:distTo, segMap:res[2], topCats:res[3]};
+        dist:res[0], distPrev:res[1], distFrom:distFrom, distTo:distTo, segMap:res[2]};
       renderCohortAll();
     });
   }).catch(function(e){
     console.error(e);
     markDbPending("코호트 전환 데이터는 아직 준비 중이에요(주문DB 집계 RPC 설정 필요) — 설정 완료 전까지 D0/D7/D30 등은 \"—\"로 표시됩니다.");
     STATE.cohort={ref:ref,cohortMap:null,curFrom:curFrom,curTo:curTo,prevFrom:prevFrom,prevTo:prevTo,
-      dist:null, distPrev:null, distFrom:distFrom, distTo:distTo, segMap:null, topCats:null};
+      dist:null, distPrev:null, distFrom:distFrom, distTo:distTo, segMap:null};
     renderCohortAll();
   });
 }
@@ -1116,7 +1217,6 @@ function renderCohortAll(){
   renderCohortSegmentDemo();
   renderCohortTable();
   renderCohortDistribution();
-  renderCohortTopCategoriesSection();
   loadCohortAi();
 }
 // 성숙 코호트만 집계(예: D7은 가입 후 7일 이상 지난 코호트만) — 미성숙 코호트를 0%로 오인하지 않도록.
@@ -1340,7 +1440,7 @@ function loadCohortAi(){
   var ctx=buildCohortAiContext();
   return window.MUSTIT.fn("ai-insight",{
     context:"신규유저 첫구매 전환 대시보드 — 코호트 분석 탭. 가입 코호트=주문DB 실제 가입일(Amplitude 아님), 전환=같은 회원의 주문DB 생애최초주문이 가입 후 N일 이내인지, 유니크 회원 기준.", data:ctx,
-    question:"아래 데이터를 보고 [변화]→[가능한 원인]→[확인할 데이터]→[이번 주 액션 아이템] 4파트로 '---' 구분해서 써줘. 앞 3개는 각 1~2문장. [변화]는 전환율이 타임라인 상 '어느 시점(며칠~며칠 사이 가입 코호트)'에서 바뀌었는지에 집중하고, 아직 성숙하지 않은(집계중) 코호트를 낮은 전환율로 오인하지 말고 비교는 성숙도가 맞는 코호트끼리만 근거로 삼아줘. 마지막 [이번 주 액션 아이템]은 실행 가능한 액션을 1~2개, 우선순위(1순위/2순위)를 붙여 제안하고 각 액션 옆에 예상 기대효과를 괄호로 짧게 붙여줘(예: '1순위: OO 재점검 (D7 전환율 소폭 개선 예상)'). 인과관계를 확신하듯 말하지 말고 '~일 가능성' 정도로. 특이 변화가 없으면 그렇다고 짧게 말해줘. "+TONE_GUIDE,
+    question:"아래 데이터를 보고 [변화]→[가능한 원인]→[확인할 데이터]→[이번 주 액션 아이템] 4파트로 '---' 구분해서 써줘. 앞 3개는 각 1~2문장. [변화]는 전환율이 타임라인 상 '어느 시점(며칠~며칠 사이 가입 코호트)'에서 바뀌었는지에 집중하고, 아직 성숙하지 않은(집계중) 코호트를 낮은 전환율로 오인하지 말고 비교는 성숙도가 맞는 코호트끼리만 근거로 삼아줘. 마지막 [이번 주 액션 아이템]은 실행 가능한 액션을 1~2개, 우선순위(1순위/2순위)를 붙여 제안하고 각 액션 옆에 예상 기대효과를 괄호로 짧게 붙여줘(예: '1순위: OO 재점검 (D7 전환율 소폭 개선 예상)'). [가능한 원인]과 [이번 주 액션 아이템] 모두 반드시 위에 주어진 데이터 안에서 확인되는 것에만 근거해서 말할 것 — 데이터에 없는 채널·캠페인·이벤트를 사실처럼 단정하거나, 그런 것이 이미 진행됐다는 전제로 액션을 제안하지 말 것. 프로모션 등은 액션으로 제안하는 것 자체는 괜찮음. 인과관계를 확신하듯 말하지 말고 '~일 가능성' 정도로. 특이 변화가 없으면 그렇다고 짧게 말해줘. "+TONE_GUIDE,
     dashboard:"d-msztl4gqh03", params:{refdate:$("refdate").value}
   }).then(function(r){ renderTriNote("ai_cohort", r.insight, ["변화","가능한 원인","확인할 데이터","이번 주 액션 아이템"]); })
     .catch(function(e){ renderAiNote("ai_cohort",""); console.error(e); });

@@ -216,7 +216,7 @@
 
 <!-- 판매자·거래액 클릭 시 상품별 거래액 -->
 <div class="modal" id="prodmodal">
-  <div class="modalbox" style="width:700px">
+  <div class="modalbox" style="width:760px">
     <div class="mhead"><b>상품별 거래액</b><button id="prod_close">✕</button></div>
     <p class="mhint" id="prodSub"></p>
     <div class="tblscroll" style="max-height:50vh"><table class="mtbl" id="prodTbl"></table></div>
@@ -444,7 +444,7 @@ function fetchAllPages(ids, range, mode){
 // ── 판매자ID·거래액 클릭 시 상품별 거래액(판매자 1명 단위라 소량이라 페이지네이션 없이도 충분) ──
 function fetchProductRows(sellerId, range, mode){
   var q = window.MUSTIT.client.from("orders_secure")
-    .select("product_id,product_name,quantity,total_purchase")
+    .select("product_id,product_name,opt_size,opt_color,quantity,total_purchase")
     .eq("seller_id", sellerId)
     .gte("order_datetime", range.start)
     .lt("order_datetime", range.end);
@@ -465,8 +465,10 @@ function openProductModal(sellerId, dateStr, mode){
     var byProd = {};
     rows.forEach(function(r){
       var pid = r.product_id!=null ? String(r.product_id) : "";
-      var key = pid || ("name:"+(r.product_name||""));
-      if(!byProd[key]) byProd[key] = { pid:pid, name:r.product_name||"(상품명 없음)", qty:0, gmv:0 };
+      var size = r.opt_size || "";
+      var color = r.opt_color || "";
+      var key = (pid || ("name:"+(r.product_name||"")))+"|"+size+"|"+color;
+      if(!byProd[key]) byProd[key] = { pid:pid, name:r.product_name||"(상품명 없음)", size:size, color:color, qty:0, gmv:0 };
       byProd[key].qty += Number(r.quantity)||0;
       byProd[key].gmv += Number(r.total_purchase)||0;
     });
@@ -478,11 +480,14 @@ function openProductModal(sellerId, dateStr, mode){
       $("prodTbl").innerHTML = '<tbody><tr><td style="color:#999;padding:12px 4px">해당 기간에 판매 내역이 없습니다.</td></tr></tbody>';
       return;
     }
-    var thead = '<thead><tr><th>상품번호</th><th>상품명</th><th style="text-align:right">수량</th><th style="text-align:right">거래액</th></tr></thead>';
+    var thead = '<thead><tr><th>상품번호</th><th>상품명</th><th style="width:52px;text-align:center">사이즈</th><th style="width:52px;text-align:center">컬러</th><th style="text-align:right">수량</th><th style="text-align:right">거래액</th></tr></thead>';
     var tbody = "<tbody>"+list.map(function(x){
-      return "<tr><td>"+esc(x.pid||"-")+"</td><td>"+esc(x.name)+'</td><td style="text-align:right">'+won(x.qty)+'</td><td style="text-align:right">'+won(x.gmv)+"</td></tr>";
+      return "<tr><td>"+esc(x.pid||"-")+"</td><td>"+esc(x.name)+'</td>'+
+        '<td style="text-align:center;font-size:11px;color:var(--sub)">'+esc(x.size||"-")+'</td>'+
+        '<td style="text-align:center;font-size:11px;color:var(--sub)">'+esc(x.color||"-")+'</td>'+
+        '<td style="text-align:right">'+won(x.qty)+'</td><td style="text-align:right">'+won(x.gmv)+"</td></tr>";
     }).join("")+
-      '<tr style="font-weight:700;background:#f8f7f3"><td colspan="2">합계</td><td style="text-align:right">'+won(totQty)+'</td><td style="text-align:right">'+won(totGmv)+"</td></tr>"+
+      '<tr style="font-weight:700;background:#f8f7f3"><td colspan="4">합계</td><td style="text-align:right">'+won(totQty)+'</td><td style="text-align:right">'+won(totGmv)+"</td></tr>"+
       "</tbody>";
     $("prodTbl").innerHTML = thead+tbody;
   }).catch(function(e){ $("prodSub").textContent = "오류: "+e.message; });

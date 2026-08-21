@@ -262,7 +262,7 @@ var ALL_SELLERS = [];
 var SORT = { key:"product_count", dir:"desc" };
 var PAGE_SIZE = 30, PAGE = 0;
 var COLS = [
-  ["seller_id","판매자ID"], ["product_count","등록 상품수"], ["matched_count","카탈로그 매칭"], ["unmatched","미매칭"], ["rate","매칭률"]
+  ["seller_id","판매자ID"], ["product_count","등록된 상품수"], ["matched_count","카탈로그 매칭 수"], ["rate","매칭률"]
 ];
 function sortAll(){
   var k = SORT.key, dir = SORT.dir==="asc" ? 1 : -1;
@@ -295,7 +295,6 @@ function paintTable(){
       '<td>'+esc(r.seller_id)+'</td>'+
       '<td class="num">'+won(r.product_count)+'</td>'+
       '<td class="num">'+won(r.matched_count)+'</td>'+
-      '<td class="num">'+won(r.unmatched)+'</td>'+
       '<td class="num">'+pct(r.rate)+'</td>'+
     '</tr>';
   }).join("")+"</tbody>";

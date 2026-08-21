@@ -1436,8 +1436,22 @@ var SEGMENT_FIELDS = [
   {key:"age_band",     label:"연령대", type:"text"},
   {key:"region_sido",  label:"지역(시도)", type:"text"},
   {key:"customer_type",label:"고객 유형", type:"text"},
+  {key:"join_year",    label:"가입연도", type:"text"},
   {key:"pref_platform",label:"주 이용 플랫폼", type:"text"},
-  {key:"pref_payment", label:"주 결제수단", type:"text"}
+  {key:"pref_payment", label:"주 결제수단", type:"text"},
+  {key:"pref_brand",           label:"선호 브랜드(최다 구매)", type:"text"},
+  {key:"pref_order_type",      label:"선호 주문유형", type:"text"},
+  {key:"pref_category_gender", label:"선호 카테고리 성별구분", type:"text"},
+  {key:"pref_category_l",      label:"선호 대카테고리", type:"text"},
+  {key:"pref_category_m",      label:"선호 중카테고리", type:"text"},
+  {key:"pref_category_s",      label:"선호 소카테고리", type:"text"},
+  {key:"pref_product_division",label:"선호 상품구분", type:"text"},
+  {key:"pref_seller_id",       label:"선호 판매자(ID)", type:"text"},
+  {key:"pref_seller_grade",    label:"선호 판매자등급", type:"text"},
+  {key:"pref_ship_origin",     label:"선호 배송출발지(국내/해외)", type:"text"},
+  {key:"pref_courier",         label:"선호 택배사", type:"text"},
+  {key:"pref_naver_discount",  label:"네이버할인 적용 성향", type:"text"},
+  {key:"pref_order_status",    label:"주 주문상태", type:"text"}
 ];
 var SEGMENT_VALUE_SUGGESTIONS = {
   buyer_gender: ["여성","남성"],
@@ -1454,14 +1468,29 @@ var CUSTOMER_AGG = null; // null=아직 안 불러옴, 배열=회원별 집계 �
 var CUSTOMER_AGG_LOADING = false;
 function d10Local(s){ return String(s).slice(0,10); }
 function daysBetween(a, b){ return Math.round((new Date(a+"T00:00:00") - new Date(b+"T00:00:00")) / 86400000); }
+// 주문마다 값이 바뀔 수 있는 속성(브랜드·카테고리·플랫폼 등)은 "가장 많이 나온 값"(mode)을 선호값으로 집계.
+// 고객마다 고정인 속성(등급·성별·연령대 등)은 그냥 마지막 값을 사용(max와 동일 효과).
+var SEG_MODE_FIELDS = [
+  {row:"platform", out:"pref_platform"}, {row:"payment_method", out:"pref_payment"},
+  {row:"brand", out:"pref_brand"}, {row:"order_type", out:"pref_order_type"},
+  {row:"category_gender", out:"pref_category_gender"}, {row:"category_l", out:"pref_category_l"},
+  {row:"category_m", out:"pref_category_m"}, {row:"category_s", out:"pref_category_s"},
+  {row:"product_division", out:"pref_product_division"}, {row:"seller_id", out:"pref_seller_id"},
+  {row:"seller_grade", out:"pref_seller_grade"}, {row:"ship_origin", out:"pref_ship_origin"},
+  {row:"courier", out:"pref_courier"}, {row:"naver_discount_applied", out:"pref_naver_discount"},
+  {row:"order_status", out:"pref_order_status"}
+];
+var SEG_STABLE_FIELDS = ["member_grade","buyer_gender","age_band","region_sido","customer_type","join_year"];
 function foldRowsIntoAgg(rows, aggMap){
   rows.forEach(function(r){
     var m = r.member_no;
     if(!m) return;
     var a = aggMap[m];
-    if(!a){ a = aggMap[m] = { orderSet:{}, gmv:0, net_rev:0, net_profit:0, lastOrder:null, firstOrder:null,
-      joinDate:null, member_grade:null, buyer_gender:null, age_band:null, region_sido:null, customer_type:null,
-      cancel_cnt:0, platformCnt:{}, paymentCnt:{} }; }
+    if(!a){
+      a = aggMap[m] = { orderSet:{}, gmv:0, net_rev:0, net_profit:0, lastOrder:null, firstOrder:null, joinDate:null, cancel_cnt:0, modeCnt:{} };
+      SEG_STABLE_FIELDS.forEach(function(f){ a[f]=null; });
+      SEG_MODE_FIELDS.forEach(function(f){ a.modeCnt[f.out]={}; });
+    }
     if(r.order_no) a.orderSet[r.order_no]=1;
     var gross=Number(r.gross_revenue)||0, disc=Number(r.own_discount_ttl)||0, fee=Number(r.payment_fee)||0;
     a.gmv += Number(r.total_purchase)||0;
@@ -1471,14 +1500,12 @@ function foldRowsIntoAgg(rows, aggMap){
     if(!a.lastOrder || d>a.lastOrder) a.lastOrder=d;
     if(!a.firstOrder || d<a.firstOrder) a.firstOrder=d;
     if(r.join_date) a.joinDate = r.join_date;
-    if(r.member_grade) a.member_grade = r.member_grade;
-    if(r.buyer_gender) a.buyer_gender = r.buyer_gender;
-    if(r.age_band) a.age_band = r.age_band;
-    if(r.region_sido) a.region_sido = r.region_sido;
-    if(r.customer_type) a.customer_type = r.customer_type;
     if(r.cancel_type) a.cancel_cnt++;
-    if(r.platform) a.platformCnt[r.platform]=(a.platformCnt[r.platform]||0)+1;
-    if(r.payment_method) a.paymentCnt[r.payment_method]=(a.paymentCnt[r.payment_method]||0)+1;
+    SEG_STABLE_FIELDS.forEach(function(f){ if(r[f]) a[f]=r[f]; });
+    SEG_MODE_FIELDS.forEach(function(f){
+      var v = r[f.row];
+      if(v) a.modeCnt[f.out][v] = (a.modeCnt[f.out][v]||0)+1;
+    });
   });
 }
 function finalizeAgg(aggMap){
@@ -1487,17 +1514,17 @@ function finalizeAgg(aggMap){
   return Object.keys(aggMap).map(function(m){
     var a = aggMap[m];
     var orderCnt = Object.keys(a.orderSet).length;
-    return {
+    var out = {
       order_cnt: orderCnt, gmv: Math.round(a.gmv), net_rev: Math.round(a.net_rev), net_profit: Math.round(a.net_profit),
       aov: orderCnt>0 ? Math.round(a.net_rev/orderCnt) : null,
       recency_days: a.lastOrder ? daysBetween(today, a.lastOrder) : null,
       tenure_days: a.firstOrder ? daysBetween(today, a.firstOrder) : null,
       signup_days: a.joinDate ? daysBetween(today, d10Local(a.joinDate)) : null,
-      cancel_cnt: a.cancel_cnt,
-      member_grade: a.member_grade, buyer_gender: a.buyer_gender, age_band: a.age_band,
-      region_sido: a.region_sido, customer_type: a.customer_type,
-      pref_platform: pickMode(a.platformCnt), pref_payment: pickMode(a.paymentCnt)
+      cancel_cnt: a.cancel_cnt
     };
+    SEG_STABLE_FIELDS.forEach(function(f){ out[f]=a[f]; });
+    SEG_MODE_FIELDS.forEach(function(f){ out[f.out]=pickMode(a.modeCnt[f.out]); });
+    return out;
   });
 }
 function fetchRawChunk(from, to, limit){
@@ -1654,7 +1681,7 @@ function fmtSegStats(stats){
     ["평균 GMV", "₩"+won(stats.avg_gmv)],
     ["평균 순매출", "₩"+won(stats.avg_net_rev)],
     ["평균 순이익", "₩"+won(stats.avg_net_profit)],
-    ["평균 구매횟수", stats.avg_order_cnt],
+    ["평균 구매횟수", stats.avg_order_cnt!=null?stats.avg_order_cnt:"—"],
     ["평균 구매경과일", (stats.avg_recency_days!=null?stats.avg_recency_days:"—")+"일"]
   ].map(function(p){ return '<span class="s">'+p[0]+'<b>'+p[1]+'</b></span>'; }).join("")+'</div>';
 }

@@ -275,14 +275,14 @@
 
     <div class="sechd">가입일별 코호트 <span class="badge real">실데이터</span></div>
     <div class="ctrlrow">
-      <button class="deftoggle" id="cohort_detail_toggle" type="button">D1 · D3 · D14 상세보기 ▾</button>
+      <button class="deftoggle" id="cohort_detail_toggle" type="button">D1 · D3 상세보기 ▾</button>
     </div>
     <div class="tblwrap">
       <table class="chtbl" id="cohort_table">
         <thead><tr>
           <th>가입 코호트</th><th>신규 가입자</th><th>D0</th>
           <th class="detailcol">D1</th><th class="detailcol">D3</th>
-          <th>D7</th><th class="detailcol">D14</th><th>D30</th>
+          <th>D7</th><th>D14</th><th>D30</th>
         </tr></thead>
         <tbody id="cohort_table_body"></tbody>
       </table>
@@ -1070,7 +1070,7 @@ function renderCohortTable(){
       var v=n/signup;
       return '<td'+cls+' title="'+won(n)+'명 / 가입자 '+won(signup)+'명">'+pct1(v)+' <span style="color:#b7b3aa;font-size:10.5px">('+won(n)+'/'+won(signup)+')</span></td>';
     }
-    return '<tr><td>'+day+'</td><td>'+won(signup)+'</td>'+cell(0,'d0')+cell(1,'d1',true)+cell(3,'d3',true)+cell(7,'d7')+cell(14,'d14',true)+cell(30,'d30')+'</tr>';
+    return '<tr><td>'+day+'</td><td>'+won(signup)+'</td>'+cell(0,'d0')+cell(1,'d1',true)+cell(3,'d3',true)+cell(7,'d7')+cell(14,'d14')+cell(30,'d30')+'</tr>';
   }).join("");
   $("cohort_table_body").innerHTML=rows;
 }
@@ -1157,7 +1157,7 @@ $("segdemotoggle").addEventListener("click",function(e){
 });
 $("cohort_detail_toggle").addEventListener("click",function(){
   var t=$("cohort_table"); var open=t.classList.toggle("show-detail");
-  $("cohort_detail_toggle").textContent = open? "D1 · D3 · D14 접기 ▴" : "D1 · D3 · D14 상세보기 ▾";
+  $("cohort_detail_toggle").textContent = open? "D1 · D3 접기 ▴" : "D1 · D3 상세보기 ▾";
 });
 
 // ── 탭별 지연 로딩(현재 보는 탭만 조회) ──

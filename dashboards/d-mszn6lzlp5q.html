@@ -138,6 +138,12 @@
   <div class="card"><h3>판매자별 취소 건 <span class="h-sub" style="display:inline">(전체 판매자 · 상위 20)</span></h3><div id="c_seller" class="chart tall"></div></div>
 </div>
 
+<!-- 취소율(판매자별 · 월별) -->
+<div class="grid2">
+  <div class="card"><h3>판매자별 취소율 <span class="h-sub" style="display:inline">(결제완료 5건 이상 판매자만 · 취소율 상위 20)</span></h3><div id="c_seller_rate" class="chart tall"></div></div>
+  <div class="card"><h3>월별 취소율 추이 <span class="h-sub" style="display:inline">(bar=결제완료·취소건수 · line=취소율)</span></h3><div id="c_monthly" class="chart tall"></div></div>
+</div>
+
 <!-- RAW -->
 <div class="rawwrap">
   <div class="rawhead">
@@ -275,13 +281,28 @@ function renderTrend(dates, paidCnt, cnt, amt){
     ]
   }, true);
 }
-function renderBarRank(id, rows, nameKey, valKey, color){
+function renderBarRank(id, rows, nameKey, valKey, color, labelFmt){
   var top = rows.slice(0,20);
+  var label = {show:true, position:"right", fontSize:10, color:"#555"};
+  if(labelFmt) label.formatter = function(p){ return labelFmt(p.value); };
   chart(id).setOption({
     grid:{left:8,right:52,top:8,bottom:8,containLabel:true}, tooltip:TIP,
     xAxis:{type:"value", axisLabel:{fontSize:9,color:"#999"}, splitLine:{lineStyle:{color:"#eee"}}},
     yAxis:{type:"category", data:top.map(function(r){return r[nameKey];}).reverse(), axisLabel:{fontSize:10.5,color:"#555"}, axisTick:{show:false}, axisLine:{lineStyle:{color:"#ddd"}}},
-    series:[{ type:"bar", data:top.map(function(r){return r[valKey];}).reverse(), itemStyle:{color:color}, barMaxWidth:16, label:{show:true, position:"right", fontSize:10, color:"#555"} }]
+    series:[{ type:"bar", data:top.map(function(r){return r[valKey];}).reverse(), itemStyle:{color:color}, barMaxWidth:16, label:label }]
+  }, true);
+}
+function renderMonthlyRate(months, paidArr, cancelArr, rateArr){
+  chart("c_monthly").setOption({
+    grid:GRID, tooltip:TIP, legend:legend(["결제완료건수","취소건수","취소율"]),
+    color:["#b7c6e6","#ee3b52","#111"],
+    xAxis:catAxis(months),
+    yAxis:[valAxisCnt(), { type:"value", position:"right", min:0, axisLabel:{formatter:"{value}%",fontSize:9,color:"#999"}, splitLine:{show:false} }],
+    series:[
+      { name:"결제완료건수", type:"bar", data:paidArr, itemStyle:{color:"#b7c6e6"}, barMaxWidth:30, yAxisIndex:0 },
+      { name:"취소건수", type:"bar", data:cancelArr, itemStyle:{color:"#ee3b52"}, barMaxWidth:30, yAxisIndex:0 },
+      { name:"취소율", type:"line", data:rateArr, yAxisIndex:1, symbol:"circle", symbolSize:4, lineStyle:{color:"#111",width:1.6}, itemStyle:{color:"#111"} }
+    ]
   }, true);
 }
 
@@ -333,7 +354,7 @@ function fetchAllCancels(from, to, filters, productName, stat){
 function queryPaidPage(from, toExcl, filters, productName, offset, limit){
   var odFrom = addDays(from, -30);
   var q = window.MUSTIT.client.from("orders_secure")
-    .select("paid_at")
+    .select("paid_at,seller_id")
     .gte("paid_at", from)
     .lt("paid_at", toExcl)
     .gte("order_datetime", odFrom)
@@ -355,6 +376,46 @@ function fetchAllPaid(from, to, filters, productName, stat){
       if(acc.length >= cap){ stat.paidTruncated = true; return acc; }
       if(THUMB) return acc;
       return next(offset+page, acc);
+    });
+  }
+  return next(0, []);
+}
+
+// ── 월별 취소율 추이: 행을 안 당기고 count(head:true)만 월별로 순차 조회 ──
+// (긴 기간을 선택해도 RAW 행상한(Q_CAP)에 걸리지 않도록 집계 자체를 서버 count로 받는다)
+function monthBuckets(from, to){
+  var out=[]; var toExcl = addDays(to, 1); var curStart = from;
+  while(curStart < toExcl){
+    var d = new Date(curStart+"T00:00:00");
+    var y = d.getFullYear(), m0 = d.getMonth();
+    var nextMonthStart = ymd(new Date(y, m0+1, 1));
+    var bucketEndExcl = nextMonthStart < toExcl ? nextMonthStart : toExcl;
+    out.push({ label:y+"-"+String(m0+1).padStart(2,"0"), from:curStart, toExcl:bucketEndExcl });
+    curStart = bucketEndExcl;
+  }
+  return out;
+}
+function countOrders(from, toExcl, filters, productName, onlyCancelled){
+  var odFrom = addDays(from, -30);
+  var q = window.MUSTIT.client.from("orders_secure")
+    .select("order_no", {count:"exact", head:true})
+    .gte("paid_at", from).lt("paid_at", toExcl)
+    .gte("order_datetime", odFrom).lt("order_datetime", toExcl);
+  if(onlyCancelled) q = q.not("cancel_done_at","is",null);
+  q = applyFilters(q, filters);
+  if(productName) q = q.ilike("product_name", "%"+productName+"%");
+  return q.then(function(res){ if(res.error) throw res.error; return res.count||0; });
+}
+function fetchMonthlyRates(from, to, filters, filtersNoCancel, productName){
+  var buckets = monthBuckets(from, to);
+  function next(i, acc){
+    if(i >= buckets.length) return acc;
+    var b = buckets[i];
+    return countOrders(b.from, b.toExcl, filtersNoCancel, productName, false).then(function(paid){
+      return countOrders(b.from, b.toExcl, filters, productName, true).then(function(cancel){
+        acc.push({ month:b.label, paid:paid, cancel:cancel, rate: paid ? (cancel/paid*100) : 0 });
+        return next(i+1, acc);
+      });
     });
   }
   return next(0, []);
@@ -487,9 +548,10 @@ function refresh(){
   $("loading").classList.add("on"); $("err").textContent="";
   Promise.all([
     fetchAllCancels(from, to, filters, pn, stat),
-    fetchAllPaid(from, to, filtersNoCancel, pn, stat)
+    fetchAllPaid(from, to, filtersNoCancel, pn, stat),
+    THUMB ? Promise.resolve([]) : fetchMonthlyRates(from, to, filters, filtersNoCancel, pn)
   ]).then(function(res){
-    var rows = withCancelDays(res[0]), paidRows = res[1];
+    var rows = withCancelDays(res[0]), paidRows = res[1], monthly = res[2];
     RAW_TRUNC = stat.truncated;
     renderKPI(rows, paidRows.length, stat.paidTruncated);
     OPTS.cancel_type = uniqueVals(rows, "cancel_type");
@@ -512,6 +574,29 @@ function refresh(){
     // 판매자별(전체 판매자 랭킹)
     var bySeller = groupCount(rows, "seller_id", "미기재");
     renderBarRank("c_seller", bySeller.slice(0,20), "name", "cnt", "#f2937f");
+
+    // 판매자별 취소율 — 절대건수 랭킹은 원래 거래량 많은 판매자가 항상 상위라 왜곡되니
+    // 결제완료건수 대비 비율로 별도 산출(표본 왜곡 방지로 결제완료 5건 이상만 포함)
+    var MIN_PAID_FOR_RATE = 5;
+    var cancelBySeller = {}; bySeller.forEach(function(s){ cancelBySeller[s.name] = s.cnt; });
+    var paidBySeller = {};
+    paidRows.forEach(function(r){ if(r.seller_id) paidBySeller[r.seller_id] = (paidBySeller[r.seller_id]||0)+1; });
+    var sellerRate = Object.keys(paidBySeller)
+      .filter(function(sid){ return paidBySeller[sid] >= MIN_PAID_FOR_RATE; })
+      .map(function(sid){
+        var paidC = paidBySeller[sid], cancelC = cancelBySeller[sid] || 0;
+        return { name:sid, rate:cancelC/paidC*100, paid:paidC, cancel:cancelC };
+      })
+      .sort(function(a,b){ return b.rate - a.rate; });
+    renderBarRank("c_seller_rate", sellerRate.slice(0,20), "name", "rate", "#c0392b", function(v){ return v.toFixed(1)+"%"; });
+
+    // 월별 취소율 추이
+    renderMonthlyRate(
+      monthly.map(function(m){return m.month;}),
+      monthly.map(function(m){return m.paid;}),
+      monthly.map(function(m){return m.cancel;}),
+      monthly.map(function(m){return Math.round(m.rate*10)/10;})
+    );
 
     renderRaw(rows);
   }).catch(function(e){ $("err").textContent = "오류: "+e.message; })

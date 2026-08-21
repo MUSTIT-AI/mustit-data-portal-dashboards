@@ -121,7 +121,7 @@
 <div class="ctrlbar">
   <div class="fld"><label>조회 기준일</label><input type="date" id="refdate"></div>
   <button class="gobtn" id="go">조회</button>
-  <span class="txt" style="margin-left:auto;max-width:420px">기준일로부터 최근 30일 등 고정 기간을 자동으로 계산합니다. 과거 특정일 기준으로 보고 싶을 때만 날짜를 바꿔주세요.</span>
+  <span class="txt" style="margin-left:auto;max-width:420px">기준일로부터 최근 30일 등 고정 기간을 자동으로 계산합니다. 기본값은 전일입니다(주문DB에 당일 데이터가 아직 반영되지 않아 "오늘"을 기준일로 두면 신규 구매 관련 값이 0으로 보일 수 있음). 과거 특정일 기준으로 보고 싶을 때만 날짜를 바꿔주세요.</span>
 </div>
 <div class="srcnote">📌 <b>신규 유저</b>: Amplitude 기준(complete_signup) · <b>신규 구매 건수·매출</b>: 실제 주문 DB의 <b>생애 최초 주문</b> 기준, customer_type(신규/기존 첫구매) 컬럼으로 판별 · 건수 기준 집계(Amplitude complete_order 이벤트는 사용하지 않음) · 국내·봇/크롤러 트래픽은 제외</div>
 <div class="dbwarn" id="dbwarn"></div>
@@ -692,7 +692,7 @@ function showTab(n){
     loadTab(n).catch(function(e){ console.error(e); }).finally(function(){ $("loading").classList.remove("on"); });
   }
 }
-function setDefaults(){ $("refdate").value = ymd(new Date()); }
+function setDefaults(){ $("refdate").value = ymd(addDays(new Date(),-1)); } // 주문DB 반영 지연 때문에 "오늘"은 데이터가 비어있음 → 기본값은 항상 전일
 function refresh(){
   if(THUMB) return;
   $("lastupdate").textContent="Last updated: "+fmtDT(new Date());

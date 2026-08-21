@@ -282,6 +282,7 @@ var OKR={
 var OFFSITE_ORDER_TYPES=["CJ API"];  // order_type 제외 대상(현재 데이터 미존재→실질 전체)
 var EXTERNAL_PAY_RE=/external/i;      // 결제수단 external 제외
 var CPS_MAIN="mustit_partner_77";    // CPS 주력 매출코드(제휴)
+var CPS_CODES=["mustit_partner_77"]; // CPS·제휴 KR 대상 매출코드(GMV 기준). 검색광고(partner81/google_sp 등) 제외. 필요시 확장.
 var MODE="compare";                  // compare(조회+비교) | view(조회만)
 /* 이상징후 임계 (spec §6 Step1) */
 var TH={ gmv:0.05, buyers:0.05, signup:0.05, rate:0.01, aov:0.05, cancel:0.03, seg:0.08 };
@@ -371,7 +372,7 @@ function cpsCumulative(from,to,sf){
   while(s<=end){ var e=new Date(s.getFullYear(),s.getMonth()+1,0); if(e>end)e=end; chunks.push([ymd(s),ymd(e)]); s=new Date(s.getFullYear(),s.getMonth()+1,1); }
   var total=0, seq=Promise.resolve();
   chunks.forEach(function(c){ seq=seq.then(function(){ return rpc("dash_raw",{p:{from:c[0],to:c[1],filters:sf},p_limit:20000})
-    .then(function(rows){ (rows||[]).forEach(function(r){ if(r.sales_code!=null&&String(r.sales_code)!=="") total+=num(r.total_purchase); }); })
+    .then(function(rows){ (rows||[]).forEach(function(r){ if(CPS_CODES.indexOf(r.sales_code)>=0) total+=num(r.total_purchase); }); })
     .catch(function(e){ console.warn("cps chunk fail",c,e.message); /* 일부 청크 실패해도 진행 */ }); }); });
   return seq.then(function(){return total;});
 }
@@ -403,7 +404,7 @@ function filt(rows,fn){return rows.filter(fn);}
 function isRep(r){return r.customer_type==="기존(재구매)";}
 function isNew(r){return r.customer_type==="신규";}                                   // 신규 가입 코호트(첫구매 시점 분석용)
 function isFirstBuy(r){return r.customer_type==="신규"||r.customer_type==="기존(첫구매)";} // 신규 첫구매 KR
-function isCps(r){return r.sales_code!=null&&String(r.sales_code)!=="";}
+function isCps(r){return CPS_CODES.indexOf(r.sales_code)>=0;}
 function groupSum(rows,keyFn,valFn){var m={};rows.forEach(function(r){var k=keyFn(r);if(k==null||k==="")k="(미상)";m[k]=(m[k]||0)+(valFn?valFn(r):num(r.total_purchase));});return m;}
 function groupBuyers(rows,keyFn){var m={};rows.forEach(function(r){var k=keyFn(r);if(k==null||k==="")k="(미상)";(m[k]=m[k]||{})[r.buyer_hash]=1;});var o={};Object.keys(m).forEach(function(k){o[k]=Object.keys(m[k]).length;});return o;}
 

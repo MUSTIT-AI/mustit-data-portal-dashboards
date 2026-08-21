@@ -141,6 +141,8 @@
   .tm_preview{margin-top:10px;padding:12px;background:#f7f6f2;border-radius:8px;text-align:center;font-size:22px;font-weight:800}
   .tm_preview .l{font-size:11px;color:var(--sub);font-weight:600;margin-bottom:4px}
   /* 세그먼트 등록 페이지 */
+  .segdatabox{background:#fff8ec;border:1px solid #f0dfb8;border-radius:10px;padding:10px 14px;margin-bottom:14px}
+  .segdatarow{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
   .segtoolbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px}
   .seglist{display:flex;flex-direction:column;gap:10px;margin:14px 0}
   .segcard{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:14px 16px;cursor:pointer;transition:box-shadow .15s}
@@ -265,13 +267,24 @@
       </div>
     </div>
     <div class="wrap" id="page_segment" style="display:none">
+      <div class="segdatabox" id="segdatabox">
+        <div class="segdatarow">
+          <button class="btn reset" id="seg_loaddata" type="button">📥 전체 고객 데이터 불러오기(브라우저 집계)</button>
+          <span class="hint" id="seg_data_status">아직 안 불러옴 — 세그먼트 미리보기 전에 먼저 눌러주세요.</span>
+        </div>
+        <p class="note" style="margin:6px 0 0">
+          ⚠ 서버 집계 함수(<code>dash_customer_segment_preview</code>)가 아직 배포되지 않아, 임시로 <b>주문 원본을 이 브라우저로 직접 받아 회원번호별로 묶는 방식</b>을 씁니다.
+          기간을 나눠 순차 조회해서 <b>다소 시간이 걸리고</b>, 원본 전체 컬럼(<code>dash_raw_all</code>)을 쓰기 때문에 <b>개인정보 열람 권한이 있는 계정만</b> 사용할 수 있습니다.
+          서버 함수가 배포되면 자동으로 그쪽을 우선 사용하도록 바뀔 예정입니다.
+        </p>
+      </div>
       <div class="segtoolbar">
         <button class="btn go" id="seg_add" type="button">+ 세그먼트 생성</button>
-        <span class="hint">주문 데이터 기준 고객 속성으로 AND/OR 조건을 조합해 세그먼트를 만듭니다 · 개인 식별정보(회원번호 등)는 노출되지 않고 집계 수치만 계산됩니다.</span>
+        <span class="hint">주문 데이터 기준 고객 속성으로 AND/OR 조건을 조합해 세그먼트를 만듭니다 · 개인 식별정보(회원번호 등)는 화면에 노출되지 않고 집계 수치만 계산됩니다.</span>
       </div>
       <div class="seglist" id="seglist"></div>
-      <p class="note" id="seg_rpc_hint" style="display:none">⚠ 서버에 세그먼트 집계 함수(<code>dash_customer_segment_preview</code>)가 아직 배포되지 않아 미리보기가 안 됩니다 — 관리자가 SQL 마이그레이션을 한 번 실행해야 합니다.</p>
-      <p class="note">세그먼트 구성은 <b>이 브라우저에만</b> 저장됩니다(localStorage, 공유 안 됨).</p>
+      <p class="note" id="seg_rpc_hint" style="display:none">⚠ 서버에 세그먼트 집계 함수(<code>dash_customer_segment_preview</code>)가 아직 배포되지 않아 미리보기가 안 됩니다 — 위 "전체 고객 데이터 불러오기"를 먼저 실행하거나, 관리자가 SQL 마이그레이션을 실행해주세요.</p>
+      <p class="note">세그먼트 구성은 <b>이 브라우저에만</b> 저장됩니다(localStorage, 공유 안 됨) · 불러온 고객 데이터도 새로고침하면 다시 불러와야 합니다(메모리에만 보관, 저장 안 됨).</p>
     </div>
 
     <div class="pager">
@@ -1448,6 +1461,147 @@ var SEGMENT_VALUE_SUGGESTIONS = {
 };
 function segFieldByKey(k){ return SEGMENT_FIELDS.filter(function(f){return f.key===k;})[0] || SEGMENT_FIELDS[0]; }
 
+// ── 브라우저 집계 모드(임시) — 서버 집계 함수가 배포되기 전까지, 주문 원본(dash_raw_all)을 기간별로
+// 순차 조회해 회원번호별로 이 브라우저에서 직접 묶는다. 개인정보 열람 권한(can_view_pii) 필요.
+// CLAUDE.md의 "집계는 DB에서, 원본을 내려받지 말 것" 원칙과 어긋나는 임시 방편 — 서버 함수가 생기면 그쪽을 우선 사용.
+var CUSTOMER_AGG = null; // null=아직 안 불러옴, 배열=회원별 집계 완료(메모리에만 보관, 새로고침하면 사라짐)
+var CUSTOMER_AGG_LOADING = false;
+function d10Local(s){ return String(s).slice(0,10); }
+function daysBetween(a, b){ return Math.round((new Date(a+"T00:00:00") - new Date(b+"T00:00:00")) / 86400000); }
+function foldRowsIntoAgg(rows, aggMap){
+  rows.forEach(function(r){
+    var m = r.member_no;
+    if(!m) return;
+    var a = aggMap[m];
+    if(!a){ a = aggMap[m] = { orderSet:{}, gmv:0, net_rev:0, net_profit:0, lastOrder:null, firstOrder:null,
+      joinDate:null, member_grade:null, buyer_gender:null, age_band:null, region_sido:null, customer_type:null,
+      cancel_cnt:0, platformCnt:{}, paymentCnt:{} }; }
+    if(r.order_no) a.orderSet[r.order_no]=1;
+    var gross=Number(r.gross_revenue)||0, disc=Number(r.own_discount_ttl)||0, fee=Number(r.payment_fee)||0;
+    a.gmv += Number(r.total_purchase)||0;
+    a.net_rev += (gross-disc);
+    a.net_profit += (gross-disc-fee);
+    var d = d10Local(r.order_datetime);
+    if(!a.lastOrder || d>a.lastOrder) a.lastOrder=d;
+    if(!a.firstOrder || d<a.firstOrder) a.firstOrder=d;
+    if(r.join_date) a.joinDate = r.join_date;
+    if(r.member_grade) a.member_grade = r.member_grade;
+    if(r.buyer_gender) a.buyer_gender = r.buyer_gender;
+    if(r.age_band) a.age_band = r.age_band;
+    if(r.region_sido) a.region_sido = r.region_sido;
+    if(r.customer_type) a.customer_type = r.customer_type;
+    if(r.cancel_type) a.cancel_cnt++;
+    if(r.platform) a.platformCnt[r.platform]=(a.platformCnt[r.platform]||0)+1;
+    if(r.payment_method) a.paymentCnt[r.payment_method]=(a.paymentCnt[r.payment_method]||0)+1;
+  });
+}
+function finalizeAgg(aggMap){
+  var today = ymd(new Date());
+  function pickMode(cnt){ var best=null,bestN=-1; Object.keys(cnt).forEach(function(k){ if(cnt[k]>bestN){bestN=cnt[k];best=k;} }); return best; }
+  return Object.keys(aggMap).map(function(m){
+    var a = aggMap[m];
+    var orderCnt = Object.keys(a.orderSet).length;
+    return {
+      order_cnt: orderCnt, gmv: Math.round(a.gmv), net_rev: Math.round(a.net_rev), net_profit: Math.round(a.net_profit),
+      aov: orderCnt>0 ? Math.round(a.net_rev/orderCnt) : null,
+      recency_days: a.lastOrder ? daysBetween(today, a.lastOrder) : null,
+      tenure_days: a.firstOrder ? daysBetween(today, a.firstOrder) : null,
+      signup_days: a.joinDate ? daysBetween(today, d10Local(a.joinDate)) : null,
+      cancel_cnt: a.cancel_cnt,
+      member_grade: a.member_grade, buyer_gender: a.buyer_gender, age_band: a.age_band,
+      region_sido: a.region_sido, customer_type: a.customer_type,
+      pref_platform: pickMode(a.platformCnt), pref_payment: pickMode(a.paymentCnt)
+    };
+  });
+}
+function fetchRawChunk(from, to, limit){
+  return window.MUSTIT.rpc("dash_raw_all", {p:{from:from,to:to}, p_limit:limit}).then(function(rows){ return rows||[]; });
+}
+// 반환행수==p_limit이면 잘린 것 — 구간을 반으로 쪼개 재귀 재조회(하루 단위까지 잘리면 그냥 받은 것만 사용)
+function fetchRangeRecursive(from, to, limit, aggMap, onProgress){
+  return fetchRawChunk(from, to, limit).then(function(rows){
+    if(rows.length===limit && from!==to){
+      var f=new Date(from+"T00:00:00"), t=new Date(to+"T00:00:00");
+      var midMs = f.getTime() + Math.floor((t.getTime()-f.getTime())/2/86400000)*86400000;
+      var mid = ymd(new Date(midMs)), mid2 = ymd(new Date(midMs+86400000));
+      if(mid===from){ foldRowsIntoAgg(rows, aggMap); onProgress(rows.length); return; }
+      return fetchRangeRecursive(from, mid, limit, aggMap, onProgress)
+        .then(function(){ return fetchRangeRecursive(mid2, to, limit, aggMap, onProgress); });
+    }
+    foldRowsIntoAgg(rows, aggMap);
+    onProgress(rows.length);
+  });
+}
+function loadCustomerAggFromBrowser(){
+  if(CUSTOMER_AGG_LOADING) return;
+  CUSTOMER_AGG_LOADING = true;
+  $("seg_loaddata").disabled = true;
+  var aggMap = {}, totalRows = 0, emptyStreak = 0;
+  var WINDOW_DAYS = 14, LIMIT = 8000;
+  var end = new Date(); end.setDate(end.getDate()-1);
+  var EARLIEST = new Date("2005-01-01T00:00:00");
+  function statusMsg(msg){ $("seg_data_status").textContent = msg; }
+  function step(){
+    if(end < EARLIEST || emptyStreak>=8){
+      CUSTOMER_AGG = finalizeAgg(aggMap);
+      CUSTOMER_AGG_LOADING = false;
+      $("seg_loaddata").disabled = false;
+      statusMsg("완료 — 고객 "+won(CUSTOMER_AGG.length)+"명, 주문행 "+won(totalRows)+"건 반영");
+      $("seg_rpc_hint").style.display = "none";
+      renderSegList();
+      return;
+    }
+    var toD = ymd(end);
+    var fromDate = new Date(end.getTime()); fromDate.setDate(fromDate.getDate()-(WINDOW_DAYS-1));
+    var fromD = ymd(fromDate);
+    statusMsg(fromD+" ~ "+toD+" 조회 중… (지금까지 고객 "+won(Object.keys(aggMap).length)+"명, 주문행 "+won(totalRows)+"건)");
+    fetchRangeRecursive(fromD, toD, LIMIT, aggMap, function(n){ totalRows+=n; emptyStreak = n===0 ? emptyStreak+1 : 0; })
+      .then(function(){ end = new Date(fromDate.getTime()); end.setDate(end.getDate()-1); step(); })
+      .catch(function(e){
+        CUSTOMER_AGG_LOADING = false;
+        $("seg_loaddata").disabled = false;
+        statusMsg("오류: "+e.message);
+      });
+  }
+  step();
+}
+function evalCond(cust, cond){
+  var f = segFieldByKey(cond.field);
+  if(f.type==="number"){
+    var v = cust[cond.field];
+    if(v==null || cond.value==null) return false;
+    switch(cond.op){
+      case ">=": return v>=cond.value; case "<=": return v<=cond.value;
+      case "=": return v===cond.value; case "!=": return v!==cond.value;
+      case ">": return v>cond.value; case "<": return v<cond.value;
+      default: return false;
+    }
+  }
+  var inList = (cond.values||[]).indexOf(cust[cond.field]) !== -1;
+  return cond.op==="not in" ? !inList : inList;
+}
+function matchesConditions(cust, conds){
+  if(!conds || !conds.length) return true;
+  var acc = evalCond(cust, conds[0]);
+  for(var i=1;i<conds.length;i++){ acc = (conds[i].join==="OR") ? (acc || evalCond(cust, conds[i])) : (acc && evalCond(cust, conds[i])); }
+  return acc;
+}
+function statsFromBrowserAgg(conditions){
+  var matched = CUSTOMER_AGG.filter(function(c){ return matchesConditions(c, conditions); });
+  var n = matched.length;
+  function avgOf(key){ if(!n) return null; var s=0,cnt=0; matched.forEach(function(c){ if(c[key]!=null){s+=c[key];cnt++;} }); return cnt?Math.round(s/cnt):null; }
+  return {
+    count:n, avg_gmv:avgOf("gmv"), avg_net_rev:avgOf("net_rev"), avg_net_profit:avgOf("net_profit"),
+    avg_order_cnt: n ? Math.round((matched.reduce(function(a,c){return a+c.order_cnt;},0)/n)*10)/10 : null,
+    avg_recency_days: avgOf("recency_days")
+  };
+}
+// 브라우저 집계가 로드돼 있으면 그걸로 즉시 계산, 아니면 서버 함수 시도(배포 전이면 실패 → 안내 문구 표시)
+function computeSegmentStats(conditions){
+  if(CUSTOMER_AGG) return Promise.resolve(statsFromBrowserAgg(conditions));
+  return window.MUSTIT.rpc("dash_customer_segment_preview", {p:{conditions:conditions}});
+}
+
 var SEG_KEY = "auc_segments_"+FILE;
 var SEGMENTS = [];
 function loadSegments(){
@@ -1500,7 +1654,7 @@ function segmentCardHTML(s){
 }
 function refreshSegmentStats(s){
   var el = $("segstats_"+s.id);
-  return window.MUSTIT.rpc("dash_customer_segment_preview", {p:{conditions:s.conds}}).then(function(r){
+  return computeSegmentStats(s.conds).then(function(r){
     if(el) el.innerHTML = fmtSegStats(r);
   }).catch(function(e){
     if(el) el.innerHTML = '<span class="s" style="color:var(--red)">미리보기 실패: '+esc(e.message)+'</span>';
@@ -1600,10 +1754,10 @@ function renderSegConds(){
 function schedulePreview(){ clearTimeout(SM_PREVIEW_TIMER); SM_PREVIEW_TIMER = setTimeout(runPreview, 400); }
 function runPreview(){
   $("sm_preview").innerHTML = '불러오는 중…';
-  window.MUSTIT.rpc("dash_customer_segment_preview", {p:{conditions:SM_EDIT_CONDS}}).then(function(r){
+  computeSegmentStats(SM_EDIT_CONDS).then(function(r){
     $("sm_preview").innerHTML = fmtSegStats(r);
   }).catch(function(e){
-    $("sm_preview").innerHTML = '<span style="color:var(--red)">미리보기 실패: '+esc(e.message)+' (서버 함수 미배포일 수 있음)</span>';
+    $("sm_preview").innerHTML = '<span style="color:var(--red)">미리보기 실패: '+esc(e.message)+' (서버 함수 미배포 또는 "전체 고객 데이터 불러오기" 미실행)</span>';
   });
 }
 function openSegmentModal(id){
@@ -1648,6 +1802,7 @@ $("sm_del").onclick = function(){
   closeSegmentModal();
 };
 $("seg_add").onclick = function(){ openSegmentModal(null); };
+$("seg_loaddata").onclick = loadCustomerAggFromBrowser;
 
 $("sw_add").onclick=function(){ openTileModal(null); };
 $("tiles_go").onclick=function(){ refreshAllTiles(); };

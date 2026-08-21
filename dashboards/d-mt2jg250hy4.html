@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="../favicon.svg">
-<title>[상품] 판매자별 상품수 · MUST IT</title>
+<title>[카탈로그] 판매자별 매칭율 · MUST IT</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../auth.js"></script>
@@ -41,7 +41,7 @@
   .filters{background:#fff;border-bottom:1px solid var(--border);padding:8px 12px;display:flex;flex-wrap:wrap;gap:7px 10px;align-items:flex-end;position:sticky;top:39px;z-index:30}
   .fld{display:flex;flex-direction:column;gap:3px}
   .fld label{font-size:10.5px;color:var(--sub);font-weight:600;letter-spacing:.02em}
-  .fld input[type=text]{border:1px solid #d6d4ce;border-radius:6px;padding:5px 7px;font-size:12px;background:#fff;height:29px}
+  .fld input[type=text],.fld input[type=date]{border:1px solid #d6d4ce;border-radius:6px;padding:5px 7px;font-size:12px;background:#fff;height:29px}
   .btns{display:flex;gap:6px;margin-left:auto}
   .btn{border:0;border-radius:7px;padding:6px 15px;font-size:12.5px;font-weight:700;cursor:pointer;height:29px}
   .btn.go{background:var(--red);color:#fff}
@@ -51,8 +51,8 @@
   .wrap{max-width:100%;padding:14px 20px}
   .note{color:var(--sub);font-size:11.5px;margin:0 0 10px;line-height:1.6}
   .note b{color:var(--ink)}
-  .kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px}
-  @media(max-width:560px){.kpis{grid-template-columns:1fr}}
+  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px}
+  @media(max-width:700px){.kpis{grid-template-columns:1fr}}
   .kpi{background:#fff;padding:14px 16px;text-align:center}
   .kpi .l{color:var(--sub);font-size:11.5px;margin-bottom:6px}
   .kpi .v{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
@@ -95,6 +95,8 @@
 </div>
 
 <div class="filters" id="filters">
+  <div class="fld"><label>조회 시작일</label><input type="date" id="from"></div>
+  <div class="fld"><label>조회 종료일</label><input type="date" id="to"></div>
   <div class="fld"><label>판매자 검색</label><input type="text" id="sellerq" placeholder="판매자ID 일부 입력"></div>
   <div class="btns">
     <button class="btn go" id="go">조회</button>
@@ -105,16 +107,16 @@
 
 <div class="wrap">
   <p class="note">
-    <b>전체 판매자 목록</b>입니다(검색은 이미 불러온 목록을 즉시 좁혀볼 뿐 — DB를 다시 조회하지 않습니다).
-    <b>상품수</b> = 해당 판매자ID로 <code>mustit_products</code>(머스트잇 Open API 상품 마스터, 매일 08:00 갱신)에 등록된 <code>product_status</code> 건수.
-    340만 행 원본을 브라우저로 내려받지 않고, 서버에서 판매자당 1행으로 미리 집계한 결과(<code>mustit_sellers_list</code> RPC)만 받아옵니다.
+    <b>전체 판매자 목록</b>입니다(판매자 검색은 이미 불러온 목록을 즉시 좁혀볼 뿐 — DB를 다시 조회하지 않습니다).
+    기존 <a href="_starter.html?f=d-mszs5qkscg4.html" style="color:var(--red);font-weight:700">「[카탈로그] 매칭 현황」</a> 대시보드와 같은 <code>catalog_matching_report</code> RPC를 그대로 사용합니다(별도 DB 작업 불필요).
+    <b>매칭수</b> = 선택한 기간 내 신규 등록된 상품 중, 속한 카탈로그의 실측 매칭 상품 수(<code>matchedItemCount</code>)가 2개 이상인 건수. <b>매칭율</b> = 매칭수 ÷ 해당 기간 신규 등록 상품수.
   </p>
 
   <div class="kpis" id="kpis"></div>
 
   <div class="card">
-    <h3>판매자별 상품수</h3>
-    <span class="h-sub">상품수 상위 30명</span>
+    <h3>판매자별 매칭수</h3>
+    <span class="h-sub">매칭수 상위 30명</span>
     <div id="c_sellers" class="chart"></div>
   </div>
 
@@ -171,9 +173,9 @@ window.addEventListener("resize", function(){ Object.keys(CH).forEach(function(k
 var TIP = { trigger:"axis", confine:true, textStyle:{fontSize:11} };
 function legend(names){ return { data:names, top:2, left:2, itemWidth:12, itemHeight:8, itemGap:8, textStyle:{fontSize:10,color:"#555"} }; }
 
-// rows: [{seller_id, product_count}] 상품수 내림차순, 상위 30명 표시
+// rows: [{seller_id, matched, rate}] 매칭수 내림차순, 상위 30명 표시
 function renderChart(rows){
-  var sorted = rows.slice().sort(function(a,b){ return b.product_count-a.product_count; }).slice(0,30);
+  var sorted = rows.slice().sort(function(a,b){ return b.matched-a.matched; }).slice(0,30);
   sorted.reverse();
   var names = sorted.map(function(r){ return r.seller_id; });
   chart("c_sellers").setOption({
@@ -181,17 +183,20 @@ function renderChart(rows){
     xAxis:{ type:"value", axisLabel:{fontSize:9,color:"#999"}, splitLine:{lineStyle:{color:"#eee"}} },
     yAxis:{ type:"category", data:names, axisLabel:{fontSize:10,color:"#555"}, axisTick:{show:false}, axisLine:{lineStyle:{color:"#ddd"}} },
     series:[
-      { name:"상품수", type:"bar", data:sorted.map(function(r){return r.product_count;}), itemStyle:{color:"#7b9ff2"}, barMaxWidth:18 }
+      { name:"매칭수", type:"bar", data:sorted.map(function(r){return r.matched;}), itemStyle:{color:"#2fae8f"}, barMaxWidth:18 }
     ]
   }, true);
 }
 
 // ── KPI ──
 function renderKPI(rows){
-  var total = rows.reduce(function(a,r){ return a+r.product_count; }, 0);
+  var matched = rows.reduce(function(a,r){ return a+r.matched; }, 0);
+  var rates = rows.filter(function(r){ return r.rate!=null; }).map(function(r){ return r.rate; });
+  var avgRate = rates.length ? rates.reduce(function(a,v){return a+v;},0)/rates.length : null;
   var items = [
-    { l:"전체 판매자 수", v: won(rows.length)+"명" },
-    { l:"총 상품수", v: won(total)+"건" }
+    { l:"조회 판매자 수", v: won(rows.length)+"명" },
+    { l:"총 매칭수", v: won(matched)+"건" },
+    { l:"평균 매칭율", v: pct(avgRate), rate:1 }
   ];
   $("kpis").innerHTML = items.map(function(k){
     return '<div class="kpi"><div class="l">'+k.l+'</div><div class="v'+(k.rate?" rate":"")+'">'+k.v+'</div></div>';
@@ -200,10 +205,10 @@ function renderKPI(rows){
 
 // ── 테이블 (전체 판매자 · 검색은 이미 불러온 목록을 즉시 필터링) ──
 var ALL_SELLERS = [];
-var SORT = { key:"product_count", dir:"desc" };
+var SORT = { key:"matched", dir:"desc" };
 var PAGE_SIZE = 30, PAGE = 0;
 var COLS = [
-  ["seller_id","판매자ID"], ["product_count","상품수"]
+  ["seller_id","판매자ID"], ["matched","매칭수"], ["rate","매칭율"]
 ];
 function sortAll(){
   var k = SORT.key, dir = SORT.dir==="asc" ? 1 : -1;
@@ -234,7 +239,8 @@ function paintTable(){
   var tbody = "<tbody>"+slice.map(function(r){
     return '<tr>'+
       '<td>'+esc(r.seller_id)+'</td>'+
-      '<td class="num">'+won(r.product_count)+'</td>'+
+      '<td class="num">'+won(r.matched)+'</td>'+
+      '<td class="num">'+pct(r.rate)+'</td>'+
     '</tr>';
   }).join("")+"</tbody>";
   $("sellers").innerHTML = thead+tbody;
@@ -264,21 +270,29 @@ function downloadCSV(){
   var body = rows.map(function(r){ return COLS.map(function(c){ return csvCell(r[c[0]]); }).join(","); }).join("\r\n");
   var blob = new Blob(["﻿"+head+"\r\n"+body], {type:"text/csv;charset=utf-8;"});
   var url = URL.createObjectURL(blob);
-  var a = document.createElement("a"); a.href=url; a.download="판매자별_상품수.csv";
+  var a = document.createElement("a"); a.href=url; a.download="판매자별_매칭율_"+$("from").value+"_"+$("to").value+".csv";
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 }
+function ymd(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+function mondayOf(d){ var x=new Date(d); var day=(x.getDay()+6)%7; x.setDate(x.getDate()-day); x.setHours(0,0,0,0); return x; }
+function setDefaultDates(){
+  var to = new Date(); to.setDate(to.getDate()-1);             // 종료일 = 어제
+  var from = mondayOf(new Date(to.getTime() - 12*7*86400000));  // 시작일 = 12주 전 월요일
+  $("from").value = ymd(from); $("to").value = ymd(to);
+}
 
-// ── refresh: mustit_sellers_list RPC 1회 호출로 판매자 전체(seller_id, 상품수)를
-//    서버에서 미리 집계해 받아온다 ──
+// ── refresh: 기존 [카탈로그] 매칭 현황 대시보드와 동일한 catalog_matching_report RPC를
+//    그대로 재사용해 판매자별 매칭수·매칭율만 뽑아 쓴다 (새 DB 작업 불필요) ──
 function refresh(){
   $("err").textContent = "";
   if(THUMB){ renderChart([]); return; }
   $("loading").classList.add("on");
-  window.MUSTIT.rpc("mustit_sellers_list", {})
-    .then(function(rows){
-      ALL_SELLERS = (rows||[]).map(function(r){
-        return { seller_id:r.seller_id, product_count: Number(r.product_status_count)||0 };
+  window.MUSTIT.rpc("catalog_matching_report", { p_from:$("from").value, p_to:$("to").value, p_seller_limit:1000 })
+    .then(function(report){
+      var sellers = (report && report.sellers) || [];
+      ALL_SELLERS = sellers.map(function(s){
+        return { seller_id:s.seller_id, matched: Number(s.matched)||0, rate: s.match_rate==null? null : Number(s.match_rate) };
       });
       sortAll(); PAGE=0;
       renderKPI(ALL_SELLERS);
@@ -286,22 +300,20 @@ function refresh(){
       paintTable();
     })
     .catch(function(e){
-      var msg = (e&&e.message) || String(e);
-      if(/mustit_sellers_list/i.test(msg) || /does not exist/i.test(msg) || /42883/.test(msg) || /404/.test(msg)){
-        msg = "집계 함수(mustit_sellers_list)가 아직 DB에 없습니다. 관리자에게 Supabase SQL 적용을 요청하세요.";
-      }
-      $("err").textContent = "오류: "+msg;
+      $("err").textContent = "오류: "+((e&&e.message)||e);
       ALL_SELLERS=[]; $("kpis").innerHTML=""; paintTable(); chart("c_sellers").clear();
     })
     .finally(function(){ $("loading").classList.remove("on"); });
 }
 
+setDefaultDates();
 $("go").onclick = refresh;
 $("csv").onclick = downloadCSV;
 $("sellerq").addEventListener("input", function(){ PAGE=0; paintTable(); });
+$("sellerq").addEventListener("keydown", function(e){ if(e.key==="Enter") refresh(); });
 $("reset").onclick = function(){
   $("sellerq").value = ""; PAGE = 0;
-  refresh();
+  setDefaultDates(); refresh();
 };
 
 // ── 대시보드 설정 모달 / 상단바 (공통 패턴) ──

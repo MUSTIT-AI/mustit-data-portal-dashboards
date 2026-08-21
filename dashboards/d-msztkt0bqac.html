@@ -143,6 +143,47 @@
   .loading.on{display:flex}
   .block{display:none;position:fixed;inset:0;background:var(--bg);z-index:80;place-items:center;text-align:center;color:var(--sub);font-family:system-ui}
   .err{color:var(--red);padding:10px 0;font-size:12.5px}
+  /* 좌측 페이지 목록 + 페이징 */
+  .shell{display:flex;align-items:flex-start;width:100%}
+  .sidenav{flex:none;width:220px;background:#fff;border-right:1px solid var(--border);min-height:calc(100vh - 79px);padding:16px 0;position:sticky;top:79px}
+  .sidenav h4{margin:0 16px 8px;font-size:11px;color:var(--sub);font-weight:700;letter-spacing:.03em}
+  .sidenav .navlist{display:flex;flex-direction:column;gap:2px}
+  .sidenav .navitem{display:flex;align-items:center;gap:8px;padding:9px 16px;cursor:pointer;border-left:3px solid transparent;color:var(--sub);font-weight:600}
+  .sidenav .navitem:hover{background:#f7f6f2}
+  .sidenav .navitem.active{background:#fdeef0;border-left-color:var(--red);color:var(--red)}
+  .sidenav .navitem .num{font-size:10.5px;width:16px;text-align:center;flex:none;opacity:.7}
+  .sidenav .navitem input.pgtitle{border:0;background:transparent;font:inherit;font-weight:inherit;color:inherit;padding:2px 4px;border-radius:4px;flex:1;min-width:0}
+  .sidenav .navitem input.pgtitle:hover{background:rgba(0,0,0,.04)}
+  .sidenav .navitem input.pgtitle:focus{background:#fff;outline:1px solid #d6d4ce}
+  .sidenav .navfoot{margin:14px 16px 0;font-size:10.5px;color:#a7a49c;line-height:1.5}
+  .pagearea{flex:1;min-width:0}
+  .pagehead{display:flex;align-items:center;gap:10px;margin:14px 20px 4px}
+  .pagehead input.pagenotetitle{border:0;background:transparent;font:inherit;font-size:16px;font-weight:800;color:inherit;padding:2px 4px;border-radius:6px;min-width:80px}
+  .pagehead input.pagenotetitle:hover{background:#fff;box-shadow:0 0 0 1px var(--border)}
+  .pagehead input.pagenotetitle:focus{background:#fff;box-shadow:0 0 0 1px #d6d4ce;outline:none}
+  .pagenote{border:0;background:transparent;font:inherit;font-size:12px;color:var(--sub);padding:2px 4px;border-radius:6px;width:calc(100% - 40px);margin:0 20px 12px}
+  .pagenote:hover{background:#fff;box-shadow:0 0 0 1px var(--border)}
+  .pagenote:focus{background:#fff;box-shadow:0 0 0 1px #d6d4ce;outline:none}
+  .pagebody{background:var(--panel);border:1px solid var(--border);border-radius:12px;min-height:320px;padding:18px;display:flex;align-items:center;justify-content:center;text-align:center;color:var(--sub);margin:0 20px}
+  .pagebody .ph{max-width:420px}
+  .pagebody .ph .ico{font-size:30px;margin-bottom:8px}
+  .pagebody .ph b{color:var(--ink);font-size:13.5px}
+  .pagebody .ph p{font-size:12px;line-height:1.6;margin:8px 0 0}
+  .pager{display:flex;align-items:center;justify-content:center;gap:6px;margin:14px 20px}
+  .pager button{border:1px solid #d6d4ce;background:#fff;border-radius:7px;padding:6px 12px;font-size:12px;font-weight:700;cursor:pointer}
+  .pager button:hover{border-color:var(--red);color:var(--red)}
+  .pager button:disabled{opacity:.35;cursor:default}
+  .pager button:disabled:hover{border-color:#d6d4ce;color:inherit}
+  .pager .dots{display:flex;gap:5px}
+  .pager .dot{width:7px;height:7px;border-radius:50%;background:#d9d7d1;cursor:pointer}
+  .pager .dot.active{background:var(--red)}
+  @media(max-width:820px){
+    .shell{flex-direction:column}
+    .sidenav{width:100%;min-height:0;position:static;border-right:0;border-bottom:1px solid var(--border);padding:10px 0}
+    .sidenav .navlist{flex-direction:row;flex-wrap:wrap;padding:0 10px;gap:6px}
+    .sidenav .navitem{border-left:0;border-bottom:3px solid transparent;border-radius:0;padding:6px 10px}
+    .sidenav .navitem.active{border-left-color:transparent;border-bottom-color:var(--red)}
+  }
 </style>
 </head>
 <body>
@@ -156,26 +197,66 @@
   </div>
 </div>
 
-<div class="wrap">
-  <div class="sechead"><span class="sectri" data-target="summarySection">▼</span><input type="text" class="sechead_title" id="sec_summary_title"><input type="text" class="sechead_note" id="sec_summary_note"></div>
-  <div class="secbody" id="summarySection">
-    <div class="acfilters" style="padding:0 0 10px">
-      <div class="fld"><label>시작일</label><input type="date" id="tiles_from"></div>
-      <div class="fld"><label>종료일</label><input type="date" id="tiles_to"></div>
-      <button class="btn go" id="tiles_go" type="button">조회</button>
-      <span class="hint">이 섹션의 모든 타일이 같은 기간을 공유합니다 · 타일을 클릭하면 상세 설정(계산식·세그먼트·비교)을 편집할 수 있습니다 · 드래그로 순서 변경</span>
-    </div>
-    <div class="tilegrid" id="summary_tiles"></div>
-    <button class="btn go" id="sw_add" type="button" style="margin:12px 0">+ 위젯 추가</button>
-    <p class="note">값 계산: <b>합계(sum)</b>=주문DB 기간 합계, <b>순유저수(countUnique)</b>=앰플리튜드 구간 전체 유니크(세그먼트 필터 가능), <b>나누기(div)</b>=분자÷분모. 위젯 구성은 <b>이 브라우저에만</b> 저장됩니다(localStorage, 공유 안 됨).</p>
+<div class="shell">
+  <div class="sidenav">
+    <h4>페이지</h4>
+    <div class="navlist" id="navlist"></div>
+    <p class="navfoot">각 페이지는 클릭 시에만 데이터를 불러옵니다(페이징) · 페이지 제목은 클릭해서 바로 수정할 수 있습니다.</p>
   </div>
+  <div class="pagearea">
+    <div class="pagehead" id="ph_wrap" style="display:none"><input type="text" class="pagenotetitle" id="ph_title"></div>
+    <input type="text" class="pagenote" id="ph_note" style="display:none">
 
-  <div class="sechead"><span class="sectri" data-target="auSection">▼</span><input type="text" class="sechead_title" id="sec_au_title"><input type="text" class="sechead_note" id="sec_au_note"></div>
-  <div class="secbody" id="auSection">
-    <div id="au_components"></div>
-    <button class="btn go" id="ac_add" type="button" style="margin-bottom:14px">+ 위젯 추가</button>
-    <button class="btn reset" id="ac_refresh_all" type="button" style="margin-bottom:14px">🔄 전체 위젯 조회</button>
-    <p class="note">위젯 구성(제목·차트종류·세그먼트·순서 등)은 <b>이 브라우저에만</b> 저장됩니다(localStorage) — 다른 사람에게는 공유되지 않고, 캐시를 지우면 초기화됩니다. 각 위젯의 "페이지 열 때 자동조회"가 꺼져 있으면(기본값) 버튼을 눌러야 조회됩니다.</p>
+    <div class="wrap" id="page_summary">
+      <div class="sechead"><span class="sectri" data-target="summarySection">▼</span><input type="text" class="sechead_title" id="sec_summary_title"><input type="text" class="sechead_note" id="sec_summary_note"></div>
+      <div class="secbody" id="summarySection">
+        <div class="acfilters" style="padding:0 0 10px">
+          <div class="fld"><label>시작일</label><input type="date" id="tiles_from"></div>
+          <div class="fld"><label>종료일</label><input type="date" id="tiles_to"></div>
+          <button class="btn go" id="tiles_go" type="button">조회</button>
+          <span class="hint">이 섹션의 모든 타일이 같은 기간을 공유합니다 · 타일을 클릭하면 상세 설정(계산식·세그먼트·비교)을 편집할 수 있습니다 · 드래그로 순서 변경</span>
+        </div>
+        <div class="tilegrid" id="summary_tiles"></div>
+        <button class="btn go" id="sw_add" type="button" style="margin:12px 0">+ 위젯 추가</button>
+        <p class="note">값 계산: <b>합계(sum)</b>=주문DB 기간 합계, <b>순유저수(countUnique)</b>=앰플리튜드 구간 전체 유니크(세그먼트 필터 가능), <b>나누기(div)</b>=분자÷분모. 위젯 구성은 <b>이 브라우저에만</b> 저장됩니다(localStorage, 공유 안 됨).</p>
+      </div>
+
+      <div class="sechead"><span class="sectri" data-target="auSection">▼</span><input type="text" class="sechead_title" id="sec_au_title"><input type="text" class="sechead_note" id="sec_au_note"></div>
+      <div class="secbody" id="auSection">
+        <div id="au_components"></div>
+        <button class="btn go" id="ac_add" type="button" style="margin-bottom:14px">+ 위젯 추가</button>
+        <button class="btn reset" id="ac_refresh_all" type="button" style="margin-bottom:14px">🔄 전체 위젯 조회</button>
+        <p class="note">위젯 구성(제목·차트종류·세그먼트·순서 등)은 <b>이 브라우저에만</b> 저장됩니다(localStorage) — 다른 사람에게는 공유되지 않고, 캐시를 지우면 초기화됩니다. 각 위젯의 "페이지 열 때 자동조회"가 꺼져 있으면(기본값) 버튼을 눌러야 조회됩니다.</p>
+      </div>
+    </div>
+
+    <div class="pagebody" id="page_trend" style="display:none">
+      <div class="ph">
+        <div class="ico">🚧</div>
+        <b id="ph_b_trend">상세 내용 준비 중</b>
+        <p>이 페이지의 실제 지표(주문 데이터 기준 집계·차트)는 추후 채워질 예정입니다. 왼쪽 목록에서 다른 페이지로 이동할 수 있고, 제목/설명은 위에서 바로 수정할 수 있습니다.</p>
+      </div>
+    </div>
+    <div class="pagebody" id="page_rfm" style="display:none">
+      <div class="ph">
+        <div class="ico">🚧</div>
+        <b id="ph_b_rfm">상세 내용 준비 중</b>
+        <p>이 페이지의 실제 지표(주문 데이터 기준 집계·차트)는 추후 채워질 예정입니다. 왼쪽 목록에서 다른 페이지로 이동할 수 있고, 제목/설명은 위에서 바로 수정할 수 있습니다.</p>
+      </div>
+    </div>
+    <div class="pagebody" id="page_retention" style="display:none">
+      <div class="ph">
+        <div class="ico">🚧</div>
+        <b id="ph_b_retention">상세 내용 준비 중</b>
+        <p>이 페이지의 실제 지표(주문 데이터 기준 집계·차트)는 추후 채워질 예정입니다. 왼쪽 목록에서 다른 페이지로 이동할 수 있고, 제목/설명은 위에서 바로 수정할 수 있습니다.</p>
+      </div>
+    </div>
+
+    <div class="pager">
+      <button type="button" id="pg_prev">← 이전</button>
+      <div class="dots" id="pg_dots"></div>
+      <button type="button" id="pg_next">다음 →</button>
+    </div>
   </div>
 </div>
 
@@ -1211,6 +1292,110 @@ function autosizeTitle(el){ el.style.width = Math.max(4, el.value.length+1)+"ch"
     el.addEventListener("change", saveSecLabels);
   });
 })();
+
+// ── 좌측 페이지 목록 + 페이징 — 1번(핵심 지표)만 실제 내용, 나머지는 자리표시자(추후 페이지별로 구현 예정) ──
+// 로그인 여부와 무관하게 항상 동작(순수 DOM). 비활성 페이지는 표시만 안 할 뿐 추가 조회는 없음(페이징).
+var PAGES = [
+  {key:"summary",   title:"핵심 지표",   note:"AU·ARPU·ARPPU·가입자수·결제자수·GMV·순수익·전환률 지표 타일 + DAU/WAU/MAU 위젯", body:null},
+  {key:"trend",     title:"매출 추이",   note:"일별·주별·월별 매출/주문 추이", body:"page_trend"},
+  {key:"rfm",       title:"RFM",        note:"고객별 최근구매일(Recency)·구매빈도(Frequency)·구매금액(Monetary) 세그먼트", body:"page_rfm"},
+  {key:"retention", title:"리텐션",      note:"코호트(가입월/최초구매월) 기준 경과월별 재구매율", body:"page_retention"}
+];
+var PAGE_KEY = "auc_pages_"+FILE;
+var CUR_PAGE = null;
+function loadPageLabels(){
+  var out = {};
+  try{
+    var raw = localStorage.getItem(PAGE_KEY);
+    var saved = raw ? JSON.parse(raw) : {};
+    PAGES.forEach(function(p){
+      out[p.key] = {
+        title: (saved[p.key]&&saved[p.key].title) || p.title,
+        note: (saved[p.key]&&saved[p.key].note!=null) ? saved[p.key].note : p.note
+      };
+    });
+  }catch(e){ PAGES.forEach(function(p){ out[p.key]={title:p.title, note:p.note}; }); }
+  return out;
+}
+var PAGE_LABELS = loadPageLabels();
+function savePageLabels(){ try{ localStorage.setItem(PAGE_KEY, JSON.stringify(PAGE_LABELS)); }catch(e){} }
+function pageIndex(key){ for(var i=0;i<PAGES.length;i++) if(PAGES[i].key===key) return i; return 0; }
+function pageByKey(key){ return PAGES.filter(function(p){return p.key===key;})[0] || PAGES[0]; }
+function renderNav(){
+  $("navlist").innerHTML = PAGES.map(function(p,i){
+    return '<div class="navitem'+(p.key===CUR_PAGE?' active':'')+'" data-key="'+p.key+'">'+
+      '<span class="num">'+(i+1)+'</span>'+
+      '<input type="text" class="pgtitle" data-key="'+p.key+'" value="'+esc(PAGE_LABELS[p.key].title)+'">'+
+    '</div>';
+  }).join("");
+  [].forEach.call($("navlist").querySelectorAll(".navitem"), function(el){
+    el.addEventListener("click", function(e){
+      if(e.target.tagName==="INPUT") return;
+      goPage(el.getAttribute("data-key"));
+    });
+  });
+  [].forEach.call($("navlist").querySelectorAll(".pgtitle"), function(inp){
+    inp.addEventListener("click", function(e){ e.stopPropagation(); });
+    inp.addEventListener("change", function(){
+      var k = inp.getAttribute("data-key");
+      PAGE_LABELS[k].title = inp.value || PAGE_LABELS[k].title;
+      savePageLabels();
+      if(k===CUR_PAGE && k!=="summary") $("ph_title").value = PAGE_LABELS[k].title;
+    });
+  });
+}
+function renderPager(){
+  var idx = pageIndex(CUR_PAGE);
+  $("pg_prev").disabled = idx<=0;
+  $("pg_next").disabled = idx>=PAGES.length-1;
+  $("pg_dots").innerHTML = PAGES.map(function(p,i){
+    return '<span class="dot'+(i===idx?' active':'')+'" data-key="'+p.key+'" title="'+esc(PAGE_LABELS[p.key].title)+'"></span>';
+  }).join("");
+  [].forEach.call($("pg_dots").querySelectorAll(".dot"), function(d){
+    d.onclick = function(){ goPage(d.getAttribute("data-key")); };
+  });
+}
+function goPage(key){
+  if(!PAGES.some(function(p){return p.key===key;})) key = PAGES[0].key;
+  CUR_PAGE = key;
+  location.hash = "p="+key;
+  var isSummary = key==="summary";
+  $("ph_wrap").style.display = isSummary ? "none" : "";
+  $("ph_note").style.display = isSummary ? "none" : "";
+  if(!isSummary){
+    $("ph_title").value = PAGE_LABELS[key].title;
+    $("ph_note").value = PAGE_LABELS[key].note;
+    var bEl = $("ph_b_"+key);
+    if(bEl) bEl.textContent = '"'+PAGE_LABELS[key].title+'" 상세 내용 준비 중';
+  }
+  ["page_summary","page_trend","page_rfm","page_retention"].forEach(function(id){
+    var el = $(id);
+    if(el) el.style.display = (id==="page_"+key) ? "" : "none";
+  });
+  renderNav();
+  renderPager();
+}
+function pageFromHash(){
+  var m = location.hash.match(/p=([a-z]+)/);
+  return (m && PAGES.some(function(p){return p.key===m[1];})) ? m[1] : PAGES[0].key;
+}
+window.addEventListener("hashchange", function(){ goPage(pageFromHash()); });
+$("ph_title").addEventListener("change", function(){
+  PAGE_LABELS[CUR_PAGE].title = $("ph_title").value || PAGE_LABELS[CUR_PAGE].title;
+  savePageLabels();
+  var bEl = $("ph_b_"+CUR_PAGE);
+  if(bEl) bEl.textContent = '"'+PAGE_LABELS[CUR_PAGE].title+'" 상세 내용 준비 중';
+  renderNav();
+  renderPager();
+});
+$("ph_note").addEventListener("change", function(){
+  PAGE_LABELS[CUR_PAGE].note = $("ph_note").value;
+  savePageLabels();
+});
+$("pg_prev").onclick = function(){ var i=pageIndex(CUR_PAGE); if(i>0) goPage(PAGES[i-1].key); };
+$("pg_next").onclick = function(){ var i=pageIndex(CUR_PAGE); if(i<PAGES.length-1) goPage(PAGES[i+1].key); };
+goPage(pageFromHash());
+
 $("sw_add").onclick=function(){ openTileModal(null); };
 $("tiles_go").onclick=function(){ refreshAllTiles(); };
 $("tm_close").onclick=closeTileModal;

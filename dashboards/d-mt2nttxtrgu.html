@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="../favicon.svg">
-<title>[상품] 판매자별 등록 상품수 · MUST IT</title>
+<title>[주문] 판매자별 매출 현황 · MUST IT</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../auth.js"></script>
 <style>
   :root{
     --red:#c8102e; --ink:#1c1b19; --sub:#6b6a66; --bg:#eef0f2; --panel:#fff; --border:#e2e0da;
-    --ok:#2fae8f; --warn:#b4523a; --off:#c9c6bd;
+    --ok:#2fae8f; --warn:#b4523a;
   }
   *{box-sizing:border-box}
   body{font-family:'Pretendard','Malgun Gothic',system-ui,sans-serif;margin:0;background:var(--bg);color:var(--ink);font-size:13px}
@@ -41,7 +41,21 @@
   .filters{background:#fff;border-bottom:1px solid var(--border);padding:8px 12px;display:flex;flex-wrap:wrap;gap:7px 10px;align-items:flex-end;position:sticky;top:39px;z-index:30}
   .fld{display:flex;flex-direction:column;gap:3px}
   .fld label{font-size:10.5px;color:var(--sub);font-weight:600;letter-spacing:.02em}
-  .fld input[type=text]{border:1px solid #d6d4ce;border-radius:6px;padding:5px 7px;font-size:12px;background:#fff;height:29px;width:160px}
+  .fld input[type=date],.fld input[type=text]{border:1px solid #d6d4ce;border-radius:6px;padding:5px 7px;font-size:12px;background:#fff;height:29px}
+  .fld input[type=text]{width:150px}
+  /* multiselect (주문상태) */
+  .ms{position:relative}
+  .ms>button{border:1px solid #d6d4ce;border-radius:6px;background:#fff;padding:5px 8px;font-size:12px;height:29px;min-width:96px;max-width:170px;
+    display:flex;align-items:center;justify-content:space-between;gap:6px;cursor:pointer;white-space:nowrap;overflow:hidden}
+  .ms>button .v{overflow:hidden;text-overflow:ellipsis}
+  .ms>button .cnt{color:#fff;background:var(--red);border-radius:10px;padding:0 6px;font-size:10px;font-weight:700}
+  .ms>button svg{flex:none;opacity:.5}
+  .ms .panel{position:absolute;top:32px;left:0;z-index:60;background:#fff;border:1px solid #cfcdc7;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.14);
+    min-width:190px;max-height:290px;overflow:auto;padding:6px;display:none}
+  .ms.open .panel{display:block}
+  .ms .panel .opt{display:flex;align-items:center;gap:7px;padding:4px 6px;border-radius:5px;cursor:pointer;font-size:12.5px}
+  .ms .panel .opt:hover{background:#f3f2ee}
+  .ms .panel .opt input{margin:0}
   .btns{display:flex;gap:6px;margin-left:auto}
   .btn{border:0;border-radius:7px;padding:6px 15px;font-size:12.5px;font-weight:700;cursor:pointer;height:29px}
   .btn.go{background:var(--red);color:#fff}
@@ -52,11 +66,12 @@
   .note{color:var(--sub);font-size:11.5px;margin:0 0 10px;line-height:1.6}
   .note b{color:var(--ink)}
   .note code{background:#f4f3ef;border-radius:4px;padding:1px 5px}
-  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px}
-  @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}}
-  .kpi{background:#fff;padding:14px 16px;text-align:center}
-  .kpi .l{color:var(--sub);font-size:11.5px;margin-bottom:6px}
-  .kpi .v{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px}
+  @media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:600px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:#fff;padding:14px 10px;text-align:center}
+  .kpi .l{color:var(--sub);font-size:11px;margin-bottom:6px}
+  .kpi .v{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
   .kpi .v.rate{color:var(--red)}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px 6px;margin-bottom:14px}
   .card h3{margin:0 0 2px;font-size:13.5px;font-weight:700}
@@ -95,9 +110,17 @@
 </div>
 
 <div class="filters" id="filters">
+  <div class="fld"><label>주문일 (시작일)</label><input type="date" id="from"></div>
+  <div class="fld"><label>주문일 (종료일)</label><input type="date" id="to"></div>
+  <div class="fld"><label>주문상태</label>
+    <div class="ms" id="ms_status">
+      <button type="button"><span class="v">전체</span><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 3l4 4 4-4" stroke="#333" fill="none" stroke-width="1.5"/></svg></button>
+      <div class="panel" id="ms_status_panel"></div>
+    </div>
+  </div>
   <div class="fld"><label>판매자 검색</label><input type="text" id="sellerq" placeholder="판매자ID 일부 입력"></div>
   <div class="btns">
-    <button class="btn go" id="go">새로고침</button>
+    <button class="btn go" id="go">조회</button>
     <button class="btn reset" id="reset">초기화</button>
     <button class="btn csv" id="csv" disabled>⬇ CSV 다운로드</button>
   </div>
@@ -105,24 +128,25 @@
 
 <div class="wrap">
   <p class="note">
-    머스트잇 Open API 상품 마스터(<code>mustit_products</code>, 매일 08:00 KST 갱신)를 판매자ID 기준으로 집계한 <b>현재 등록 상품수</b> 스냅샷입니다(신규/기간 등록이 아닌 <b>전체 누적 등록</b> 기준).
-    <b>판매중</b> = <code>product_status = IN_STOCK</code>, <b>판매중지·품절</b> = 그 외 상태(OUT_OF_STOCK/SUSPENDED). 판매자 검색은 이미 불러온 목록을 즉시 좁혀볼 뿐 DB를 다시 조회하지 않습니다.
+    선택한 기간 내 <b>판매자ID별 매출 현황</b>입니다(주문 라인 <code>orders_secure</code> 기준 DB 집계 · 원본을 브라우저로 당기지 않음).
+    <b>거래액(GMV)</b>=<code>total_purchase</code> 합계, <b>순매출</b>=총매출−자사할인, <b>순이익</b>=순매출−결제수수료. 기본은 <b>전체 주문상태</b> 기준이며, 정산완료 건만 보려면 주문상태 필터에서 선택하세요.
+    판매자 검색은 이미 불러온 목록을 즉시 좁혀볼 뿐 DB를 다시 조회하지 않습니다.
   </p>
 
   <div class="kpis" id="kpis"></div>
 
   <div class="card">
-    <h3>판매자별 등록 상품수</h3>
-    <span class="h-sub">등록 상품수 상위 30명 · 판매중/판매중지·품절 구성</span>
+    <h3>판매자별 매출 현황</h3>
+    <span class="h-sub">거래액(GMV) 상위 30명 · 순이익 비교</span>
     <div id="c_sellers" class="chart"></div>
   </div>
 
   <div class="tblwrap">
     <div class="tblhead">
-      <h3>판매자별 등록 상품수 전체</h3>
+      <h3>판매자별 매출 현황 전체</h3>
       <span class="tblcount" id="sellercount"></span>
     </div>
-    <p class="note" style="margin:0 0 8px">등록 상품수 많은 순 정렬(헤더 클릭으로 재정렬).</p>
+    <p class="note" style="margin:0 0 8px">거래액(GMV) 많은 순 정렬(헤더 클릭으로 재정렬) · 평균객단가 = 거래액 ÷ 주문수.</p>
     <div class="tblscroll"><table class="sellers" id="sellers"></table></div>
     <div class="pager" id="pager"></div>
   </div>
@@ -152,12 +176,39 @@
 (function(){
 "use strict";
 var $ = function(id){ return document.getElementById(id); };
+function rpc(fn, body){ return window.MUSTIT.rpc(fn, body); }
 function won(n){ return (Number(n)||0).toLocaleString("ko-KR"); }
 function pct(n){ return n==null ? "-" : ((Number(n)||0)*100).toFixed(1)+"%"; }
 function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function ymd(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
 
 // 홈 썸네일(iframe #thumb)로 뜰 땐 무거운 조회를 건너뛴다.
 var THUMB = location.hash.indexOf("thumb") >= 0;
+
+// ── 주문상태 멀티셀렉트 (dash_filters()가 내려주는 실제 값만 사용 · 하드코딩 금지) ──
+var STATUS_OPTS = [];
+var STATUS_SEL = new Set();
+function buildStatusDropdown(){
+  var panel = $("ms_status_panel");
+  panel.innerHTML = "";
+  panel.addEventListener("click", function(e){ e.stopPropagation(); });
+  STATUS_OPTS.forEach(function(v){
+    var row = document.createElement("label"); row.className = "opt";
+    var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = STATUS_SEL.has(v);
+    cb.onchange = function(){ if(cb.checked) STATUS_SEL.add(v); else STATUS_SEL.delete(v); updateStatusBtn(); };
+    row.appendChild(cb); row.appendChild(document.createTextNode(" " + v));
+    panel.appendChild(row);
+  });
+}
+function updateStatusBtn(){
+  var n = STATUS_SEL.size;
+  $("ms_status").querySelector(".v").textContent = n===0 ? "전체" : (n===1 ? Array.from(STATUS_SEL)[0] : n+"개 선택");
+}
+$("ms_status").querySelector("button").onclick = function(e){
+  e.stopPropagation();
+  $("ms_status").classList.toggle("open");
+};
+document.addEventListener("click", function(){ $("ms_status").classList.remove("open"); });
 
 // ── ECharts ──
 var CH = {};
@@ -168,38 +219,40 @@ function chart(id){
   return CH[id];
 }
 window.addEventListener("resize", function(){ Object.keys(CH).forEach(function(k){ CH[k].resize(); }); });
-var TIP = { trigger:"axis", confine:true, textStyle:{fontSize:11}, axisPointer:{type:"shadow"} };
+var TIP = { trigger:"axis", confine:true, textStyle:{fontSize:11}, axisPointer:{type:"shadow"},
+  valueFormatter:function(v){ return "₩"+won(v); } };
 function legend(names){ return { data:names, top:2, left:2, itemWidth:12, itemHeight:8, itemGap:8, textStyle:{fontSize:10,color:"#555"} }; }
 
-// rows: [{seller_id, product_count, active_count}] 등록상품수 내림차순, 상위 30명 표시(판매중/판매중지 스택)
+// rows: [{seller_id, gmv, net_profit}] 거래액(GMV) 내림차순, 상위 30명 표시
 function renderChart(rows){
-  var sorted = rows.slice().sort(function(a,b){ return b.product_count-a.product_count; }).slice(0,30);
+  var sorted = rows.slice().sort(function(a,b){ return b.gmv-a.gmv; }).slice(0,30);
   sorted.reverse();
   var names = sorted.map(function(r){ return r.seller_id; });
-  var active = sorted.map(function(r){ return r.active_count; });
-  var inactive = sorted.map(function(r){ return Math.max(0, r.product_count - r.active_count); });
   chart("c_sellers").setOption({
-    grid:{ left:110, right:24, top:30, bottom:26 }, tooltip:TIP, legend:legend(["판매중","판매중지·품절"]),
-    color:["#2fae8f","#c9c6bd"],
-    xAxis:{ type:"value", axisLabel:{fontSize:9,color:"#999"}, splitLine:{lineStyle:{color:"#eee"}} },
+    grid:{ left:110, right:24, top:30, bottom:26 }, tooltip:TIP, legend:legend(["거래액(GMV)","순이익"]),
+    color:["#c8102e","#2fae8f"],
+    xAxis:{ type:"value", axisLabel:{fontSize:9,color:"#999",formatter:function(v){return Math.round(v/1e6)+"M";}}, splitLine:{lineStyle:{color:"#eee"}} },
     yAxis:{ type:"category", data:names, axisLabel:{fontSize:10,color:"#555"}, axisTick:{show:false}, axisLine:{lineStyle:{color:"#ddd"}} },
     series:[
-      { name:"판매중", type:"bar", stack:"t", data:active, barMaxWidth:18 },
-      { name:"판매중지·품절", type:"bar", stack:"t", data:inactive, barMaxWidth:18 }
+      { name:"거래액(GMV)", type:"bar", data:sorted.map(function(r){return r.gmv;}), barMaxWidth:14 },
+      { name:"순이익", type:"bar", data:sorted.map(function(r){return r.net_profit;}), barMaxWidth:14 }
     ]
   }, true);
 }
 
 // ── KPI ──
 function renderKPI(rows){
-  var total = rows.reduce(function(a,r){ return a+r.product_count; }, 0);
-  var active = rows.reduce(function(a,r){ return a+r.active_count; }, 0);
-  var avgPerSeller = rows.length ? total/rows.length : 0;
+  var gmv = rows.reduce(function(a,r){ return a+r.gmv; }, 0);
+  var netRev = rows.reduce(function(a,r){ return a+r.net_revenue; }, 0);
+  var netProfit = rows.reduce(function(a,r){ return a+r.net_profit; }, 0);
+  var orders = rows.reduce(function(a,r){ return a+r.orders; }, 0);
   var items = [
     { l:"판매자 수", v: won(rows.length)+"명" },
-    { l:"총 등록 상품수", v: won(total)+"개" },
-    { l:"판매자당 평균 등록수", v: won(Math.round(avgPerSeller))+"개" },
-    { l:"판매중 비율", v: pct(total?active/total:null), rate:1 }
+    { l:"총 거래액(GMV)", v: won(gmv) },
+    { l:"총 순매출", v: won(netRev) },
+    { l:"총 순이익", v: won(netProfit) },
+    { l:"총 주문수", v: won(orders)+"건" },
+    { l:"판매자당 평균 거래액", v: won(rows.length ? Math.round(gmv/rows.length) : 0) }
   ];
   $("kpis").innerHTML = items.map(function(k){
     return '<div class="kpi"><div class="l">'+k.l+'</div><div class="v'+(k.rate?" rate":"")+'">'+k.v+'</div></div>';
@@ -208,15 +261,17 @@ function renderKPI(rows){
 
 // ── 테이블 (전체 판매자 · 검색은 이미 불러온 목록을 즉시 필터링) ──
 var ALL_SELLERS = [];
-var SORT = { key:"product_count", dir:"desc" };
+var SORT = { key:"gmv", dir:"desc" };
 var PAGE_SIZE = 30, PAGE = 0;
 var COLS = [
-  ["seller_id","판매자ID"], ["product_count","등록 상품수"], ["active_count","판매중"], ["inactive_count","판매중지·품절"], ["avg_price","평균 판매가"]
+  ["seller_id","판매자ID"], ["gmv","거래액(GMV)"], ["net_revenue","순매출"], ["net_profit","순이익"],
+  ["orders","주문수"], ["quantity","구매수량"], ["aov","평균객단가"], ["own_discount","자사할인"]
 ];
 function withDerived(rows){
   return rows.map(function(r){ return {
-    seller_id:r.seller_id, product_count:r.product_count, active_count:r.active_count,
-    inactive_count: Math.max(0, r.product_count - r.active_count), avg_price:r.avg_price
+    seller_id:r.seller_id, gmv:r.gmv, net_revenue:r.net_revenue, net_profit:r.net_profit,
+    orders:r.orders, quantity:r.quantity, own_discount:r.own_discount,
+    aov: r.orders ? Math.round(r.gmv/r.orders) : 0
   }; });
 }
 function sortAll(){
@@ -248,10 +303,13 @@ function paintTable(){
   var tbody = "<tbody>"+slice.map(function(r){
     return '<tr>'+
       '<td>'+esc(r.seller_id)+'</td>'+
-      '<td class="num">'+won(r.product_count)+'</td>'+
-      '<td class="num">'+won(r.active_count)+'</td>'+
-      '<td class="num">'+won(r.inactive_count)+'</td>'+
-      '<td class="num">'+(r.avg_price==null?"-":won(Math.round(r.avg_price)))+'</td>'+
+      '<td class="num">'+won(r.gmv)+'</td>'+
+      '<td class="num">'+won(r.net_revenue)+'</td>'+
+      '<td class="num">'+won(r.net_profit)+'</td>'+
+      '<td class="num">'+won(r.orders)+'</td>'+
+      '<td class="num">'+won(r.quantity)+'</td>'+
+      '<td class="num">'+won(r.aov)+'</td>'+
+      '<td class="num">'+won(r.own_discount)+'</td>'+
     '</tr>';
   }).join("")+"</tbody>";
   $("sellers").innerHTML = thead+tbody;
@@ -281,26 +339,39 @@ function downloadCSV(){
   var body = rows.map(function(r){ return COLS.map(function(c){ return csvCell(r[c[0]]); }).join(","); }).join("\r\n");
   var blob = new Blob(["﻿"+head+"\r\n"+body], {type:"text/csv;charset=utf-8;"});
   var url = URL.createObjectURL(blob);
-  var a = document.createElement("a"); a.href=url; a.download="판매자별_등록상품수.csv";
+  var a = document.createElement("a"); a.href=url; a.download="판매자별_매출현황_"+$("from").value+"_"+$("to").value+".csv";
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 }
+function setDefaultDates(){
+  var y=new Date(); y.setDate(y.getDate()-1);              // 종료일 = 어제
+  var f=new Date(y.getTime()); f.setDate(f.getDate()-30);  // 시작일 = 어제로부터 30일 전
+  $("from").value=ymd(f); $("to").value=ymd(y);
+}
 
-// ── refresh: DB 집계 RPC mustit_products_by_seller 사용 (mustit_products ~340만행을
-//    브라우저로 당겨 집계하지 않는다 — CLAUDE.md 필수 규칙) ──
+// ── refresh: DB 집계 RPC dash_seller_rank 사용 (orders_secure 원본을 브라우저로
+//    당겨 집계하지 않는다 — CLAUDE.md 필수 규칙) ──
+function params(){
+  var f = {};
+  if(STATUS_SEL.size) f.order_status = Array.from(STATUS_SEL);
+  return { from:$("from").value, to:$("to").value, filters:f };
+}
 function refresh(){
   $("err").textContent = "";
   if(THUMB){ renderChart([]); return; }
   $("loading").classList.add("on");
-  window.MUSTIT.rpc("mustit_products_by_seller", { p_limit: 20000 })
+  rpc("dash_seller_rank", { p: params(), p_limit: 20000 })
     .then(function(rows){
       rows = Array.isArray(rows) ? rows : [];
       ALL_SELLERS = withDerived(rows.map(function(r){
         return {
           seller_id: r.seller_id,
-          product_count: Number(r.product_count)||0,
-          active_count: Number(r.active_count)||0,
-          avg_price: r.avg_price==null ? null : Number(r.avg_price)
+          gmv: Number(r.gmv)||0,
+          net_revenue: Number(r.net_revenue)||0,
+          net_profit: Number(r.net_profit)||0,
+          orders: Number(r.orders)||0,
+          quantity: Number(r.quantity)||0,
+          own_discount: Number(r.own_discount)||0
         };
       }));
       sortAll(); PAGE=0;
@@ -315,13 +386,15 @@ function refresh(){
     .finally(function(){ $("loading").classList.remove("on"); });
 }
 
+setDefaultDates();
 $("go").onclick = refresh;
 $("csv").onclick = downloadCSV;
 $("sellerq").addEventListener("input", function(){ PAGE=0; paintTable(); });
 $("sellerq").addEventListener("keydown", function(e){ if(e.key==="Enter") refresh(); });
 $("reset").onclick = function(){
   $("sellerq").value = ""; PAGE = 0;
-  refresh();
+  STATUS_SEL = new Set(); buildStatusDropdown(); updateStatusBtn();
+  setDefaultDates(); refresh();
 };
 
 // ── 대시보드 설정 모달 / 상단바 (공통 패턴) ──
@@ -411,7 +484,11 @@ window.MUSTIT.ready(function(){
     if(!a || a.view===false){ blockNoAccess(); return; }
     ACCESS=a;
     setupTopbar();
-    if(!THUMB) refresh();
+    rpc("dash_filters",{}).then(function(o){
+      STATUS_OPTS = (o && o.order_status) || [];
+      buildStatusDropdown(); updateStatusBtn();
+    }).catch(function(){ buildStatusDropdown(); updateStatusBtn(); })
+      .finally(function(){ if(!THUMB) refresh(); else refresh(); });
   }).catch(function(e){ blockNoAccess(e.message); });
 });
 })();

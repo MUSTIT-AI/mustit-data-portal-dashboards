@@ -71,13 +71,19 @@
   /* KPI 카드 */
   .kpigrid{display:grid;grid-template-columns:repeat(5,1fr);gap:10px}
   .kpigrid.four{grid-template-columns:repeat(4,1fr)}
+  .kpigrid.primary{grid-template-columns:repeat(3,1fr);margin-bottom:10px}
   @media(max-width:1100px){.kpigrid{grid-template-columns:repeat(3,1fr)}.kpigrid.four{grid-template-columns:repeat(2,1fr)}}
+  @media(max-width:900px){.kpigrid.primary{grid-template-columns:repeat(1,1fr)}}
   @media(max-width:640px){.kpigrid{grid-template-columns:repeat(2,1fr)}}
   .kpicard{background:#fff;border:1px solid var(--border);border-radius:12px;padding:12px 14px}
   .kpicard .kt{font-size:11.5px;color:var(--sub);margin-bottom:6px;font-weight:700}
   .kpicard .kv{font-size:21px;font-weight:800;margin-bottom:9px;font-variant-numeric:tabular-nums;color:var(--ink)}
+  .kpicard.big{padding:16px 18px;border-width:1.5px}
+  .kpicard.big .kt{font-size:12.5px}
+  .kpicard.big .kv{font-size:30px;margin-bottom:11px}
   .kpichip{display:flex;justify-content:space-between;align-items:center;font-size:10.8px;color:var(--sub);padding:2px 0;border-top:1px dashed #ece9e2}
   .kpichip:first-child{border-top:0}
+  .kpichip.sub{opacity:.55}
   .chg{font-size:11px;font-weight:800}
   .chg.up{color:var(--up)}.chg.down{color:var(--down)}.chg.flat{color:var(--sub)}
 
@@ -107,7 +113,8 @@
 <div class="topbar">
   <a class="logo" href="../index.html">🛍️ Data Portal</a>
   <div class="right">
-    <span class="live"><span class="dot"></span><span id="lastupdate">Last updated: -</span></span>
+    <span class="live"><span id="src_orderdb">주문DB: -</span></span>
+    <span class="live"><span class="dot"></span><span id="src_amp">Amplitude: -</span></span>
     <span class="owner" id="dashowner"></span>
     <select id="dashnav" title="대시보드 이동"></select>
   </div>
@@ -121,9 +128,9 @@
 <div class="ctrlbar">
   <div class="fld"><label>조회 기준일</label><input type="date" id="refdate"></div>
   <button class="gobtn" id="go">조회</button>
-  <span class="txt" style="margin-left:auto;max-width:420px">기준일로부터 최근 30일 등 고정 기간을 자동으로 계산합니다. 기본값은 전일입니다(주문DB에 당일 데이터가 아직 반영되지 않아 "오늘"을 기준일로 두면 신규 구매 관련 값이 0으로 보일 수 있음). 과거 특정일 기준으로 보고 싶을 때만 날짜를 바꿔주세요.</span>
+  <span class="txt" style="margin-left:auto;max-width:300px">이 대시보드 전체의 기준일입니다(차트 내부 기간과는 별개). 기본값=전일(주문DB 반영 지연 때문).</span>
 </div>
-<div class="srcnote">📌 <b>신규 유저</b>: Amplitude 기준(complete_signup) · <b>신규 구매 건수·매출</b>: 실제 주문 DB의 <b>생애 최초 주문</b> 기준, customer_type(신규/기존 첫구매) 컬럼으로 판별 · 건수 기준 집계(Amplitude complete_order 이벤트는 사용하지 않음) · 국내·봇/크롤러 트래픽은 제외</div>
+<div class="srcnote">📌 데이터 기준: <b>전일 마감</b>(주문DB) · KST · 국내 트래픽만 · 봇/크롤러 제외 — 지표별 정확한 정의는 아래 <b>용어 정의</b> 참고</div>
 <div class="dbwarn" id="dbwarn"></div>
 
 <div class="wrap">
@@ -133,13 +140,22 @@
     <div class="sechd">Summary <span class="n" id="daily_period"></span>
       <button class="deftoggle" id="daily_deftoggle" type="button" style="margin-left:auto">용어 정의 ▾</button>
     </div>
-    <div class="kpigrid" id="daily_kpis"></div>
+    <div class="kpigrid primary" id="daily_kpis_primary"></div>
+    <div class="kpigrid four" id="daily_kpis_secondary"></div>
     <div class="defbox" id="daily_defbox" style="display:none">
-      DAU=그날 앰플리튜드에 어떤 이벤트든 1개 이상 발생시킨 유저 수(<code>_active</code>, 로그인 여부 무관 전체 방문자) · <b>신규 유저 수</b>=그날 <code>complete_signup</code> 이벤트를 발생시킨 유저 수(가입일=이벤트 발생일, KST) · 신규 유저 수 옆 "DAU 대비 %"는 전체 트래픽 중 신규가입이 차지하는 비중이며, 기존 회원 중 신규 비율이 아닙니다 · <b>신규 구매 건수·매출</b>은 Amplitude가 아닌 주문DB 기준으로, 주문DB의 <code>customer_type</code> 값이 "신규"(가입 당일 구매) 또는 "기존(첫구매)"(가입 후 처음 구매, 오래된 회원 포함)인 주문을 합친 것 = 생애 최초 주문. <b>건수 기준</b>이라 같은 회원이 같은 날 여러 건 주문하면 중복 집계될 수 있습니다(유니크 회원 수 아님) · 국가(대한민국 외 제외)와 봇/크롤러(Yeti 등, os 값 기준) 트래픽은 모든 지표에서 제외했습니다.
+      DAU=그날 앰플리튜드에 어떤 이벤트든 1개 이상 발생시킨 유저 수(<code>_active</code>, 로그인 여부 무관 전체 방문자) · <b>신규 가입자 수</b>=그날 <code>complete_signup</code> 이벤트를 발생시킨 유저 수(가입일=이벤트 발생일, KST) · "DAU·신규가입 비중" 카드의 %는 전체 트래픽 중 신규가입이 차지하는 비중이며, 기존 회원 중 신규 비율이 아닙니다.
+      <br><br><b>첫구매 지표는 전부 주문DB 기준</b>(Amplitude complete_order 이벤트는 사용하지 않음), <code>customer_type</code> 컬럼으로 판별합니다: "신규"=가입 당일 구매, "기존(첫구매)"=가입 후 처음 구매(오래된 회원 포함) → 이 둘을 합친 게 생애 최초 주문입니다.
+      <br>· <b>가입 당일 첫구매 전환율</b> = 그날 가입자 중 customer_type="신규"인 <b>주문 건수</b> ÷ 그날 가입자 수. 회원 단위 유니크 전환율이 아니라 <b>건수 기준 근사치</b>입니다 — 가입자와 구매자가 항상 동일 집단은 아니고(같은 날 여러 건 주문 시 100% 초과 가능), 유니크 고객 기준 정확한 값은 별도 집계가 더 필요해서 아직 준비 중입니다.
+      <br>· <b>당일 첫구매 건수</b> = "신규"+"기존(첫구매)" 전체 합. 카드 하단에 신규가입/기존가입 비중을 나눠서 표시합니다(가입 성과인지, 오래된 회원의 구매 전환인지 구분용).
+      <br>· <b>첫구매 거래액</b>=취소·환불 포함 총 주문금액, <b>첫구매 순매출</b>=거기서 자사 할인을 제외한 값(취소·환불건도 포함되어 있어 카드 하단에 취소·환불률을 같이 표시함), <b>첫구매 객단가</b>=순매출 ÷ 첫구매 건수.
+      <br>· 비교값은 <b>전주 동일요일 대비</b>를 기본으로 강조하고, 전일·전년은 참고용으로 옅게 표시합니다.
+      <br>· <b>가입 후 구매 퍼널</b>: Amplitude 이벤트 기준, 가입 → 상품 조회는 공통 경로, 이후 <b style="color:#c8102e">장바구니</b>/<b style="color:#2f6fe8">찜</b> 두 경로로 분기해서 각각 결제 시작 → 주문 완료까지 봄(Sankey 다이어그램, 색=경로). 유니크 사용자, 가입 후 30일 이내 전환만 집계. Amplitude API 특성상 절대 인원수를 직접 안 줘서, 신규 가입자 수 × 누적 전환율로 역산한 값입니다.
+      <br>· 국가(대한민국 외 제외)와 봇/크롤러(Yeti 등, os 값 기준) 트래픽은 모든 지표에서 제외했습니다.
     </div>
 
     <div class="sechd">기간별 추이 <span class="badge real">실데이터</span>
       <div style="margin-left:auto;display:flex;align-items:flex-end;gap:6px">
+        <span class="txt" style="align-self:center;margin-right:2px">추이 조회 기간(이 차트·표에만 적용) </span>
         <div class="fld"><input type="date" id="daily_trend_from" style="height:26px;font-size:11.5px;padding:3px 6px"></div>
         <span style="color:#aaa;font-size:11px">~</span>
         <div class="fld"><input type="date" id="daily_trend_to" style="height:26px;font-size:11.5px;padding:3px 6px"></div>
@@ -147,12 +163,12 @@
       </div>
     </div>
     <div class="card">
-      <p class="csub">막대=일별 신규 유저 수(Amplitude) · 선=일별 신규 구매 건수(주문DB, 생애 최초 주문 기준) · 기본값은 최근 30일</p>
+      <p class="csub">막대=일별 신규 가입자 수(Amplitude, 왼쪽 축) · 선=일별 당일 첫구매 건수(주문DB, 오른쪽 축) · 기본값은 최근 30일</p>
       <div class="chart" id="c_daily_trend"></div>
     </div>
     <div class="tblwrap" style="margin-top:10px">
       <table class="chtbl">
-        <thead><tr><th>날짜</th><th>신규 유저</th><th>신규 구매 건수</th><th>전환율</th><th>신규 구매 매출</th></tr></thead>
+        <thead><tr><th>날짜</th><th>신규 가입자</th><th>신규가입 첫구매</th><th>기존가입 첫구매</th><th>첫구매 합계</th><th>가입당일 전환율</th><th>첫구매 거래액</th><th>첫구매 순매출</th></tr></thead>
         <tbody id="daily_table_body"></tbody>
       </table>
     </div>
@@ -161,6 +177,18 @@
       <div class="ntoggle" id="dailygrp" style="margin-left:auto"><button data-g="w" class="on">주간</button><button data-g="m">월간</button></div>
     </div>
     <div class="card"><div class="chart" id="c_daily_period"></div></div>
+
+    <div class="sechd">가입 후 구매 퍼널 <span class="badge real">실데이터</span> <span class="n" id="funnel_period"></span></div>
+    <div class="card">
+      <p class="csub" id="funnel_sub">가입 → 상품 조회까지는 동일 경로, 이후 <span style="color:#c8102e;font-weight:700">장바구니</span> / <span style="color:#2f6fe8;font-weight:700">찜</span> 두 경로로 분기됩니다. 유니크 사용자 기준, 가입 후 30일 내 전환. 불러오는 중…</p>
+      <div class="chart" id="c_funnel" style="height:320px"></div>
+    </div>
+    <div class="tblwrap" style="margin-top:10px">
+      <table class="chtbl">
+        <thead><tr><th>단계</th><th style="color:#c8102e">장바구니 경로</th><th>이전 기간 대비</th><th style="color:#2f6fe8">찜 경로</th><th>이전 기간 대비</th></tr></thead>
+        <tbody id="funnel_table_body"></tbody>
+      </table>
+    </div>
 
     <div class="sechd">인사이트 · 액션</div>
     <div id="ai_daily" class="ainote-wrap"></div>
@@ -281,17 +309,39 @@ function fetchActiveDaily(fromISO,toISO){
       return map;
     });
 }
-// 신규 구매(=생애 최초 주문) 건수·매출: 주문DB의 customer_type 컬럼을 그대로 씀.
+// 첫구매(=생애 최초 주문) 건수·매출: 주문DB의 customer_type 컬럼을 그대로 씀.
 // customer_type: "신규"(가입 당일 구매) / "기존(첫구매)"(가입 후 처음 구매, 오래된 회원도 포함) / "기존(재구매)" / "비회원"
-// → "신규"+"기존(첫구매)" = 생애 최초 주문(정확히 우리가 원하는 정의). 이미 상류 배치에서 계산돼 매 주문行에 박혀있는
-// 값이라 회원별 전체 이력을 실시간으로 훑을 필요가 없고, order_datetime 인덱스로 바로 좁혀져서 빠름.
-// 별도 사전집계 테이블/cron 불필요 — 기존 dash_daily RPC에 filters.customer_type만 얹어서 씀.
-// 건수 기준 집계(주문수)이며, 같은 회원이 같은 날 여러 건 주문하면 건수가 중복 집계될 수 있음(유니크 회원수 아님).
-function fetchNewBuyers(fromISO,toISO){
-  return rpc("dash_daily",{from:fromISO,to:toISO,filters:{customer_type:["신규","기존(첫구매)"]}}).then(function(rows){
+// → "신규"+"기존(첫구매)" = 생애 최초 주문. 이미 상류 배치에서 계산돼 매 주문行에 박혀있는 값이라
+// 회원별 전체 이력을 실시간으로 훑을 필요가 없고, order_datetime 인덱스로 바로 좁혀져서 빠름.
+// 별도 사전집계 테이블/cron 불필요 — 기존 dash_daily RPC에 filters만 얹어서 3번 호출(전체/신규만/취소만)해서 합성함.
+// ⚠ 건수 기준 집계(주문수)이며, 같은 회원이 같은 날 여러 건 주문하면 건수가 중복 집계될 수 있음(유니크 회원수 아님).
+//   유니크 회원수 기준 정확한 지표는 member_no가 필요해서 별도 RPC 승인이 있어야 함(아직 미적용).
+var CANCEL_STATUSES=["교환요청","구매취소(결제후발송전취소)","구매취소환불완료","반품요청","반품환불완료","판매취소","판매취소완료"];
+function fetchFirstPurchaseDaily(fromISO,toISO){
+  var pAll = rpc("dash_daily",{from:fromISO,to:toISO,filters:{customer_type:["신규","기존(첫구매)"]}});
+  var pNew = rpc("dash_daily",{from:fromISO,to:toISO,filters:{customer_type:["신규"]}});
+  var pCancel = rpc("dash_daily",{from:fromISO,to:toISO,filters:{customer_type:["신규","기존(첫구매)"],order_status:CANCEL_STATUSES}});
+  return Promise.all([pAll,pNew,pCancel]).then(function(res){
+    var allMap={}, newMap={}, cancelMap={}, days={};
+    (res[0]||[]).forEach(function(r){ allMap[r.d]=r; days[r.d]=1; });
+    (res[1]||[]).forEach(function(r){ newMap[r.d]=r; days[r.d]=1; });
+    (res[2]||[]).forEach(function(r){ cancelMap[r.d]=r; });
     var map={};
-    (rows||[]).forEach(function(r){
-      map[r.d] = { new_buyers:r.orders, gmv:r.tp, revenue:r.gross, net_rev:r.net_rev };
+    Object.keys(days).forEach(function(day){
+      var a=allMap[day]||{orders:0,tp:0,net_rev:0,points_used:0};
+      var n=newMap[day]||{orders:0};
+      var c=cancelMap[day]||{orders:0};
+      var totalOrders=Number(a.orders)||0, newOrders=Number(n.orders)||0;
+      map[day]={
+        total_orders: totalOrders,
+        new_orders: newOrders,
+        existing_orders: Math.max(0,totalOrders-newOrders),
+        tp: Number(a.tp)||0,
+        net_rev: Number(a.net_rev)||0,
+        points_used: Number(a.points_used)||0,
+        cancel_orders: Number(c.orders)||0,
+        cancel_rate: totalOrders>0 ? (Number(c.orders)||0)/totalOrders : null
+      };
     });
     return map;
   });
@@ -304,6 +354,26 @@ function fetchCohortConversion(fromISO,toISO){
 }
 function fetchDistribution(fromISO,toISO){
   return rpc("dash_first_purchase_distribution",{from:fromISO,to:toISO});
+}
+
+// ── 가입 후 구매 퍼널(Amplitude) ──
+// funnels 엔드포인트 응답은 절대 인원수를 안 주고 누적 전환율(cumulative, 0~1)만 줌
+// → 1단계(가입) 절대 인원수는 이미 갖고 있는 signupMap 합계로 구하고, 거기에 누적 전환율을 곱해서 인원수를 역산함.
+var FUNNEL_STEPS_CART=[["complete_signup","가입"],["view_product_detail","상품 조회"],["add_to_cart","장바구니 담기"],["view_order_form","결제 시작"],["complete_order","주문 완료"]];
+var FUNNEL_STEPS_WISH=[["complete_signup","가입"],["view_product_detail","상품 조회"],["add_to_wish","찜하기"],["view_order_form","결제 시작"],["complete_order","주문 완료"]];
+function sumRange(map,fromISO,toISO){
+  var s=0; enumerateDates(fromISO,toISO).forEach(function(day){ s += (map[day]||0); });
+  return s;
+}
+function fetchFunnelCumulative(steps,fromISO,toISO){
+  return amp("funnels",{
+    e: steps.map(function(s){ return JSON.stringify(ev(s[0])); }),
+    start:ad(fromISO), end:ad(toISO), cs:2592000, // 30일 전환 윈도우
+    s:[JSON.stringify([{prop:"os",op:"does not contain",values:["Yeti","bot","headless","bingbot","bingbot2","crawler"]}])]
+  }).then(function(d){
+    var rows = Array.isArray(d&&d.data) ? d.data : (d&&d.data ? [d.data] : []);
+    return (rows[0] && rows[0].cumulative) ? rows[0].cumulative : null;
+  });
 }
 
 // ── 증감 포맷: 증감률(%) vs %p 는 반드시 구분 ──
@@ -359,19 +429,20 @@ function loadDailyTab(){
   var d1=ymdAdd(ref,-1), d7=ymdAdd(ref,-7), d364=ymdAdd(ref,-364);
   return Promise.all([fetchSignupDaily(winStart,ref), fetchActiveDaily(winStart,ref)]).then(function(res){
     var signupMap=res[0], dauMap=res[1];
-    return fetchNewBuyers(winStart,ref).then(function(buyerMap){
+    return fetchFirstPurchaseDaily(winStart,ref).then(function(buyerMap){
       hideDbPending();
       STATE.daily={ref:ref,d1:d1,d7:d7,d364:d364,coverFrom:winStart,coverTo:ref,signupMap:signupMap,dauMap:dauMap,buyerMap:buyerMap};
       renderDailyAll();
     }).catch(function(e){
       console.error(e);
-      markDbPending("신규 구매 건수·매출 데이터를 불러오지 못했어요. 잠시 후 다시 시도해주세요.");
+      markDbPending("첫구매 건수·매출 데이터를 불러오지 못했어요. 잠시 후 다시 시도해주세요.");
       STATE.daily={ref:ref,d1:d1,d7:d7,d364:d364,coverFrom:winStart,coverTo:ref,signupMap:signupMap,dauMap:dauMap,buyerMap:null};
       renderDailyAll();
     });
   }).catch(function(e){
     console.error(e);
-    $("daily_kpis").innerHTML='<div class="secload" style="color:#c8102e">데이터 로드 실패: '+esc(e.message)+'</div>';
+    $("daily_kpis_primary").innerHTML='<div class="secload" style="color:#c8102e">데이터 로드 실패: '+esc(e.message)+'</div>';
+    $("daily_kpis_secondary").innerHTML="";
   });
 }
 function renderDailyAll(){
@@ -381,34 +452,162 @@ function renderDailyAll(){
   renderDailyTrendRange(ymdAdd(STATE.daily.ref,-29), STATE.daily.ref);
   renderDailyPeriod("w");
   loadDailyAi();
+  loadDailyFunnel();
+}
+function loadDailyFunnel(){
+  var d=STATE.daily; if(!d) return;
+  var ref=d.ref;
+  var curFrom=ymdAdd(ref,-29), curTo=ref;
+  var prevFrom=ymdAdd(ref,-59), prevTo=ymdAdd(ref,-30);
+  $("funnel_period").textContent="("+curFrom+" ~ "+curTo+" 가입자, 이전 기간 "+prevFrom+" ~ "+prevTo+")";
+  var totalCur=sumRange(d.signupMap,curFrom,curTo);
+  var totalPrev=sumRange(d.signupMap,prevFrom,prevTo);
+  // 429(Amplitude rate limit) 방지 위해 4번 순차 호출(장바구니경로 이번/이전, 찜경로 이번/이전)
+  return fetchFunnelCumulative(FUNNEL_STEPS_CART,curFrom,curTo).then(function(cartCumCur){
+    return fetchFunnelCumulative(FUNNEL_STEPS_CART,prevFrom,prevTo).then(function(cartCumPrev){
+      return fetchFunnelCumulative(FUNNEL_STEPS_WISH,curFrom,curTo).then(function(wishCumCur){
+        return fetchFunnelCumulative(FUNNEL_STEPS_WISH,prevFrom,prevTo).then(function(wishCumPrev){
+          renderDailyFunnel(totalCur,totalPrev,cartCumCur,cartCumPrev,wishCumCur,wishCumPrev);
+        });
+      });
+    });
+  }).catch(function(e){
+    console.error(e);
+    $("funnel_sub").textContent="퍼널 데이터를 불러오지 못했어요.";
+    $("c_funnel").innerHTML=""; $("funnel_table_body").innerHTML="";
+  });
+}
+var FUNNEL_CART_COLOR="#c8102e", FUNNEL_WISH_COLOR="#2f6fe8", FUNNEL_SHARED_COLOR="#9a9992";
+function renderDailyFunnel(totalCur,totalPrev,cartCumCur,cartCumPrev,wishCumCur,wishCumPrev){
+  if(cartCumCur==null || wishCumCur==null){
+    $("funnel_sub").textContent="퍼널 응답 형식을 확인하지 못했습니다(Amplitude 응답 구조 변경 가능성) — 콘솔 로그를 확인해주세요.";
+    return;
+  }
+  var cartCur=cartCumCur.map(function(c){ return Math.round((c||0)*totalCur); });
+  var wishCur=wishCumCur.map(function(c){ return Math.round((c||0)*totalCur); });
+  var cartPrev=(cartCumPrev||[]).map(function(c){ return Math.round((c||0)*totalPrev); });
+  var wishPrev=(wishCumPrev||[]).map(function(c){ return Math.round((c||0)*totalPrev); });
+  var cartOverall=cartCumCur.length?cartCumCur[cartCumCur.length-1]:null;
+  var wishOverall=wishCumCur.length?wishCumCur[wishCumCur.length-1]:null;
+  $("funnel_sub").innerHTML = '가입 → 상품 조회까지는 동일 경로, 이후 <span style="color:'+FUNNEL_CART_COLOR+';font-weight:700">장바구니</span> / <span style="color:'+FUNNEL_WISH_COLOR+';font-weight:700">찜</span> 두 경로로 분기됩니다. 유니크 사용자 기준, 가입 후 30일 내 전환.'
+    + (cartOverall!=null&&wishOverall!=null ? (' 최종 전환율은 장바구니 경로 '+pct1(cartOverall)+' vs 찜 경로 '+pct1(wishOverall)+' — 장바구니에 담은 사람이 훨씬 더 잘 삽니다.') : '');
+
+  // 공유 트렁크(가입→상품조회) + 장바구니/찜 분기, Sankey로 표현(색=경로)
+  var viewCount = cartCur[1]; // 상품조회 수는 두 경로 동일
+  var NODE_VAL={};
+  NODE_VAL["가입"]=totalCur;
+  NODE_VAL["상품 조회"]=viewCount;
+  NODE_VAL["장바구니 담기"]=cartCur[2];
+  NODE_VAL["찜하기"]=wishCur[2];
+  NODE_VAL["결제시작·장바구니"]=cartCur[3];
+  NODE_VAL["결제시작·찜"]=wishCur[3];
+  NODE_VAL["주문완료·장바구니"]=cartCur[4];
+  NODE_VAL["주문완료·찜"]=wishCur[4];
+  var nodes=[
+    {name:"가입",itemStyle:{color:FUNNEL_SHARED_COLOR}},
+    {name:"상품 조회",itemStyle:{color:FUNNEL_SHARED_COLOR}},
+    {name:"장바구니 담기",itemStyle:{color:FUNNEL_CART_COLOR}},
+    {name:"찜하기",itemStyle:{color:FUNNEL_WISH_COLOR}},
+    {name:"결제시작·장바구니",itemStyle:{color:FUNNEL_CART_COLOR}},
+    {name:"결제시작·찜",itemStyle:{color:FUNNEL_WISH_COLOR}},
+    {name:"주문완료·장바구니",itemStyle:{color:FUNNEL_CART_COLOR}},
+    {name:"주문완료·찜",itemStyle:{color:FUNNEL_WISH_COLOR}}
+  ];
+  var links=[
+    {source:"가입",target:"상품 조회",value:Math.max(viewCount,1)},
+    {source:"상품 조회",target:"장바구니 담기",value:Math.max(cartCur[2],1)},
+    {source:"상품 조회",target:"찜하기",value:Math.max(wishCur[2],1)},
+    {source:"장바구니 담기",target:"결제시작·장바구니",value:Math.max(cartCur[3],1)},
+    {source:"찜하기",target:"결제시작·찜",value:Math.max(wishCur[3],1)},
+    {source:"결제시작·장바구니",target:"주문완료·장바구니",value:Math.max(cartCur[4],1)},
+    {source:"결제시작·찜",target:"주문완료·찜",value:Math.max(wishCur[4],1)}
+  ];
+  chart("c_funnel").setOption({
+    tooltip:{trigger:"item",formatter:function(p){
+      if(p.dataType==="edge"){ return p.data.source+" → "+p.data.target+"<br>"+won(p.value)+"명"; }
+      return p.name+": "+won(NODE_VAL[p.name]||0)+"명";
+    }},
+    series:[{
+      type:"sankey",
+      left:8,right:130,top:24,bottom:16,
+      nodeGap:20,nodeWidth:14,
+      layoutIterations:32,
+      label:{fontSize:11,color:"#333",formatter:function(p){ return p.name+"  "+won(NODE_VAL[p.name]||0)+"명"; }},
+      lineStyle:{color:"source",opacity:0.32,curveness:0.5},
+      emphasis:{focus:"adjacency"},
+      data:nodes,
+      links:links
+    }]
+  },true);
+
+  function row(label,curArr,prevArr,idx){
+    var cur=curArr[idx], prev=(prevArr&&prevArr.length)?prevArr[idx]:null;
+    return {label:label,cur:cur,prev:prev};
+  }
+  var cartRows=[row("가입",cartCur,cartPrev,0),row("상품 조회",cartCur,cartPrev,1),row("장바구니 담기",cartCur,cartPrev,2),row("결제 시작",cartCur,cartPrev,3),row("주문 완료",cartCur,cartPrev,4)];
+  var wishRows=[row("가입",wishCur,wishPrev,0),row("상품 조회",wishCur,wishPrev,1),row("찜하기",wishCur,wishPrev,2),row("결제 시작",wishCur,wishPrev,3),row("주문 완료",wishCur,wishPrev,4)];
+  var stepLabels=["가입","상품 조회","장바구니 담기 / 찜하기","결제 시작","주문 완료"];
+  var rows=stepLabels.map(function(lbl,i){
+    var c=cartRows[i], w=wishRows[i];
+    return '<tr><td>'+esc(lbl)+'</td>'
+      +'<td>'+won(c.cur)+'명</td><td><span class="chg '+deltaPct(c.cur,c.prev).c+'">'+deltaPct(c.cur,c.prev).t+'</span></td>'
+      +'<td>'+won(w.cur)+'명</td><td><span class="chg '+deltaPct(w.cur,w.prev).c+'">'+deltaPct(w.cur,w.prev).t+'</span></td></tr>';
+  }).join("");
+  $("funnel_table_body").innerHTML=rows;
 }
 function buyerRowOf(d,day){
   if(d.buyerMap==null) return null;
-  return d.buyerMap[day] || {new_buyers:0,gmv:0,revenue:0,net_rev:0};
+  return d.buyerMap[day] || {total_orders:0,new_orders:0,existing_orders:0,tp:0,net_rev:0,points_used:0,cancel_orders:0,cancel_rate:null};
+}
+function kpiCard2(title,valueStr,cmpArr,subText,big){
+  var chips=(cmpArr||[]).map(function(c){
+    return '<div class="kpichip'+(c.primary?"":" sub")+'"><span>'+esc(c.label)+'</span><span class="chg '+c.delta.c+'">'+c.delta.t+'</span></div>';
+  }).join("");
+  var sub = subText ? '<div style="font-size:10.5px;color:var(--sub);margin:-5px 0 8px">'+subText+'</div>' : "";
+  return '<div class="kpicard'+(big?" big":"")+'"><div class="kt">'+esc(title)+'</div><div class="kv">'+valueStr+'</div>'+sub+chips+'</div>';
+}
+// 비교값: 전주 동일요일을 기본(강조)으로, 전일·전년은 보조(옅게)로.
+function cmp3(s,fn){
+  return [
+    {label:"전주 동일요일",delta:fn(s.cur,s.d7),primary:true},
+    {label:"전일",delta:fn(s.cur,s.d1)},
+    {label:"전년 동일일",delta:fn(s.cur,s.d364)}
+  ];
 }
 function renderDailyKPIs(){
   var d=STATE.daily; if(!d) return;
-  $("daily_period").textContent="(기준일 "+d.ref+")";
+  var isToday = d.ref===ymd(new Date());
+  $("daily_period").innerHTML="(기준일 "+d.ref+")"+(isToday?' <span style="color:var(--warn);font-weight:700">⚠ 주문DB에 오늘 데이터가 아직 반영되지 않았을 수 있어요</span>':"");
   function get(map,day){ return (map && map[day]!=null) ? map[day] : null; }
   function seriesFor(fn){ return {cur:fn(d.ref), d1:fn(d.d1), d7:fn(d.d7), d364:fn(d.d364)}; }
-  var dau     = seriesFor(function(day){ return get(d.dauMap,day); });
-  var signup  = seriesFor(function(day){ return get(d.signupMap,day); });
-  var buyer   = seriesFor(function(day){ var r=buyerRowOf(d,day); return r? r.new_buyers : null; });
-  var revenue = seriesFor(function(day){ var r=buyerRowOf(d,day); return r? r.revenue : null; });
-  var cvr     = seriesFor(function(day){ var s=get(d.signupMap,day), r=buyerRowOf(d,day); return (s&&r&&s>0)? r.new_buyers/s : null; });
-  var aov     = seriesFor(function(day){ var r=buyerRowOf(d,day); return (r&&r.new_buyers>0)? r.revenue/r.new_buyers : null; });
-  function cmp3(s,fn){ return [{label:"전일",delta:fn(s.cur,s.d1)},{label:"전주 동일요일",delta:fn(s.cur,s.d7)},{label:"전년 동일일",delta:fn(s.cur,s.d364)}]; }
+  var dau      = seriesFor(function(day){ return get(d.dauMap,day); });
+  var signup   = seriesFor(function(day){ return get(d.signupMap,day); });
+  var total    = seriesFor(function(day){ var r=buyerRowOf(d,day); return r? r.total_orders : null; });
+  var newOnly  = seriesFor(function(day){ var r=buyerRowOf(d,day); return r? r.new_orders : null; });
+  var existing = seriesFor(function(day){ var r=buyerRowOf(d,day); return r? r.existing_orders : null; });
+  var tp       = seriesFor(function(day){ var r=buyerRowOf(d,day); return r? r.tp : null; });
+  var netRev   = seriesFor(function(day){ var r=buyerRowOf(d,day); return r? r.net_rev : null; });
+  var cancelRt = seriesFor(function(day){ var r=buyerRowOf(d,day); return (r&&r.total_orders>0)? r.cancel_rate : null; });
+  var cvr      = seriesFor(function(day){ var s=get(d.signupMap,day), r=buyerRowOf(d,day); return (s&&r&&s>0)? r.new_orders/s : null; });
+  var aov      = seriesFor(function(day){ var r=buyerRowOf(d,day); return (r&&r.total_orders>0)? r.net_rev/r.total_orders : null; });
   var dauShare = (dau.cur && signup.cur!=null) ? signup.cur/dau.cur : null;
-  var html="";
-  html+=kpiCard("DAU(전체 활성 유저)", dau.cur==null?"-":won(dau.cur)+"명", cmp3(dau,deltaPct));
-  html+=kpiCard("신규 유저 수", signup.cur==null?"-":won(signup.cur)+"명", cmp3(signup,deltaPct),
-    dauShare==null?"":("DAU 대비 "+pct1(dauShare)));
-  html+=kpiCard("신규 구매 건수", buyer.cur==null?"-":won(buyer.cur)+"건", cmp3(buyer,deltaPct));
-  html+=kpiCard("신규유저 구매 전환(건수)", cvr.cur==null?"-":pct1(cvr.cur), cmp3(cvr,deltaPP),
-    "신규 유저 수 대비 신규 구매 건수 · 건수 기준이라 100% 초과 가능");
-  html+=kpiCard("신규 구매 매출", revenue.cur==null?"-":won(revenue.cur)+"원", cmp3(revenue,deltaPct));
-  html+=kpiCard("신규 구매 객단가", aov.cur==null?"-":won(aov.cur)+"원", cmp3(aov,deltaPct));
-  $("daily_kpis").innerHTML=html;
+
+  var primary="";
+  primary+=kpiCard2("신규 가입자 수", signup.cur==null?"-":won(signup.cur)+"명", cmp3(signup,deltaPct), null, true);
+  primary+=kpiCard2("가입 당일 첫구매 전환율", cvr.cur==null?"-":pct1(cvr.cur), cmp3(cvr,deltaPP),
+    "신규가입자 대비 당일 첫구매 <b>건수</b> · 고객수 아님(100% 초과 가능)", true);
+  primary+=kpiCard2("당일 첫구매 건수", total.cur==null?"-":won(total.cur)+"건", cmp3(total,deltaPct),
+    (newOnly.cur==null?"":("신규가입 "+won(newOnly.cur)+"건 · 기존가입 "+won(existing.cur)+"건")), true);
+  $("daily_kpis_primary").innerHTML=primary;
+
+  var secondary="";
+  secondary+=kpiCard2("첫구매 거래액", tp.cur==null?"-":won(tp.cur)+"원", cmp3(tp,deltaPct), "취소·환불 포함 총 주문금액");
+  secondary+=kpiCard2("첫구매 순매출", netRev.cur==null?"-":won(netRev.cur)+"원", cmp3(netRev,deltaPct),
+    cancelRt.cur==null?"":("취소·환불률 "+pct1(cancelRt.cur)));
+  secondary+=kpiCard2("첫구매 객단가", aov.cur==null?"-":won(aov.cur)+"원", cmp3(aov,deltaPct), "순매출 ÷ 첫구매 건수");
+  secondary+=kpiCard2("DAU · 신규가입 비중", dau.cur==null?"-":won(dau.cur)+"명", cmp3(dau,deltaPct),
+    dauShare==null?"":("신규가입 비중 "+pct1(dauShare)));
+  $("daily_kpis_secondary").innerHTML=secondary;
 }
 function ensureDailyCoverage(fromISO,toISO){
   var d=STATE.daily;
@@ -418,7 +617,7 @@ function ensureDailyCoverage(fromISO,toISO){
   if(!needs.length) return Promise.resolve();
   return Promise.all(needs.map(function(r){
     var p = fetchSignupDaily(r[0],r[1]).then(function(sm){ Object.assign(d.signupMap,sm); });
-    if(d.buyerMap!=null){ p = p.then(function(){ return fetchNewBuyers(r[0],r[1]).then(function(bm){ Object.assign(d.buyerMap,bm); }); }); }
+    if(d.buyerMap!=null){ p = p.then(function(){ return fetchFirstPurchaseDaily(r[0],r[1]).then(function(bm){ Object.assign(d.buyerMap,bm); }); }); }
     return p;
   })).then(function(){
     if(fromISO<d.coverFrom) d.coverFrom=fromISO;
@@ -430,25 +629,31 @@ function renderDailyTrendRange(fromISO,toISO){
   var days=enumerateDates(fromISO,toISO);
   var labels=days.map(function(s){return s.slice(5,10);});
   var signupArr=days.map(function(day){ var v=d.signupMap[day]; return v==null?0:v; });
-  var buyerArr=days.map(function(day){ var r=buyerRowOf(d,day); return r? r.new_buyers : 0; });
+  var buyerArr=days.map(function(day){ var r=buyerRowOf(d,day); return r? r.total_orders : 0; });
   chart("c_daily_trend").setOption({
-    grid:{left:46,right:14,top:26,bottom:36},
+    grid:{left:46,right:46,top:26,bottom:36},
     tooltip:{trigger:"axis"},
     legend:{top:0,textStyle:{fontSize:10}},
     xAxis:{type:"category",data:labels,axisLabel:{fontSize:9,color:"#999"}},
-    yAxis:{type:"value",axisLabel:{fontSize:9,color:"#999"}},
+    yAxis:[
+      {type:"value",name:"신규 가입자",nameTextStyle:{fontSize:9,color:"#999"},axisLabel:{fontSize:9,color:"#999"}},
+      {type:"value",name:"첫구매 건수",nameTextStyle:{fontSize:9,color:"#c8102e"},axisLabel:{fontSize:9,color:"#c8102e"},splitLine:{show:false}}
+    ],
     series:[
-      {name:"신규 유저",type:"bar",data:signupArr,itemStyle:{color:"#c9c7c0"},barMaxWidth:18},
-      {name:"신규 구매 건수",type:"line",data:d.buyerMap==null?[]:buyerArr,symbol:"circle",symbolSize:5,lineStyle:{width:2,color:"#c8102e"},itemStyle:{color:"#c8102e"}}
+      {name:"신규 가입자",type:"bar",data:signupArr,itemStyle:{color:"#c9c7c0"},barMaxWidth:18,yAxisIndex:0},
+      {name:"당일 첫구매 건수",type:"line",data:d.buyerMap==null?[]:buyerArr,symbol:"circle",symbolSize:5,lineStyle:{width:2,color:"#c8102e"},itemStyle:{color:"#c8102e"},yAxisIndex:1}
     ]
   },true);
   var rows=days.slice().reverse().map(function(day){
     var s=d.signupMap[day];
     var r=buyerRowOf(d,day);
-    var buy = r? r.new_buyers : null;
-    var rev = r? r.revenue : null;
-    var cvr = (s&&buy!=null&&s>0)? buy/s : null;
-    return '<tr><td>'+day+'</td><td>'+(s==null?"-":won(s))+'</td><td>'+(buy==null?"-":won(buy))+'</td><td>'+(cvr==null?"-":pct1(cvr))+'</td><td>'+(rev==null?"-":won(rev)+"원")+'</td></tr>';
+    var newO = r? r.new_orders : null;
+    var exO  = r? r.existing_orders : null;
+    var tot  = r? r.total_orders : null;
+    var tp   = r? r.tp : null;
+    var net  = r? r.net_rev : null;
+    var cvr  = (s&&newO!=null&&s>0)? newO/s : null;
+    return '<tr><td>'+day+'</td><td>'+(s==null?"-":won(s))+'</td><td>'+(newO==null?"-":won(newO))+'</td><td>'+(exO==null?"-":won(exO))+'</td><td>'+(tot==null?"-":won(tot))+'</td><td>'+(cvr==null?"-":pct1(cvr))+'</td><td>'+(tp==null?"-":won(tp)+"원")+'</td><td>'+(net==null?"-":won(net)+"원")+'</td></tr>';
   }).join("");
   $("daily_table_body").innerHTML = rows;
 }
@@ -468,7 +673,7 @@ function bucketDailyBy(d,mode){
     if(!buckets[key]) buckets[key]={signup:0,buyer:0,revenue:0};
     buckets[key].signup += (d.signupMap[day]||0);
     var r=buyerRowOf(d,day);
-    if(r){ buckets[key].buyer += r.new_buyers; buckets[key].revenue += r.revenue; }
+    if(r){ buckets[key].buyer += r.total_orders; buckets[key].revenue += r.net_rev; }
   });
   var keys=Object.keys(buckets).sort();
   return {keys:keys,buckets:buckets};
@@ -481,14 +686,17 @@ function renderDailyPeriod(mode){
   var signupArr=keys.map(function(k){ return b.buckets[k].signup; });
   var buyerArr=keys.map(function(k){ return d.buyerMap==null? null : b.buckets[k].buyer; });
   chart("c_daily_period").setOption({
-    grid:{left:46,right:14,top:26,bottom:36},
+    grid:{left:46,right:46,top:26,bottom:36},
     tooltip:{trigger:"axis"},
     legend:{top:0,textStyle:{fontSize:10}},
     xAxis:{type:"category",data:labels,axisLabel:{fontSize:9,color:"#999"}},
-    yAxis:{type:"value",axisLabel:{fontSize:9,color:"#999"}},
+    yAxis:[
+      {type:"value",name:"신규 가입자",nameTextStyle:{fontSize:9,color:"#999"},axisLabel:{fontSize:9,color:"#999"}},
+      {type:"value",name:"첫구매 건수",nameTextStyle:{fontSize:9,color:"#c8102e"},axisLabel:{fontSize:9,color:"#c8102e"},splitLine:{show:false}}
+    ],
     series:[
-      {name:"신규 유저",type:"bar",data:signupArr,itemStyle:{color:"#c9c7c0"},barMaxWidth:22},
-      {name:"신규 구매 건수",type:"line",data:buyerArr,symbol:"circle",symbolSize:5,lineStyle:{width:2,color:"#c8102e"},itemStyle:{color:"#c8102e"}}
+      {name:"신규 가입자",type:"bar",data:signupArr,itemStyle:{color:"#c9c7c0"},barMaxWidth:22,yAxisIndex:0},
+      {name:"당일 첫구매 건수",type:"line",data:buyerArr,symbol:"circle",symbolSize:5,lineStyle:{width:2,color:"#c8102e"},itemStyle:{color:"#c8102e"},yAxisIndex:1}
     ]
   },true);
 }
@@ -499,18 +707,22 @@ $("dailygrp").addEventListener("click",function(e){
 });
 function buildDailyAiContext(){
   var d=STATE.daily; if(!d) return {};
-  function row(day){ var r=buyerRowOf(d,day); return {신규유저:d.signupMap[day], 신규구매건수:r?r.new_buyers:null, 매출:r?r.revenue:null}; }
+  function row(day){
+    var r=buyerRowOf(d,day);
+    return {신규가입자:d.signupMap[day], 신규가입첫구매:r?r.new_orders:null, 기존가입첫구매:r?r.existing_orders:null,
+      첫구매합계:r?r.total_orders:null, 첫구매순매출:r?r.net_rev:null, 취소율:r?r.cancel_rate:null};
+  }
   return {
     기준일:d.ref,
     오늘:row(d.ref), 전일:row(d.d1), 전주동일요일:row(d.d7), 전년동일일:row(d.d364),
-    최근7일: enumerateDates(ymdAdd(d.ref,-6),d.ref).map(function(day){ var r=buyerRowOf(d,day); return {날짜:day,신규유저:d.signupMap[day],신규구매건수:r?r.new_buyers:null}; })
+    최근7일: enumerateDates(ymdAdd(d.ref,-6),d.ref).map(function(day){ var r=buyerRowOf(d,day); return {날짜:day,신규가입자:d.signupMap[day],첫구매합계:r?r.total_orders:null}; })
   };
 }
 function loadDailyAi(){
   if(THUMB) return;
   var ctx=buildDailyAiContext();
   return window.MUSTIT.fn("ai-insight",{
-    context:"신규유저 첫구매 전환 대시보드 — 데일리 탭. 신규유저=Amplitude, 신규구매건수·매출=주문DB customer_type(신규/기존첫구매) 기준 생애최초주문, 건수 집계.", data:ctx,
+    context:"신규유저 첫구매 전환 대시보드 — 데일리 탭. 신규가입자=Amplitude, 첫구매 지표=주문DB customer_type(신규/기존첫구매) 기준 생애최초주문, 건수 집계(유니크 고객수 아님).", data:ctx,
     question:"아래 데이터를 보고 [변화]→[원인 후보]→[확인할 지점] 3파트로 '---' 구분해서 각 1~2문장씩 써줘. 인과관계를 확신하듯 말하지 말고 '~일 가능성' 정도로. 특이 변화가 없으면 그렇다고 짧게 말해줘. "+TONE_GUIDE,
     dashboard:"d-msztl4gqh03", params:{refdate:$("refdate").value}
   }).then(function(r){ renderTriNote("ai_daily", r.insight, ["변화","원인 후보","확인할 지점"]); })
@@ -695,7 +907,9 @@ function showTab(n){
 function setDefaults(){ $("refdate").value = ymd(addDays(new Date(),-1)); } // 주문DB 반영 지연 때문에 "오늘"은 데이터가 비어있음 → 기본값은 항상 전일
 function refresh(){
   if(THUMB) return;
-  $("lastupdate").textContent="Last updated: "+fmtDT(new Date());
+  var ref = $("refdate").value || ymd(new Date());
+  $("src_orderdb").textContent="주문DB: "+ref+" 마감";
+  $("src_amp").textContent="Amplitude: "+fmtDT(new Date())+" 갱신";
   hideDbPending();
   TAB_LOADED={1:false,2:false};
   showTab(CUR_TAB);

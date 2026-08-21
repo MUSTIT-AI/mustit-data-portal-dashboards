@@ -1,0 +1,467 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<title>[상품] 판매자별 카탈로그 매칭 · MUST IT</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../auth.js"></script>
+<style>
+  :root{
+    --red:#c8102e; --ink:#1c1b19; --sub:#6b6a66; --bg:#eef0f2; --panel:#fff; --border:#e2e0da;
+    --ok:#1f8a4c; --warn:#b4523a;
+  }
+  *{box-sizing:border-box}
+  body{font-family:'Pretendard','Malgun Gothic',system-ui,sans-serif;margin:0;background:var(--bg);color:var(--ink);font-size:13px}
+  a{color:inherit}
+  .topbar{display:flex;align-items:center;gap:14px;background:#fbfbfc;border-bottom:1px solid var(--border);padding:8px 16px;position:sticky;top:0;z-index:40}
+  .topbar .logo{font-weight:800;color:#232a33;display:flex;align-items:center;gap:6px;text-decoration:none;cursor:pointer}
+  .topbar .logo:hover{color:var(--red)}
+  .topbar .right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .topbar .owner{color:var(--ink);font-size:12.5px;font-weight:700;white-space:nowrap}
+  .topbar #dashnav{border:1px solid #d6d4ce;border-radius:7px;padding:5px 9px;font-size:12.5px;background:#fff;max-width:230px}
+  .topbar .editbtn{border:1px solid #c8102e;background:#fff;color:#c8102e;border-radius:7px;padding:4px 11px;font-size:12px;font-weight:700;cursor:pointer}
+  .topbar .editbtn:hover{background:#c8102e;color:#fff}
+  .modal{display:none;position:fixed;inset:0;z-index:200;background:rgba(20,18,15,.4);align-items:flex-start;justify-content:center;padding:60px 16px}
+  .modalbox{background:#fff;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.25);width:560px;max-width:100%;max-height:80vh;overflow:auto;padding:20px 22px}
+  .modalbox .mhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+  .modalbox .mhead b{font-size:16px}
+  .modalbox .mhead button{border:0;background:transparent;font-size:18px;cursor:pointer;color:#888}
+  .modalbox .mrow{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+  .modalbox .mrow label{width:70px;font-size:12.5px;color:var(--sub);font-weight:600}
+  .modalbox .mrow input{flex:1;border:1px solid #d6d4ce;border-radius:8px;padding:8px 10px;font-size:13.5px}
+  .modalbox h4{margin:18px 0 4px;font-size:13.5px}
+  .modalbox .mhint{margin:0 0 10px;font-size:11.5px;color:#8a8880}
+  .modalbox .mmsg{font-size:12.5px;color:#1f8a4c;margin-left:8px}
+  .mtbl{width:100%;border-collapse:collapse;font-size:12.5px}
+  .mtbl th{background:#f4f3ef;text-align:left;padding:6px 8px;border-bottom:1px solid #e2e0da;font-size:11.5px}
+  .mtbl td{padding:6px 8px;border-bottom:1px solid #f0efe9}
+  .filters{background:#fff;border-bottom:1px solid var(--border);padding:8px 12px;display:flex;flex-wrap:wrap;gap:7px 10px;align-items:flex-end;position:sticky;top:39px;z-index:30}
+  .fld{display:flex;flex-direction:column;gap:3px}
+  .fld label{font-size:10.5px;color:var(--sub);font-weight:600;letter-spacing:.02em}
+  .fld input[type=text]{border:1px solid #d6d4ce;border-radius:6px;padding:5px 7px;font-size:12px;background:#fff;height:29px}
+  .fld input[type=text]#sellerids{width:340px}
+  /* multiselect */
+  .ms{position:relative}
+  .ms>button{border:1px solid #d6d4ce;border-radius:6px;background:#fff;padding:5px 8px;font-size:12px;height:29px;min-width:96px;max-width:150px;
+    display:flex;align-items:center;justify-content:space-between;gap:6px;cursor:pointer;white-space:nowrap;overflow:hidden}
+  .ms>button .v{overflow:hidden;text-overflow:ellipsis}
+  .ms>button svg{flex:none;opacity:.5}
+  .ms .panel{position:absolute;top:32px;left:0;z-index:60;background:#fff;border:1px solid #cfcdc7;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.14);
+    min-width:170px;max-height:220px;overflow:auto;padding:6px;display:none}
+  .ms.open .panel{display:block}
+  .ms .panel .opt{display:flex;align-items:center;gap:7px;padding:4px 6px;border-radius:5px;cursor:pointer;font-size:12.5px}
+  .ms .panel .opt:hover{background:#f3f2ee}
+  .ms .panel .opt input{margin:0}
+  .btns{display:flex;gap:6px;margin-left:auto}
+  .btn{border:0;border-radius:7px;padding:6px 15px;font-size:12.5px;font-weight:700;cursor:pointer;height:29px}
+  .btn.go{background:var(--red);color:#fff}
+  .btn.reset{background:#e9e7e1;color:#333}
+  .btn.csv{background:#1f8a4c;color:#fff}
+  .btn.csv:disabled{background:#c7ccc8;cursor:default}
+  .wrap{max-width:100%;padding:14px 20px}
+  .note{color:var(--sub);font-size:11.5px;margin:0 0 10px;line-height:1.6}
+  .note b{color:var(--ink)}
+  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px}
+  @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:#fff;padding:14px 16px;text-align:center}
+  .kpi .l{color:var(--sub);font-size:11.5px;margin-bottom:6px}
+  .kpi .v{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .kpi .v.rate{color:var(--red)}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px 6px;margin-bottom:14px}
+  .card h3{margin:0 0 2px;font-size:13.5px;font-weight:700}
+  .card .h-sub{color:var(--sub);font-size:10.5px;margin:0 0 4px;display:block}
+  .chart{width:100%;height:360px}
+  .tblwrap{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:30px}
+  .tblhead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+  .tblhead h3{margin:0;font-size:14px}
+  .tblcount{color:var(--sub);font-size:12px}
+  .tblscroll{overflow-x:auto;border:1px solid var(--border);border-radius:8px}
+  table.sellers{border-collapse:collapse;width:100%;white-space:nowrap;font-size:12px}
+  table.sellers th{background:#f4f3ef;color:#33322f;padding:7px 10px;text-align:left;border-bottom:1px solid #e2e0da;position:sticky;top:0;font-weight:700;cursor:pointer;user-select:none}
+  table.sellers th:hover{background:#ece9e2}
+  table.sellers th .arrow{opacity:.4;margin-left:3px;font-size:10px}
+  table.sellers td{padding:6px 10px;border-bottom:1px solid #f0efe9;font-variant-numeric:tabular-nums}
+  table.sellers td.num{text-align:right}
+  table.sellers tr:hover td{background:#fafaf7}
+  table.sellers tr.err td{background:#fdf0ee;color:var(--warn)}
+  .empty{color:var(--sub);font-size:12.5px;padding:30px 10px;text-align:center}
+  .loading{position:fixed;inset:0;background:rgba(255,255,255,.55);display:none;align-items:center;justify-content:center;z-index:80;font-weight:700;color:var(--red)}
+  .loading.on{display:flex}
+  .err{color:var(--red);padding:10px 14px;font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a class="logo" href="../index.html">🛍️ Data Portal</a>
+  <div class="right">
+    <span class="owner" id="dashowner"></span>
+    <button class="editbtn" id="editdash" style="display:none">수정</button>
+    <select id="dashnav" title="대시보드 이동"></select>
+  </div>
+</div>
+
+<div class="filters" id="filters">
+  <div class="fld"><label>판매자ID (쉼표로 구분, 최대 50개)</label><input type="text" id="sellerids" placeholder="예: madamthej, xws8088, timely"></div>
+  <div id="dropdowns" style="display:contents"></div>
+  <div class="btns">
+    <button class="btn go" id="go">조회</button>
+    <button class="btn reset" id="reset">초기화</button>
+    <button class="btn csv" id="csv" disabled>⬇ CSV 다운로드</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <p class="note">
+    <b>등록 상품수</b> = 해당 판매자ID로 <code>mustit_products</code>(머스트잇 Open API 상품 마스터, 매일 08:00 갱신)에 등록된 상품 총건수(선택한 상품상태 기준).
+    <b>카탈로그 매칭 상품수</b> = 그중 <code>catalog_id</code>가 배정된(=카탈로그에 연결된) 상품수(단순 판정: 배정 여부만 봄).
+    <span style="color:var(--warn)">※ 카탈로그 자체의 실제 판매 매칭도(<code>matchedItemCount≥2</code> 등 정교한 판정)가 필요하면 <a href="_starter.html?f=d-mszs5qkscg4.html" style="color:var(--red);font-weight:700">「[카탈로그] 매칭 현황」</a> 대시보드를 참고하세요.</span>
+    행 데이터를 브라우저로 내려받지 않고 서버에서 건수만 집계해 조회합니다.
+  </p>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card">
+    <h3>판매자별 등록·매칭 상품수</h3>
+    <span class="h-sub">입력한 판매자ID · 등록 상품수 내림차순</span>
+    <div id="c_sellers" class="chart"></div>
+  </div>
+
+  <div class="tblwrap">
+    <div class="tblhead">
+      <h3>판매자별 상세</h3>
+      <span class="tblcount" id="sellercount"></span>
+    </div>
+    <div class="tblscroll"><table class="sellers" id="sellers"></table></div>
+  </div>
+</div>
+
+<!-- 대시보드 설정 모달 (소유자/관리자) -->
+<div class="modal" id="editmodal">
+  <div class="modalbox">
+    <div class="mhead"><b>대시보드 설정</b><button id="m_close">✕</button></div>
+    <div class="mrow"><label>이름</label><input id="m_title" type="text"></div>
+    <div><button class="btn" id="m_save" style="padding:8px 16px">이름 저장</button><span class="mmsg" id="m_msg"></span></div>
+    <h4>보기 / 수정 권한</h4>
+    <p class="mhint">체크하면 바로 저장됩니다. 기본은 <b>로그인 전원 열람</b>. <b>열람</b>을 아무도 체크 안 하면 전원 열람이고, 한 명이라도 체크하면 그 계정만 열람. <b>수정</b>만 줘도 열람은 안 막힙니다. 관리자는 항상 전체.</p>
+    <table class="mtbl"><thead><tr><th>이메일</th><th>메모</th><th style="text-align:center">열람</th><th style="text-align:center">수정</th></tr></thead>
+      <tbody id="m_acl"><tr><td colspan="4" style="color:#999">불러오는 중…</td></tr></tbody></table>
+    <div id="m_delwrap" style="display:none;margin-top:18px;border-top:1px solid #eee;padding-top:14px">
+      <button class="btn" id="m_del" style="background:#c8102e;color:#fff;padding:8px 16px">이 대시보드 삭제</button>
+      <span style="font-size:11.5px;color:#8a8880;margin-left:8px">생성자만 · 목록에서 삭제 · 되돌릴 수 없음</span>
+    </div>
+  </div>
+</div>
+
+<div class="loading" id="loading">불러오는 중…</div>
+<div class="err" id="err"></div>
+
+<script>
+(function(){
+"use strict";
+var $ = function(id){ return document.getElementById(id); };
+function won(n){ return (Number(n)||0).toLocaleString("ko-KR"); }
+function pct(n){ return n==null ? "-" : ((Number(n)||0)*100).toFixed(1)+"%"; }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+
+// 홈 썸네일(iframe #thumb)로 뜰 땐 무거운 조회를 건너뛴다.
+var THUMB = location.hash.indexOf("thumb") >= 0;
+
+var MAX_SELLERS = 50;
+
+// ── 상품상태 멀티셀렉트 (필터는 항상 복수선택) ──
+var STATUS_OPTS = [
+  ["IN_STOCK","판매중"], ["OUT_OF_STOCK","품절"], ["SUSPENDED","판매중지"]
+];
+var STATUS_SEL = new Set();
+function buildStatusFilter(){
+  var host = $("dropdowns"); host.innerHTML = "";
+  var fld = document.createElement("div"); fld.className = "fld";
+  fld.innerHTML = '<label>상품상태</label>';
+  var ms = document.createElement("div"); ms.className = "ms";
+  var btn = document.createElement("button");
+  btn.innerHTML = '<span class="v">전체</span><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 3l4 4 4-4" stroke="#333" fill="none" stroke-width="1.5"/></svg>';
+  var panel = document.createElement("div"); panel.className = "panel";
+  panel.addEventListener("click", function(e){ e.stopPropagation(); });
+  STATUS_OPTS.forEach(function(o){
+    var row = document.createElement("label"); row.className = "opt";
+    var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = STATUS_SEL.has(o[0]);
+    cb.onchange = function(){ if(cb.checked) STATUS_SEL.add(o[0]); else STATUS_SEL.delete(o[0]); updateBtn(); };
+    row.appendChild(cb); row.appendChild(document.createTextNode(" "+o[1]));
+    panel.appendChild(row);
+  });
+  function updateBtn(){
+    var n = STATUS_SEL.size;
+    btn.querySelector(".v").textContent = n===0 ? "전체" : (n===1 ? STATUS_OPTS.filter(function(o){return STATUS_SEL.has(o[0]);})[0][1] : n+"개 선택");
+  }
+  btn.onclick = function(e){ e.stopPropagation();
+    document.querySelectorAll(".ms.open").forEach(function(o){ if(o!==ms) o.classList.remove("open"); });
+    ms.classList.toggle("open");
+  };
+  ms.appendChild(btn); ms.appendChild(panel);
+  fld.appendChild(ms); host.appendChild(fld);
+}
+document.addEventListener("click", function(){ document.querySelectorAll(".ms.open").forEach(function(o){o.classList.remove("open");}); });
+
+// ── ECharts ──
+var CH = {};
+function chart(id){
+  if(CH[id] && !CH[id].isDisposed()) return CH[id];
+  var el = $(id); el.innerHTML = "";
+  CH[id] = echarts.init(el);
+  return CH[id];
+}
+window.addEventListener("resize", function(){ Object.keys(CH).forEach(function(k){ CH[k].resize(); }); });
+var TIP = { trigger:"axis", confine:true, textStyle:{fontSize:11} };
+function legend(names){ return { data:names, top:2, left:2, itemWidth:12, itemHeight:8, itemGap:8, textStyle:{fontSize:10,color:"#555"} }; }
+
+// rows: [{seller_id, total, matched, unmatched}] 등록 상품수 내림차순, 최대 30명 표시
+function renderChart(rows){
+  var sorted = rows.filter(function(r){ return !r.error; }).slice().sort(function(a,b){ return b.total-a.total; }).slice(0,30);
+  sorted.reverse();
+  var names = sorted.map(function(r){ return r.seller_id; });
+  chart("c_sellers").setOption({
+    grid:{ left:110, right:24, top:26, bottom:26 }, tooltip:TIP, legend:legend(["매칭","미매칭"]),
+    xAxis:{ type:"value", axisLabel:{fontSize:9,color:"#999"}, splitLine:{lineStyle:{color:"#eee"}} },
+    yAxis:{ type:"category", data:names, axisLabel:{fontSize:10,color:"#555"}, axisTick:{show:false}, axisLine:{lineStyle:{color:"#ddd"}} },
+    series:[
+      { name:"매칭",   type:"bar", stack:"s", data:sorted.map(function(r){return r.matched;}),   itemStyle:{color:"#2fae8f"}, barMaxWidth:18 },
+      { name:"미매칭", type:"bar", stack:"s", data:sorted.map(function(r){return r.unmatched;}), itemStyle:{color:"#ee3b52"}, barMaxWidth:18 }
+    ]
+  }, true);
+}
+
+// ── KPI ──
+function renderKPI(rows){
+  var ok = rows.filter(function(r){ return !r.error; });
+  var total = ok.reduce(function(a,r){ return a+r.total; }, 0);
+  var matched = ok.reduce(function(a,r){ return a+r.matched; }, 0);
+  var items = [
+    { l:"조회 판매자 수", v: won(ok.length)+"명" },
+    { l:"총 등록 상품수", v: won(total)+"건" },
+    { l:"카탈로그 매칭 상품수", v: won(matched)+"건" },
+    { l:"평균 매칭률", v: pct(total ? matched/total : null), rate:1 }
+  ];
+  $("kpis").innerHTML = items.map(function(k){
+    return '<div class="kpi"><div class="l">'+k.l+'</div><div class="v'+(k.rate?" rate":"")+'">'+k.v+'</div></div>';
+  }).join("");
+}
+
+// ── 테이블 ──
+var ROWS = [];
+var SORT = { key:"total", dir:"desc" };
+var COLS = [
+  ["seller_id","판매자ID"], ["total","등록 상품수"], ["matched","카탈로그 매칭"], ["unmatched","미매칭"], ["rate","매칭률"]
+];
+function sortRows(){
+  var k = SORT.key, dir = SORT.dir==="asc" ? 1 : -1;
+  ROWS.sort(function(a,b){
+    if(a.error && !b.error) return 1; if(!a.error && b.error) return -1;
+    var av=a[k], bv=b[k];
+    if(av==null && bv==null) return 0;
+    if(av==null) return 1; if(bv==null) return -1;
+    if(typeof av === "string") return dir*String(av).localeCompare(String(bv));
+    return dir*(av-bv);
+  });
+}
+function paintTable(){
+  if(!ROWS.length){ $("sellers").innerHTML=""; $("sellercount").textContent=""; $("csv").disabled=true; return; }
+  var thead = "<thead><tr>"+COLS.map(function(c){
+    var arrow = SORT.key===c[0] ? (SORT.dir==="asc"?"▲":"▼") : "";
+    return '<th data-k="'+c[0]+'">'+c[1]+'<span class="arrow">'+arrow+'</span></th>';
+  }).join("")+"</tr></thead>";
+  var tbody = "<tbody>"+ROWS.map(function(r){
+    if(r.error){
+      return '<tr class="err"><td>'+esc(r.seller_id)+'</td><td colspan="4">조회 실패: '+esc(r.error)+'</td></tr>';
+    }
+    return '<tr>'+
+      '<td>'+esc(r.seller_id)+'</td>'+
+      '<td class="num">'+won(r.total)+'</td>'+
+      '<td class="num">'+won(r.matched)+'</td>'+
+      '<td class="num">'+won(r.unmatched)+'</td>'+
+      '<td class="num">'+pct(r.rate)+'</td>'+
+    '</tr>';
+  }).join("")+"</tbody>";
+  $("sellers").innerHTML = thead+tbody;
+  [].forEach.call($("sellers").querySelectorAll("th"), function(th){
+    th.onclick=function(){
+      var k = th.getAttribute("data-k");
+      SORT.dir = (SORT.key===k && SORT.dir==="asc") ? "desc" : "asc";
+      SORT.key = k; sortRows(); paintTable();
+    };
+  });
+  $("sellercount").textContent = "총 "+won(ROWS.length)+"명";
+  $("csv").disabled = false;
+}
+function csvCell(v){ v=(v==null?"":String(v)); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+function downloadCSV(){
+  if(!ROWS.length) return;
+  var head = COLS.map(function(c){return csvCell(c[1]);}).join(",");
+  var body = ROWS.map(function(r){
+    if(r.error) return [r.seller_id,"","","","조회실패:"+r.error].map(csvCell).join(",");
+    return COLS.map(function(c){ return csvCell(r[c[0]]); }).join(",");
+  }).join("\r\n");
+  var blob = new Blob(["﻿"+head+"\r\n"+body], {type:"text/csv;charset=utf-8;"});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a"); a.href=url; a.download="판매자별_카탈로그매칭.csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+}
+
+// ── 판매자ID 목록 파싱 ──
+function sellerIds(){
+  var raw = $("sellerids").value.trim();
+  if(!raw) return [];
+  var ids = raw.split(",").map(function(s){ return s.trim(); }).filter(Boolean);
+  // 중복 제거
+  var seen = {}; var out = [];
+  ids.forEach(function(id){ var k=id.toLowerCase(); if(!seen[k]){ seen[k]=1; out.push(id); } });
+  return out.slice(0, MAX_SELLERS);
+}
+
+// 판매자 1명 = COUNT 전용 요청 2건(head:true → 행 데이터는 내려받지 않음)
+function countFor(sellerId, statuses){
+  var base = window.MUSTIT.client.from("mustit_products").select("item_no", {count:"exact", head:true}).eq("seller_id", sellerId);
+  var baseMatched = window.MUSTIT.client.from("mustit_products").select("item_no", {count:"exact", head:true}).eq("seller_id", sellerId).not("catalog_id", "is", null);
+  if(statuses && statuses.length){ base = base.in("product_status", statuses); baseMatched = baseMatched.in("product_status", statuses); }
+  return Promise.all([base, baseMatched]).then(function(res){
+    if(res[0].error) throw res[0].error;
+    if(res[1].error) throw res[1].error;
+    var total = res[0].count||0, matched = res[1].count||0;
+    return { seller_id:sellerId, total:total, matched:matched, unmatched:total-matched, rate: total? matched/total : null };
+  }).catch(function(e){
+    return { seller_id:sellerId, error:(e&&e.message)||String(e) };
+  });
+}
+
+// ── refresh ──
+function refresh(){
+  if(THUMB){ renderChart([]); return; }
+  var ids = sellerIds();
+  $("err").textContent = "";
+  if(!ids.length){
+    ROWS = []; $("kpis").innerHTML=""; paintTable();
+    chart("c_sellers").clear();
+    $("sellers").innerHTML = "";
+    $("err").textContent = "판매자ID를 1개 이상 입력하세요 (쉼표로 구분).";
+    return;
+  }
+  var statuses = Array.from(STATUS_SEL);
+  $("loading").classList.add("on");
+  Promise.all(ids.map(function(id){ return countFor(id, statuses); }))
+    .then(function(rows){
+      ROWS = rows; sortRows();
+      renderKPI(rows);
+      renderChart(rows);
+      paintTable();
+    })
+    .catch(function(e){ $("err").textContent = "오류: "+((e&&e.message)||e); })
+    .finally(function(){ $("loading").classList.remove("on"); });
+}
+
+$("go").onclick = refresh;
+$("csv").onclick = downloadCSV;
+$("reset").onclick = function(){
+  $("sellerids").value = ""; STATUS_SEL.clear(); buildStatusFilter();
+  ROWS=[]; $("kpis").innerHTML=""; $("sellers").innerHTML=""; $("sellercount").textContent=""; $("csv").disabled=true;
+  chart("c_sellers").clear();
+};
+$("sellerids").addEventListener("keydown", function(e){ if(e.key==="Enter") refresh(); });
+buildStatusFilter();
+
+// ── 대시보드 설정 모달 / 상단바 (공통 패턴) ──
+var ACCESS=null;
+function blockNoAccess(msg){
+  document.body.innerHTML='<div style="font-family:Pretendard,\'Malgun Gothic\',system-ui,sans-serif;max-width:520px;margin:90px auto;padding:28px;background:#fff;border:1px solid #e2e0da;border-radius:12px;text-align:center;color:#6b6a66">'+
+    '<h2 style="margin:0 0 8px;color:#1c1b19">열람 권한이 없습니다</h2>'+
+    '<p style="margin:0 0 6px">이 대시보드를 볼 권한이 없습니다. 관리자에게 요청하세요.</p>'+
+    (msg?'<p style="font-size:12px;color:#a7a49c">'+msg+'</p>':'')+
+    '<p style="margin-top:16px"><a href="../index.html" style="color:#c8102e">← 대시보드 목록</a></p></div>';
+}
+var CUR_FILE = decodeURIComponent(location.pathname.split("/").pop()||"");
+var CUR_META = null;
+function setupTopbar(){
+  window.MUSTIT.rpc("dash_list",{}).then(function(list){
+    list = list||[];
+    var cur = list.filter(function(d){ return d.file===CUR_FILE; })[0];
+    CUR_META = cur;
+    if(cur){ $("dashowner").textContent = (cur.title||"") + (cur.owner_name?(" · "+cur.owner_name):""); document.title="Data Portal - "+(cur.title||CUR_FILE); }
+    var sel=$("dashnav");
+    sel.innerHTML = list.map(function(d){
+      var href = '_starter.html?f='+encodeURIComponent(d.file);
+      return '<option value="'+href+'" data-file="'+esc(d.file)+'"'+(d.file===CUR_FILE?' selected':'')+'>'+esc(d.title||d.file)+'</option>';
+    }).join("");
+    sel.onchange=function(){ var o=sel.options[sel.selectedIndex]; if(o && o.getAttribute('data-file')!==CUR_FILE) location.href=o.value; };
+    if(cur && cur.manage){ $("editdash").style.display=""; }
+  }).catch(function(){});
+}
+function openEditModal(){
+  $("m_msg").textContent="";
+  $("m_title").value = (CUR_META&&CUR_META.title)||"";
+  $("editmodal").style.display="flex";
+  var meEmail=((window.MUSTIT.user&&window.MUSTIT.user()&&window.MUSTIT.user().email)||"").toLowerCase();
+  var isOwner = !!(CUR_META && CUR_META.owner_email && String(CUR_META.owner_email).toLowerCase()===meEmail);
+  $("m_delwrap").style.display = isOwner ? "" : "none";
+  $("m_del").onclick = function(){ deleteDash((CUR_META&&CUR_META.title)||CUR_FILE); };
+  $("m_acl").innerHTML='<tr><td colspan="4" style="color:#999">불러오는 중…</td></tr>';
+  window.MUSTIT.fn("admin-users",{action:"acl_list",dashboard:CUR_FILE}).then(function(res){
+    var rows=res.rows||[];
+    $("m_acl").innerHTML = rows.map(function(r){
+      var dis = r.role==='admin' ? ' disabled' : '';
+      var adm = r.role==='admin' ? ' <span style="color:#999;font-size:11px">(관리자)</span>' : '';
+      return '<tr><td>'+esc(r.email)+adm+'</td><td>'+esc(r.note||'')+'</td>'+
+        '<td style="text-align:center"><input type="checkbox" class="mv" data-email="'+esc(r.email)+'"'+(r.can_view?' checked':'')+dis+'></td>'+
+        '<td style="text-align:center"><input type="checkbox" class="me" data-email="'+esc(r.email)+'"'+(r.can_edit?' checked':'')+dis+'></td></tr>';
+    }).join("");
+    [].forEach.call(document.querySelectorAll(".mv,.me"),function(cb){
+      cb.addEventListener("change",function(){
+        var email=cb.getAttribute("data-email");
+        var v=document.querySelector('.mv[data-email="'+email+'"]').checked;
+        var e=document.querySelector('.me[data-email="'+email+'"]').checked;
+        cb.disabled=true;
+        window.MUSTIT.fn("admin-users",{action:"acl_set",dashboard:CUR_FILE,email:email,can_view:v,can_edit:e})
+          .then(function(){cb.disabled=false;}).catch(function(err){alert("저장 실패: "+err.message);openEditModal();});
+      });
+    });
+  }).catch(function(e){ $("m_acl").innerHTML='<tr><td colspan="4" style="color:#c8102e">'+esc(e.message)+'</td></tr>'; });
+}
+function saveMeta(){
+  window.MUSTIT.fn("admin-users",{action:"dash_meta_set",file:CUR_FILE,title:$("m_title").value})
+    .then(function(){ $("m_msg").textContent="저장되었습니다."; setupTopbar(); })
+    .catch(function(e){ $("m_msg").style.color="#c8102e"; $("m_msg").textContent="실패: "+e.message; });
+}
+function deleteDash(name){
+  name=String(name||"").trim();
+  if(!confirm("“"+name+"” 대시보드를 삭제할까요?\n목록에서 사라지며 되돌릴 수 없습니다.")) return;
+  var email=((window.MUSTIT.user()&&window.MUSTIT.user().email)||"");
+  var pw=prompt("확인을 위해 로그인 계정("+email+") 비밀번호를 입력하세요:");
+  if(pw===null) return;
+  if(!pw){ alert("비밀번호를 입력하세요."); return; }
+  window.MUSTIT.client.auth.signInWithPassword({email:email,password:pw}).then(function(res){
+    if(res.error){ alert("비밀번호가 일치하지 않습니다. 삭제를 취소했습니다."); return; }
+    window.MUSTIT.fn("admin-users",{action:"dash_delete",file:CUR_FILE})
+      .then(function(r){ if(!r.ok) throw new Error(r.error||'실패'); alert("삭제했습니다."); location.href="../index.html"; })
+      .catch(function(e){ alert("삭제 실패: "+e.message); });
+  });
+}
+$("editdash").onclick=openEditModal;
+$("m_close").onclick=function(){ $("editmodal").style.display="none"; };
+$("m_save").onclick=saveMeta;
+$("editmodal").onclick=function(e){ if(e.target===$("editmodal")) $("editmodal").style.display="none"; };
+
+// 로그인 + 이 대시보드 열람권한 확인 후 데이터 로드
+window.MUSTIT.ready(function(){
+  var DASH_FILE = decodeURIComponent(location.pathname.split("/").pop()||"");
+  window.MUSTIT.rpc("dash_access",{p_dashboard:DASH_FILE}).then(function(a){
+    if(!a || a.view===false){ blockNoAccess(); return; }
+    ACCESS=a;
+    setupTopbar();
+    if(!THUMB) refresh();
+  }).catch(function(e){ blockNoAccess(e.message); });
+});
+})();
+</script>
+</body>
+</html>

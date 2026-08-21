@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" type="image/svg+xml" href="../favicon.svg">
+<title>[주문] 판매자별 매출 현황 · MUST IT</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="../auth.js"></script>
+<style>
+  :root{
+    --red:#c8102e; --ink:#1c1b19; --sub:#6b6a66; --bg:#eef0f2; --panel:#fff; --border:#e2e0da;
+    --ok:#2fae8f; --warn:#b4523a;
+  }
+  *{box-sizing:border-box}
+  body{font-family:'Pretendard','Malgun Gothic',system-ui,sans-serif;margin:0;background:var(--bg);color:var(--ink);font-size:13px}
+  a{color:inherit}
+  .topbar{display:flex;align-items:center;gap:14px;background:#fbfbfc;border-bottom:1px solid var(--border);padding:8px 16px;position:sticky;top:0;z-index:40}
+  .topbar .logo{font-weight:800;color:#232a33;display:flex;align-items:center;gap:6px;text-decoration:none;cursor:pointer}
+  .topbar .logo:hover{color:var(--red)}
+  .topbar .right{margin-left:auto;display:flex;align-items:center;gap:10px}
+  .topbar .owner{color:var(--ink);font-size:12.5px;font-weight:700;white-space:nowrap}
+  .topbar #dashnav{border:1px solid #d6d4ce;border-radius:7px;padding:5px 9px;font-size:12.5px;background:#fff;max-width:230px}
+  .topbar .editbtn{border:1px solid #c8102e;background:#fff;color:#c8102e;border-radius:7px;padding:4px 11px;font-size:12px;font-weight:700;cursor:pointer}
+  .topbar .editbtn:hover{background:#c8102e;color:#fff}
+  .modal{display:none;position:fixed;inset:0;z-index:200;background:rgba(20,18,15,.4);align-items:flex-start;justify-content:center;padding:60px 16px}
+  .modalbox{background:#fff;border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.25);width:560px;max-width:100%;max-height:80vh;overflow:auto;padding:20px 22px}
+  .modalbox .mhead{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+  .modalbox .mhead b{font-size:16px}
+  .modalbox .mhead button{border:0;background:transparent;font-size:18px;cursor:pointer;color:#888}
+  .modalbox .mrow{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+  .modalbox .mrow label{width:70px;font-size:12.5px;color:var(--sub);font-weight:600}
+  .modalbox .mrow input{flex:1;border:1px solid #d6d4ce;border-radius:8px;padding:8px 10px;font-size:13.5px}
+  .modalbox h4{margin:18px 0 4px;font-size:13.5px}
+  .modalbox .mhint{margin:0 0 10px;font-size:11.5px;color:#8a8880}
+  .modalbox .mmsg{font-size:12.5px;color:#1f8a4c;margin-left:8px}
+  .mtbl{width:100%;border-collapse:collapse;font-size:12.5px}
+  .mtbl th{background:#f4f3ef;text-align:left;padding:6px 8px;border-bottom:1px solid #e2e0da;font-size:11.5px}
+  .mtbl td{padding:6px 8px;border-bottom:1px solid #f0efe9}
+  .filters{background:#fff;border-bottom:1px solid var(--border);padding:8px 12px;display:flex;flex-wrap:wrap;gap:7px 10px;align-items:flex-end;position:sticky;top:39px;z-index:30}
+  .fld{display:flex;flex-direction:column;gap:3px}
+  .fld label{font-size:10.5px;color:var(--sub);font-weight:600;letter-spacing:.02em}
+  .fld input[type=date],.fld input[type=text]{border:1px solid #d6d4ce;border-radius:6px;padding:5px 7px;font-size:12px;background:#fff;height:29px}
+  .fld input[type=text]{width:150px}
+  /* multiselect (주문상태) */
+  .ms{position:relative}
+  .ms>button{border:1px solid #d6d4ce;border-radius:6px;background:#fff;padding:5px 8px;font-size:12px;height:29px;min-width:96px;max-width:170px;
+    display:flex;align-items:center;justify-content:space-between;gap:6px;cursor:pointer;white-space:nowrap;overflow:hidden}
+  .ms>button .v{overflow:hidden;text-overflow:ellipsis}
+  .ms>button .cnt{color:#fff;background:var(--red);border-radius:10px;padding:0 6px;font-size:10px;font-weight:700}
+  .ms>button svg{flex:none;opacity:.5}
+  .ms .panel{position:absolute;top:32px;left:0;z-index:60;background:#fff;border:1px solid #cfcdc7;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.14);
+    min-width:190px;max-height:290px;overflow:auto;padding:6px;display:none}
+  .ms.open .panel{display:block}
+  .ms .panel .opt{display:flex;align-items:center;gap:7px;padding:4px 6px;border-radius:5px;cursor:pointer;font-size:12.5px}
+  .ms .panel .opt:hover{background:#f3f2ee}
+  .ms .panel .opt input{margin:0}
+  .btns{display:flex;gap:6px;margin-left:auto}
+  .btn{border:0;border-radius:7px;padding:6px 15px;font-size:12.5px;font-weight:700;cursor:pointer;height:29px}
+  .btn.go{background:var(--red);color:#fff}
+  .btn.reset{background:#e9e7e1;color:#333}
+  .btn.csv{background:#1f8a4c;color:#fff}
+  .btn.csv:disabled{background:#c7ccc8;cursor:default}
+  .wrap{max-width:100%;padding:14px 20px}
+  .note{color:var(--sub);font-size:11.5px;margin:0 0 10px;line-height:1.6}
+  .note b{color:var(--ink)}
+  .note code{background:#f4f3ef;border-radius:4px;padding:1px 5px}
+  .kpis{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px}
+  @media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}}
+  @media(max-width:600px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpi{background:#fff;padding:14px 10px;text-align:center}
+  .kpi .l{color:var(--sub);font-size:11px;margin-bottom:6px}
+  .kpi .v{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .kpi .v.rate{color:var(--red)}
+  .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px 6px;margin-bottom:14px}
+  .card h3{margin:0 0 2px;font-size:13.5px;font-weight:700}
+  .card .h-sub{color:var(--sub);font-size:10.5px;margin:0 0 4px;display:block}
+  .chart{width:100%;height:420px}
+  .tblwrap{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px 14px;margin-bottom:30px}
+  .tblhead{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+  .tblhead h3{margin:0;font-size:14px}
+  .tblcount{color:var(--sub);font-size:12px}
+  .tblscroll{overflow-x:auto;border:1px solid var(--border);border-radius:8px}
+  table.sellers{border-collapse:collapse;width:100%;white-space:nowrap;font-size:12px}
+  table.sellers th{background:#f4f3ef;color:#33322f;padding:7px 10px;text-align:left;border-bottom:1px solid #e2e0da;position:sticky;top:0;font-weight:700;cursor:pointer;user-select:none}
+  table.sellers th:hover{background:#ece9e2}
+  table.sellers th .arrow{opacity:.4;margin-left:3px;font-size:10px}
+  table.sellers td{padding:6px 10px;border-bottom:1px solid #f0efe9;font-variant-numeric:tabular-nums}
+  table.sellers td.num{text-align:right}
+  table.sellers tr:hover td{background:#fafaf7}
+  .empty{color:var(--sub);font-size:12.5px;padding:30px 10px;text-align:center}
+  .pager{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:10px;font-size:12.5px;color:var(--sub)}
+  .pager button{border:1px solid #d6d4ce;background:#fff;border-radius:7px;padding:5px 12px;font-size:12.5px;cursor:pointer;font-weight:600}
+  .pager button:disabled{opacity:.4;cursor:default}
+  .pager .pp{font-variant-numeric:tabular-nums;min-width:92px;text-align:center}
+  .loading{position:fixed;inset:0;background:rgba(255,255,255,.55);display:none;align-items:center;justify-content:center;z-index:80;font-weight:700;color:var(--red)}
+  .loading.on{display:flex}
+  .err{color:var(--red);padding:10px 14px;font-size:12.5px}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <a class="logo" href="../index.html">🛍️ Data Portal</a>
+  <div class="right">
+    <span class="owner" id="dashowner"></span>
+    <button class="editbtn" id="editdash" style="display:none">수정</button>
+    <select id="dashnav" title="대시보드 이동"></select>
+  </div>
+</div>
+
+<div class="filters" id="filters">
+  <div class="fld"><label>주문일 (시작일)</label><input type="date" id="from"></div>
+  <div class="fld"><label>주문일 (종료일)</label><input type="date" id="to"></div>
+  <div class="fld"><label>주문상태</label>
+    <div class="ms" id="ms_status">
+      <button type="button"><span class="v">전체</span><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 3l4 4 4-4" stroke="#333" fill="none" stroke-width="1.5"/></svg></button>
+      <div class="panel" id="ms_status_panel"></div>
+    </div>
+  </div>
+  <div class="fld"><label>판매자 검색</label><input type="text" id="sellerq" placeholder="판매자ID 일부 입력"></div>
+  <div class="btns">
+    <button class="btn go" id="go">조회</button>
+    <button class="btn reset" id="reset">초기화</button>
+    <button class="btn csv" id="csv" disabled>⬇ CSV 다운로드</button>
+  </div>
+</div>
+
+<div class="wrap">
+  <p class="note">
+    선택한 기간 내 <b>판매자ID별 매출 현황</b>입니다(주문 라인 <code>orders_secure</code> 기준 DB 집계 · 원본을 브라우저로 당기지 않음).
+    <b>거래액(GMV)</b>=<code>total_purchase</code> 합계, <b>순매출</b>=총매출−자사할인, <b>순이익</b>=순매출−결제수수료. 기본은 <b>전체 주문상태</b> 기준이며, 정산완료 건만 보려면 주문상태 필터에서 선택하세요.
+    판매자 검색은 이미 불러온 목록을 즉시 좁혀볼 뿐 DB를 다시 조회하지 않습니다.
+  </p>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="card">
+    <h3>판매자별 매출 현황</h3>
+    <span class="h-sub">거래액(GMV) 상위 30명 · 순이익 비교</span>
+    <div id="c_sellers" class="chart"></div>
+  </div>
+
+  <div class="tblwrap">
+    <div class="tblhead">
+      <h3>판매자별 매출 현황 전체</h3>
+      <span class="tblcount" id="sellercount"></span>
+    </div>
+    <p class="note" style="margin:0 0 8px">거래액(GMV) 많은 순 정렬(헤더 클릭으로 재정렬) · 평균객단가 = 거래액 ÷ 주문수.</p>
+    <div class="tblscroll"><table class="sellers" id="sellers"></table></div>
+    <div class="pager" id="pager"></div>
+  </div>
+</div>
+
+<!-- 대시보드 설정 모달 (소유자/관리자) -->
+<div class="modal" id="editmodal">
+  <div class="modalbox">
+    <div class="mhead"><b>대시보드 설정</b><button id="m_close">✕</button></div>
+    <div class="mrow"><label>이름</label><input id="m_title" type="text"></div>
+    <div><button class="btn" id="m_save" style="padding:8px 16px">이름 저장</button><span class="mmsg" id="m_msg"></span></div>
+    <h4>보기 / 수정 권한</h4>
+    <p class="mhint">체크하면 바로 저장됩니다. 기본은 <b>로그인 전원 열람</b>. <b>열람</b>을 아무도 체크 안 하면 전원 열람이고, 한 명이라도 체크하면 그 계정만 열람. <b>수정</b>만 줘도 열람은 안 막힙니다. 관리자는 항상 전체.</p>
+    <table class="mtbl"><thead><tr><th>이메일</th><th>메모</th><th style="text-align:center">열람</th><th style="text-align:center">수정</th></tr></thead>
+      <tbody id="m_acl"><tr><td colspan="4" style="color:#999">불러오는 중…</td></tr></tbody></table>
+    <div id="m_delwrap" style="display:none;margin-top:18px;border-top:1px solid #eee;padding-top:14px">
+      <button class="btn" id="m_del" style="background:#c8102e;color:#fff;padding:8px 16px">이 대시보드 삭제</button>
+      <span style="font-size:11.5px;color:#8a8880;margin-left:8px">생성자만 · 목록에서 삭제 · 되돌릴 수 없음</span>
+    </div>
+  </div>
+</div>
+
+<div class="loading" id="loading">불러오는 중…</div>
+<div class="err" id="err"></div>
+
+<script>
+(function(){
+"use strict";
+var $ = function(id){ return document.getElementById(id); };
+function rpc(fn, body){ return window.MUSTIT.rpc(fn, body); }
+function won(n){ return (Number(n)||0).toLocaleString("ko-KR"); }
+function pct(n){ return n==null ? "-" : ((Number(n)||0)*100).toFixed(1)+"%"; }
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+function ymd(d){ return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0"); }
+
+// 홈 썸네일(iframe #thumb)로 뜰 땐 무거운 조회를 건너뛴다.
+var THUMB = location.hash.indexOf("thumb") >= 0;
+
+// ── 주문상태 멀티셀렉트 (dash_filters()가 내려주는 실제 값만 사용 · 하드코딩 금지) ──
+var STATUS_OPTS = [];
+var STATUS_SEL = new Set();
+function buildStatusDropdown(){
+  var panel = $("ms_status_panel");
+  panel.innerHTML = "";
+  panel.addEventListener("click", function(e){ e.stopPropagation(); });
+  STATUS_OPTS.forEach(function(v){
+    var row = document.createElement("label"); row.className = "opt";
+    var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = STATUS_SEL.has(v);
+    cb.onchange = function(){ if(cb.checked) STATUS_SEL.add(v); else STATUS_SEL.delete(v); updateStatusBtn(); };
+    row.appendChild(cb); row.appendChild(document.createTextNode(" " + v));
+    panel.appendChild(row);
+  });
+}
+function updateStatusBtn(){
+  var n = STATUS_SEL.size;
+  $("ms_status").querySelector(".v").textContent = n===0 ? "전체" : (n===1 ? Array.from(STATUS_SEL)[0] : n+"개 선택");
+}
+$("ms_status").querySelector("button").onclick = function(e){
+  e.stopPropagation();
+  $("ms_status").classList.toggle("open");
+};
+document.addEventListener("click", function(){ $("ms_status").classList.remove("open"); });
+
+// ── ECharts ──
+var CH = {};
+function chart(id){
+  if(CH[id] && !CH[id].isDisposed()) return CH[id];
+  var el = $(id); el.innerHTML = "";
+  CH[id] = echarts.init(el);
+  return CH[id];
+}
+window.addEventListener("resize", function(){ Object.keys(CH).forEach(function(k){ CH[k].resize(); }); });
+var TIP = { trigger:"axis", confine:true, textStyle:{fontSize:11}, axisPointer:{type:"shadow"},
+  valueFormatter:function(v){ return "₩"+won(v); } };
+function legend(names){ return { data:names, top:2, left:2, itemWidth:12, itemHeight:8, itemGap:8, textStyle:{fontSize:10,color:"#555"} }; }
+
+// rows: [{seller_id, gmv, net_profit}] 거래액(GMV) 내림차순, 상위 30명 표시
+function renderChart(rows){
+  var sorted = rows.slice().sort(function(a,b){ return b.gmv-a.gmv; }).slice(0,30);
+  sorted.reverse();
+  var names = sorted.map(function(r){ return r.seller_id; });
+  chart("c_sellers").setOption({
+    grid:{ left:110, right:24, top:30, bottom:26 }, tooltip:TIP, legend:legend(["거래액(GMV)","순이익"]),
+    color:["#c8102e","#2fae8f"],
+    xAxis:{ type:"value", axisLabel:{fontSize:9,color:"#999",formatter:function(v){return Math.round(v/1e6)+"M";}}, splitLine:{lineStyle:{color:"#eee"}} },
+    yAxis:{ type:"category", data:names, axisLabel:{fontSize:10,color:"#555"}, axisTick:{show:false}, axisLine:{lineStyle:{color:"#ddd"}} },
+    series:[
+      { name:"거래액(GMV)", type:"bar", data:sorted.map(function(r){return r.gmv;}), barMaxWidth:14 },
+      { name:"순이익", type:"bar", data:sorted.map(function(r){return r.net_profit;}), barMaxWidth:14 }
+    ]
+  }, true);
+}
+
+// ── KPI ──
+function renderKPI(rows){
+  var gmv = rows.reduce(function(a,r){ return a+r.gmv; }, 0);
+  var netRev = rows.reduce(function(a,r){ return a+r.net_revenue; }, 0);
+  var netProfit = rows.reduce(function(a,r){ return a+r.net_profit; }, 0);
+  var orders = rows.reduce(function(a,r){ return a+r.orders; }, 0);
+  var items = [
+    { l:"판매자 수", v: won(rows.length)+"명" },
+    { l:"총 거래액(GMV)", v: won(gmv) },
+    { l:"총 순매출", v: won(netRev) },
+    { l:"총 순이익", v: won(netProfit) },
+    { l:"총 주문수", v: won(orders)+"건" },
+    { l:"판매자당 평균 거래액", v: won(rows.length ? Math.round(gmv/rows.length) : 0) }
+  ];
+  $("kpis").innerHTML = items.map(function(k){
+    return '<div class="kpi"><div class="l">'+k.l+'</div><div class="v'+(k.rate?" rate":"")+'">'+k.v+'</div></div>';
+  }).join("");
+}
+
+// ── 테이블 (전체 판매자 · 검색은 이미 불러온 목록을 즉시 필터링) ──
+var ALL_SELLERS = [];
+var SORT = { key:"gmv", dir:"desc" };
+var PAGE_SIZE = 30, PAGE = 0;
+var COLS = [
+  ["seller_id","판매자ID"], ["gmv","거래액(GMV)"], ["net_revenue","순매출"], ["net_profit","순이익"],
+  ["orders","주문수"], ["quantity","구매수량"], ["aov","평균객단가"], ["own_discount","자사할인"]
+];
+function withDerived(rows){
+  return rows.map(function(r){ return {
+    seller_id:r.seller_id, gmv:r.gmv, net_revenue:r.net_revenue, net_profit:r.net_profit,
+    orders:r.orders, quantity:r.quantity, own_discount:r.own_discount,
+    aov: r.orders ? Math.round(r.gmv/r.orders) : 0
+  }; });
+}
+function sortAll(){
+  var k = SORT.key, dir = SORT.dir==="asc" ? 1 : -1;
+  ALL_SELLERS.sort(function(a,b){
+    var av=a[k], bv=b[k];
+    if(av==null && bv==null) return 0;
+    if(av==null) return 1; if(bv==null) return -1;
+    if(typeof av === "string") return dir*String(av).localeCompare(String(bv));
+    return dir*(av-bv);
+  });
+}
+function filteredSellers(){
+  var q = $("sellerq").value.trim().toLowerCase();
+  return q ? ALL_SELLERS.filter(function(s){ return String(s.seller_id||"").toLowerCase().indexOf(q)>=0; }) : ALL_SELLERS;
+}
+function paintTable(){
+  var rows = filteredSellers();
+  var total = rows.length;
+  if(!ALL_SELLERS.length){ $("sellers").innerHTML=""; $("sellercount").textContent=""; $("pager").innerHTML=""; $("csv").disabled=true; return; }
+  if(!total){ $("sellers").innerHTML='<tr><td class="empty" colspan="'+COLS.length+'">일치하는 판매자가 없습니다.</td></tr>'; $("sellercount").textContent="0명"; $("pager").innerHTML=""; $("csv").disabled=true; return; }
+  var pages = Math.max(1, Math.ceil(total/PAGE_SIZE));
+  if(PAGE>pages-1) PAGE=pages-1; if(PAGE<0) PAGE=0;
+  var slice = rows.slice(PAGE*PAGE_SIZE, PAGE*PAGE_SIZE+PAGE_SIZE);
+  var thead = "<thead><tr>"+COLS.map(function(c){
+    var arrow = SORT.key===c[0] ? (SORT.dir==="asc"?"▲":"▼") : "";
+    return '<th data-k="'+c[0]+'">'+c[1]+'<span class="arrow">'+arrow+'</span></th>';
+  }).join("")+"</tr></thead>";
+  var tbody = "<tbody>"+slice.map(function(r){
+    return '<tr>'+
+      '<td>'+esc(r.seller_id)+'</td>'+
+      '<td class="num">'+won(r.gmv)+'</td>'+
+      '<td class="num">'+won(r.net_revenue)+'</td>'+
+      '<td class="num">'+won(r.net_profit)+'</td>'+
+      '<td class="num">'+won(r.orders)+'</td>'+
+      '<td class="num">'+won(r.quantity)+'</td>'+
+      '<td class="num">'+won(r.aov)+'</td>'+
+      '<td class="num">'+won(r.own_discount)+'</td>'+
+    '</tr>';
+  }).join("")+"</tbody>";
+  $("sellers").innerHTML = thead+tbody;
+  [].forEach.call($("sellers").querySelectorAll("th"), function(th){
+    th.onclick=function(){
+      var k = th.getAttribute("data-k");
+      SORT.dir = (SORT.key===k && SORT.dir==="asc") ? "desc" : "asc";
+      SORT.key = k; sortAll(); PAGE=0; paintTable();
+    };
+  });
+  $("sellercount").textContent = "총 "+won(total)+"명"+(total!==ALL_SELLERS.length ? " (전체 "+won(ALL_SELLERS.length)+"명 중 검색됨)" : "");
+  var from = total===0?0:PAGE*PAGE_SIZE+1, to = Math.min(total,(PAGE+1)*PAGE_SIZE);
+  $("pager").innerHTML =
+    '<button id="pgprev"'+(PAGE<=0?" disabled":"")+'>◀ 이전</button>'+
+    '<span class="pp">'+from+'–'+to+' / '+won(total)+'</span>'+
+    '<button id="pgnext"'+(PAGE>=pages-1?" disabled":"")+'>다음 ▶</button>';
+  var pv=$("pgprev"), nx=$("pgnext");
+  if(pv) pv.onclick=function(){ PAGE--; paintTable(); };
+  if(nx) nx.onclick=function(){ PAGE++; paintTable(); };
+  $("csv").disabled = false;
+}
+function csvCell(v){ v=(v==null?"":String(v)); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
+function downloadCSV(){
+  var rows = filteredSellers();
+  if(!rows.length) return;
+  var head = COLS.map(function(c){return csvCell(c[1]);}).join(",");
+  var body = rows.map(function(r){ return COLS.map(function(c){ return csvCell(r[c[0]]); }).join(","); }).join("\r\n");
+  var blob = new Blob(["﻿"+head+"\r\n"+body], {type:"text/csv;charset=utf-8;"});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a"); a.href=url; a.download="판매자별_매출현황_"+$("from").value+"_"+$("to").value+".csv";
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+}
+function setDefaultDates(){
+  var y=new Date(); y.setDate(y.getDate()-1);              // 종료일 = 어제
+  var f=new Date(y.getTime()); f.setDate(f.getDate()-30);  // 시작일 = 어제로부터 30일 전
+  $("from").value=ymd(f); $("to").value=ymd(y);
+}
+
+// ── refresh: DB 집계 RPC dash_seller_rank 사용 (orders_secure 원본을 브라우저로
+//    당겨 집계하지 않는다 — CLAUDE.md 필수 규칙) ──
+function params(){
+  var f = {};
+  if(STATUS_SEL.size) f.order_status = Array.from(STATUS_SEL);
+  return { from:$("from").value, to:$("to").value, filters:f };
+}
+function refresh(){
+  $("err").textContent = "";
+  if(THUMB){ renderChart([]); return; }
+  $("loading").classList.add("on");
+  rpc("dash_seller_rank", { p: params(), p_limit: 20000 })
+    .then(function(rows){
+      rows = Array.isArray(rows) ? rows : [];
+      ALL_SELLERS = withDerived(rows.map(function(r){
+        return {
+          seller_id: r.seller_id,
+          gmv: Number(r.gmv)||0,
+          net_revenue: Number(r.net_revenue)||0,
+          net_profit: Number(r.net_profit)||0,
+          orders: Number(r.orders)||0,
+          quantity: Number(r.quantity)||0,
+          own_discount: Number(r.own_discount)||0
+        };
+      }));
+      sortAll(); PAGE=0;
+      renderKPI(ALL_SELLERS);
+      renderChart(ALL_SELLERS);
+      paintTable();
+    })
+    .catch(function(e){
+      $("err").textContent = "오류: "+((e&&e.message)||e);
+      ALL_SELLERS=[]; $("kpis").innerHTML=""; paintTable(); chart("c_sellers").clear();
+    })
+    .finally(function(){ $("loading").classList.remove("on"); });
+}
+
+setDefaultDates();
+$("go").onclick = refresh;
+$("csv").onclick = downloadCSV;
+$("sellerq").addEventListener("input", function(){ PAGE=0; paintTable(); });
+$("sellerq").addEventListener("keydown", function(e){ if(e.key==="Enter") refresh(); });
+$("reset").onclick = function(){
+  $("sellerq").value = ""; PAGE = 0;
+  STATUS_SEL = new Set(); buildStatusDropdown(); updateStatusBtn();
+  setDefaultDates(); refresh();
+};
+
+// ── 대시보드 설정 모달 / 상단바 (공통 패턴) ──
+var ACCESS=null;
+function blockNoAccess(msg){
+  document.body.innerHTML='<div style="font-family:Pretendard,\'Malgun Gothic\',system-ui,sans-serif;max-width:520px;margin:90px auto;padding:28px;background:#fff;border:1px solid #e2e0da;border-radius:12px;text-align:center;color:#6b6a66">'+
+    '<h2 style="margin:0 0 8px;color:#1c1b19">열람 권한이 없습니다</h2>'+
+    '<p style="margin:0 0 6px">이 대시보드를 볼 권한이 없습니다. 관리자에게 요청하세요.</p>'+
+    (msg?'<p style="font-size:12px;color:#a7a49c">'+msg+'</p>':'')+
+    '<p style="margin-top:16px"><a href="../index.html" style="color:#c8102e">← 대시보드 목록</a></p></div>';
+}
+var CUR_FILE = decodeURIComponent(location.pathname.split("/").pop()||"");
+var CUR_META = null;
+function setupTopbar(){
+  window.MUSTIT.rpc("dash_list",{}).then(function(list){
+    list = list||[];
+    var cur = list.filter(function(d){ return d.file===CUR_FILE; })[0];
+    CUR_META = cur;
+    if(cur){ $("dashowner").textContent = (cur.title||"") + (cur.owner_name?(" · "+cur.owner_name):""); document.title="Data Portal - "+(cur.title||CUR_FILE); }
+    var sel=$("dashnav");
+    sel.innerHTML = list.map(function(d){
+      var href = '_starter.html?f='+encodeURIComponent(d.file);
+      return '<option value="'+href+'" data-file="'+esc(d.file)+'"'+(d.file===CUR_FILE?' selected':'')+'>'+esc(d.title||d.file)+'</option>';
+    }).join("");
+    sel.onchange=function(){ var o=sel.options[sel.selectedIndex]; if(o && o.getAttribute('data-file')!==CUR_FILE) location.href=o.value; };
+    if(cur && cur.manage){ $("editdash").style.display=""; }
+  }).catch(function(){});
+}
+function openEditModal(){
+  $("m_msg").textContent="";
+  $("m_title").value = (CUR_META&&CUR_META.title)||"";
+  $("editmodal").style.display="flex";
+  var meEmail=((window.MUSTIT.user&&window.MUSTIT.user()&&window.MUSTIT.user().email)||"").toLowerCase();
+  var isOwner = !!(CUR_META && CUR_META.owner_email && String(CUR_META.owner_email).toLowerCase()===meEmail);
+  $("m_delwrap").style.display = isOwner ? "" : "none";
+  $("m_del").onclick = function(){ deleteDash((CUR_META&&CUR_META.title)||CUR_FILE); };
+  $("m_acl").innerHTML='<tr><td colspan="4" style="color:#999">불러오는 중…</td></tr>';
+  window.MUSTIT.fn("admin-users",{action:"acl_list",dashboard:CUR_FILE}).then(function(res){
+    var rows=res.rows||[];
+    $("m_acl").innerHTML = rows.map(function(r){
+      var dis = r.role==='admin' ? ' disabled' : '';
+      var adm = r.role==='admin' ? ' <span style="color:#999;font-size:11px">(관리자)</span>' : '';
+      return '<tr><td>'+esc(r.email)+adm+'</td><td>'+esc(r.note||'')+'</td>'+
+        '<td style="text-align:center"><input type="checkbox" class="mv" data-email="'+esc(r.email)+'"'+(r.can_view?' checked':'')+dis+'></td>'+
+        '<td style="text-align:center"><input type="checkbox" class="me" data-email="'+esc(r.email)+'"'+(r.can_edit?' checked':'')+dis+'></td></tr>';
+    }).join("");
+    [].forEach.call(document.querySelectorAll(".mv,.me"),function(cb){
+      cb.addEventListener("change",function(){
+        var email=cb.getAttribute("data-email");
+        var v=document.querySelector('.mv[data-email="'+email+'"]').checked;
+        var e=document.querySelector('.me[data-email="'+email+'"]').checked;
+        cb.disabled=true;
+        window.MUSTIT.fn("admin-users",{action:"acl_set",dashboard:CUR_FILE,email:email,can_view:v,can_edit:e})
+          .then(function(){cb.disabled=false;}).catch(function(err){alert("저장 실패: "+err.message);openEditModal();});
+      });
+    });
+  }).catch(function(e){ $("m_acl").innerHTML='<tr><td colspan="4" style="color:#c8102e">'+esc(e.message)+'</td></tr>'; });
+}
+function saveMeta(){
+  window.MUSTIT.fn("admin-users",{action:"dash_meta_set",file:CUR_FILE,title:$("m_title").value})
+    .then(function(){ $("m_msg").textContent="저장되었습니다."; setupTopbar(); })
+    .catch(function(e){ $("m_msg").style.color="#c8102e"; $("m_msg").textContent="실패: "+e.message; });
+}
+function deleteDash(name){
+  name=String(name||"").trim();
+  if(!confirm("“"+name+"” 대시보드를 삭제할까요?\n목록에서 사라지며 되돌릴 수 없습니다.")) return;
+  var email=((window.MUSTIT.user()&&window.MUSTIT.user().email)||"");
+  var pw=prompt("확인을 위해 로그인 계정("+email+") 비밀번호를 입력하세요:");
+  if(pw===null) return;
+  if(!pw){ alert("비밀번호를 입력하세요."); return; }
+  window.MUSTIT.client.auth.signInWithPassword({email:email,password:pw}).then(function(res){
+    if(res.error){ alert("비밀번호가 일치하지 않습니다. 삭제를 취소했습니다."); return; }
+    window.MUSTIT.fn("admin-users",{action:"dash_delete",file:CUR_FILE})
+      .then(function(r){ if(!r.ok) throw new Error(r.error||'실패'); alert("삭제했습니다."); location.href="../index.html"; })
+      .catch(function(e){ alert("삭제 실패: "+e.message); });
+  });
+}
+$("editdash").onclick=openEditModal;
+$("m_close").onclick=function(){ $("editmodal").style.display="none"; };
+$("m_save").onclick=saveMeta;
+$("editmodal").onclick=function(e){ if(e.target===$("editmodal")) $("editmodal").style.display="none"; };
+
+// 로그인 + 이 대시보드 열람권한 확인 후 데이터 로드
+window.MUSTIT.ready(function(){
+  var DASH_FILE = decodeURIComponent(location.pathname.split("/").pop()||"");
+  window.MUSTIT.rpc("dash_access",{p_dashboard:DASH_FILE}).then(function(a){
+    if(!a || a.view===false){ blockNoAccess(); return; }
+    ACCESS=a;
+    setupTopbar();
+    rpc("dash_filters",{}).then(function(o){
+      STATUS_OPTS = (o && o.order_status) || [];
+      buildStatusDropdown(); updateStatusBtn();
+    }).catch(function(){ buildStatusDropdown(); updateStatusBtn(); })
+      .finally(function(){ if(!THUMB) refresh(); else refresh(); });
+  }).catch(function(e){ blockNoAccess(e.message); });
+});
+})();
+</script>
+</body>
+</html>

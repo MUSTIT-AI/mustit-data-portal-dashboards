@@ -59,14 +59,6 @@
   .sechead_title:hover,.sechead_note:hover{border-color:var(--border)}
   .sechead_title:focus,.sechead_note:focus{border-color:#d6d4ce;background:#fff;outline:none}
   .wrap>.sechead:first-child{margin-top:2px}
-  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
-  @media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}}
-  @media(max-width:640px){.kpis{grid-template-columns:repeat(2,1fr)}}
-  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px 16px;text-align:center}
-  .kpi .l{font-size:12px;color:#b0aca3;margin-bottom:10px;font-weight:600}
-  .kpi .v{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em;white-space:nowrap}
-  .kpi .v.red{color:var(--red)}
-  .kpi .note2{font-size:10px;color:var(--sub);margin-top:6px}
   .sectri{cursor:pointer;margin-right:5px;font-size:11px;color:var(--sub);user-select:none;display:inline-block}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
   @media(max-width:900px){.grid2{grid-template-columns:1fr}}
@@ -112,8 +104,6 @@
   .condval_panel{display:none;position:absolute;top:29px;left:0;z-index:60;background:#fff;border:1px solid #d6d4ce;border-radius:6px;box-shadow:0 4px 12px rgba(0,0,0,.12);max-height:112px;overflow-y:auto;min-width:130px}
   .condval_opt{padding:5px 8px;font-size:11.5px;cursor:pointer;white-space:nowrap}
   .condval_opt:hover{background:#f3f2ee}
-  .achead{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
-  .achead .kpi{flex:0 1 220px;min-width:150px}
   .acgrp{margin-bottom:8px}
   .delta{display:inline-block;margin-left:7px;padding:2px 9px;border-radius:12px;font-size:11.5px;font-weight:700;vertical-align:middle}
   .delta.up{background:#e3f6ea;color:#1f8a4c}
@@ -555,7 +545,6 @@ function widgetHTML(w){
         '<div class="segs"></div>'+
         '<button type="button" class="btn reset ac_seg_add">+ 세그먼트 추가</button>'+
       '</div>'+
-      '<div class="achead" id="auc_'+w.id+'_kpis"></div>'+
       '<div class="chart" id="auc_'+w.id+'_chart" style="height:240px"></div>'+
       '<div class="acgrp" id="auc_'+w.id+'_grp"></div>'+
       '<p class="note" id="auc_'+w.id+'_note"></p>'+
@@ -680,10 +669,10 @@ function deltaBadge(cur, prev){
   var sign = pct>=0 ? "+" : "";
   return '<span class="delta '+(pct>=0?"up":"down")+'">'+sign+pct.toFixed(1)+'%</span>';
 }
-function paintAcKpis(elId, tiles){
-  $(elId).innerHTML = tiles.map(function(t){
-    return '<div class="kpi"><div class="l">'+t.l+'</div><div class="v'+(t.red?" red":"")+'">'+t.v+(t.badge||"")+'</div></div>';
-  }).join("");
+function deltaBadgeText(cur, prev){
+  if(cur==null || prev==null || !prev) return "";
+  var pct = ((cur-prev)/prev*100);
+  return " ("+(pct>=0?"+":"")+pct.toFixed(1)+"%)";
 }
 function renderTrendChart(chartId, names, xs, seriesData, vis){
   // names/seriesData: 단일 시리즈면 문자열/배열 1개, 세그먼트 여러 개면 배열/배열의 배열
@@ -743,7 +732,6 @@ function refreshWidget(w){
       $("auc_"+w.id+"_grp").innerHTML = '<table class="mtbl"><thead><tr><th>세그먼트</th><th style="text-align:right">순유저(구간 전체)</th></tr></thead><tbody>'+
         names.map(function(nm,i){ return '<tr><td>'+esc(nm)+'</td><td style="text-align:right">'+(overall[i]==null?'—':won(overall[i]))+'</td></tr>'; }).join("")+
         '</tbody></table>';
-      paintAcKpis("auc_"+w.id+"_kpis", [{l:w.title+" (세그먼트 "+names.length+"개 비교)", v:""}]);
       w._xs = xs; w._ys = res.series||[]; w._names = names;
       renderTrendChart(chartId, names, xs, res.series||[], w.vis||"bar");
       $("auc_"+w.id+"_note").textContent = "세그먼트 "+names.length+"개를 비교 중입니다(비교기간은 세그먼트 미사용 시에만 지원)."+
@@ -752,27 +740,21 @@ function refreshWidget(w){
       $("auc_"+w.id+"_grp").innerHTML = "";
       var headline = overall.length ? overall[0] : null;
       var cmp = compareRange(from, to, cmpMode);
-      var tiles = [{l:w.title+" ("+from+" ~ "+to+", 구간 전체 순유저·유니크)", v: headline==null?"—":won(headline), red:1}];
-      var chainP = Promise.resolve();
-      if(cmp){
-        chainP = chainP.then(function(){
-          return queryAURange(w.event, cmp.from, cmp.to, inputs.eventConds, [], gran).then(function(cres){
-            var prevVal = (cres.overall&&cres.overall.length) ? cres.overall[0] : null;
-            if(headline!=null && prevVal!=null){ tiles[0].badge = deltaBadge(headline, prevVal); }
-            tiles.push({l:"비교기간("+cmp.from+"~"+cmp.to+")", v: prevVal==null?"—":won(prevVal)});
-          }).catch(function(){});
-        });
-      }
-      return chainP.then(function(){
-        paintAcKpis("auc_"+w.id+"_kpis", tiles);
+      var chainP = cmp
+        ? queryAURange(w.event, cmp.from, cmp.to, inputs.eventConds, [], gran).then(function(cres){
+            return (cres.overall&&cres.overall.length) ? cres.overall[0] : null;
+          }).catch(function(){ return null; })
+        : Promise.resolve(null);
+      return chainP.then(function(prevVal){
         w._xs = xs;
         w._ys = (res.series&&res.series[0])||[];
         w._names = w.title;
         renderTrendChart(chartId, w.title, w._xs, w._ys, w.vis||"bar");
         var mismatchNote = inputs.mismatched>0 ? (" ⚠ 이벤트속성 조건 "+inputs.mismatched+"개는 현재 위젯 이벤트와 달라 적용되지 않았습니다(이벤트속성은 조회 중인 이벤트와 같은 것만 적용 가능).") : "";
-        $("auc_"+w.id+"_note").textContent = (headline==null
-          ? "⚠ 서버 응답에 구간 전체 유니크(overallSeries)가 없어 헤드라인을 표시할 수 없습니다. 아래 차트는 "+granLabel(gran)+" 버킷별 값입니다(합산 시 중복 발생 — 참고용)."
-          : "차트는 참고용 "+granLabel(gran)+" 추이(버킷 간 중복 있을 수 있음) · 위 헤드라인 숫자만 구간 전체 순유저(유니크)입니다.") + mismatchNote;
+        var headlineText = "구간 전체 순유저(유니크): "+(headline==null?"—":won(headline));
+        var cmpText = cmp ? (" · 비교기간("+cmp.from+"~"+cmp.to+"): "+(prevVal==null?"—":won(prevVal))+deltaBadgeText(headline, prevVal)) : "";
+        var warnText = headline==null ? " — ⚠ 서버 응답에 구간 전체 유니크(overallSeries)가 없어 정확하지 않을 수 있습니다." : "";
+        $("auc_"+w.id+"_note").textContent = headlineText+cmpText+warnText+" · 아래 차트는 "+granLabel(gran)+" 버킷별 값(참고용, 버킷 간 중복 있을 수 있음)."+mismatchNote;
       });
     }
   }).catch(function(e){ $("auc_"+w.id+"_note").textContent = "오류: "+e.message; });

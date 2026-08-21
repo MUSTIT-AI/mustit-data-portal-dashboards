@@ -74,6 +74,9 @@
   table.sellers td.num{text-align:right}
   table.sellers tr:hover td{background:#fafaf7}
   table.sellers tr.err td{background:#fdf0ee;color:var(--warn)}
+  table.sellers tr.risk td{background:#fdf0ee}
+  table.sellers tr.risk:hover td{background:#fbe4e0}
+  .badge{display:inline-block;background:#f4f3ef;border:1px solid #e2e0da;border-radius:6px;padding:1px 7px;font-size:10.5px;color:var(--sub);margin-left:6px}
   .empty{color:var(--sub);font-size:12.5px;padding:30px 10px;text-align:center}
   .pager{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:10px;font-size:12.5px;color:var(--sub)}
   .pager button{border:1px solid #d6d4ce;background:#fff;border-radius:7px;padding:5px 12px;font-size:12.5px;cursor:pointer;font-weight:600}
@@ -122,9 +125,10 @@
 
   <div class="tblwrap">
     <div class="tblhead">
-      <h3>판매자별 전체 목록</h3>
+      <h3>판매자별 매칭 현황 <span class="badge">등록 많은데 매칭률 낮은 판매자 확인용</span></h3>
       <span class="tblcount" id="sellercount"></span>
     </div>
+    <p class="note" style="margin:0 0 8px">선택한 기간 내 신규 등록 기준 · 매칭률 낮은 순 정렬(헤더 클릭으로 재정렬) · 매칭률 20% 미만 &amp; 등록 10건 이상은 빨간 배경으로 표시.</p>
     <div class="tblscroll"><table class="sellers" id="sellers"></table></div>
     <div class="pager" id="pager"></div>
   </div>
@@ -205,10 +209,10 @@ function renderKPI(rows){
 
 // ── 테이블 (전체 판매자 · 검색은 이미 불러온 목록을 즉시 필터링) ──
 var ALL_SELLERS = [];
-var SORT = { key:"matched", dir:"desc" };
+var SORT = { key:"rate", dir:"asc" };
 var PAGE_SIZE = 30, PAGE = 0;
 var COLS = [
-  ["seller_id","판매자ID"], ["matched","매칭수"], ["rate","매칭율"]
+  ["seller_id","판매자ID"], ["new_items","신규 등록"], ["matched","매칭"], ["unmatched","미매칭"], ["rate","매칭률"]
 ];
 function sortAll(){
   var k = SORT.key, dir = SORT.dir==="asc" ? 1 : -1;
@@ -228,7 +232,7 @@ function paintTable(){
   var rows = filteredSellers();
   var total = rows.length;
   if(!ALL_SELLERS.length){ $("sellers").innerHTML=""; $("sellercount").textContent=""; $("pager").innerHTML=""; $("csv").disabled=true; return; }
-  if(!total){ $("sellers").innerHTML='<tr><td class="empty">일치하는 판매자가 없습니다.</td></tr>'; $("sellercount").textContent="0명"; $("pager").innerHTML=""; $("csv").disabled=true; return; }
+  if(!total){ $("sellers").innerHTML='<tr><td class="empty" colspan="'+COLS.length+'">일치하는 판매자가 없습니다.</td></tr>'; $("sellercount").textContent="0명"; $("pager").innerHTML=""; $("csv").disabled=true; return; }
   var pages = Math.max(1, Math.ceil(total/PAGE_SIZE));
   if(PAGE>pages-1) PAGE=pages-1; if(PAGE<0) PAGE=0;
   var slice = rows.slice(PAGE*PAGE_SIZE, PAGE*PAGE_SIZE+PAGE_SIZE);
@@ -237,9 +241,12 @@ function paintTable(){
     return '<th data-k="'+c[0]+'">'+c[1]+'<span class="arrow">'+arrow+'</span></th>';
   }).join("")+"</tr></thead>";
   var tbody = "<tbody>"+slice.map(function(r){
-    return '<tr>'+
+    var risk = r.new_items>=10 && (r.rate==null || r.rate<0.2);
+    return '<tr class="'+(risk?"risk":"")+'">'+
       '<td>'+esc(r.seller_id)+'</td>'+
+      '<td class="num">'+won(r.new_items)+'</td>'+
       '<td class="num">'+won(r.matched)+'</td>'+
+      '<td class="num">'+won(r.unmatched)+'</td>'+
       '<td class="num">'+pct(r.rate)+'</td>'+
     '</tr>';
   }).join("")+"</tbody>";
@@ -292,7 +299,13 @@ function refresh(){
     .then(function(report){
       var sellers = (report && report.sellers) || [];
       ALL_SELLERS = sellers.map(function(s){
-        return { seller_id:s.seller_id, matched: Number(s.matched)||0, rate: s.match_rate==null? null : Number(s.match_rate) };
+        return {
+          seller_id:s.seller_id,
+          new_items: Number(s.new_items)||0,
+          matched: Number(s.matched)||0,
+          unmatched: Number(s.unmatched)||0,
+          rate: s.match_rate==null ? null : Number(s.match_rate)
+        };
       });
       sortAll(); PAGE=0;
       renderKPI(ALL_SELLERS);

@@ -196,7 +196,7 @@
   function scaleThumbs() { [].forEach.call(document.querySelectorAll('.thumb iframe'), function (f) { var w = f.parentNode.clientWidth; if (w) f.style.transform = 'scale(' + (w / 1280) + ')'; }); }
   // 스냅샷(비공개 스토리지) 서명 URL — 성공/실패 모두 캐시(불필요 재요청 방지)
   function thumbUrl(file) {
-    var key = 'tu:' + file;
+    var key = 'tu2:' + file;
     try { var c = JSON.parse(localStorage.getItem(key) || 'null'); if (c && c.exp > Date.now()) return Promise.resolve(c.url); } catch (e) {}
     return window.MUSTIT.client.storage.from('dash-thumbs').createSignedUrl(file + '.png', 21600).then(function (res) {
       var url = (res && res.data && res.data.signedUrl) ? res.data.signedUrl : null;
@@ -218,7 +218,7 @@
     thumbUrl(file).then(function (url) {
       if (!url) { injectIframe(el, file); return; }
       var img = new Image(); img.className = 'thumbpic'; img.alt = '';
-      img.onerror = function () { try { localStorage.removeItem('tu:' + file); } catch (e) {} img.remove(); injectIframe(el, file); };
+      img.onerror = function () { try { localStorage.removeItem('tu2:' + file); } catch (e) {} img.remove(); injectIframe(el, file); };
       img.src = url; el.appendChild(img);
     });
   }

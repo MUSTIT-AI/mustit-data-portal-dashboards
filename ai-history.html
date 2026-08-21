@@ -16,6 +16,7 @@ select,input{padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:
 .meta{display:flex;gap:8px;align-items:center;flex-wrap:wrap;font-size:12.5px;color:#6b6a66}
 .meta b{color:#1c1b19;font-size:13px}
 .dash{background:#f0eeea;border-radius:6px;padding:1px 7px;font-size:11.5px;color:#555}
+a.dash{text-decoration:none;cursor:pointer}a.dash:hover{background:#e6e3dd;color:var(--red)}
 .copy{margin-left:auto;border:1px solid #ddd;background:#fff;border-radius:8px;padding:3px 10px;font-size:11.5px;cursor:pointer;color:#555}
 .copy:hover{border-color:var(--red);color:var(--red)}
 .cond{font-size:12px;color:#8a8780;margin:6px 0 2px}
@@ -39,6 +40,23 @@ details{margin-top:8px}summary{cursor:pointer;font-size:13.5px;font-weight:600;c
 var $=function(id){return document.getElementById(id);};
 function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 function mdLite(s){return esc(s).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/^\s*[-*] /gm,'• ').replace(/\n/g,'<br>');}
+// UTC 저장값 → 한국시간(KST) "YYYY-MM-DD HH:MM"
+function fmtKST(iso){ if(!iso) return '-';
+  var d=new Date(iso); if(isNaN(d.getTime())) return String(iso).replace('T',' ').slice(0,16);
+  try{
+    var o={}; new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Seoul',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false})
+      .formatToParts(d).forEach(function(p){o[p.type]=p.value;});
+    return o.year+'-'+o.month+'-'+o.day+' '+(o.hour==='24'?'00':o.hour)+':'+o.minute;
+  }catch(e){ return String(iso).replace('T',' ').slice(0,16); }
+}
+// 대시보드명(=제목) → 파일 링크 칩
+var TITLE2FILE={};
+function dashChip(name){
+  if(!name) return '<span class="dash">-</span>';
+  var file=TITLE2FILE[name];
+  if(file) return '<a class="dash" href="dashboards/'+encodeURIComponent(file)+'" title="대시보드 열기">'+esc(name)+' ↗</a>';
+  return '<span class="dash">'+esc(name)+'</span>';
+}
 var FLBL={paymentMethod:'결제수단',shippingType:'배송',transactionType:'거래구분',businessType:'비즈니스',category_gender:'카테고리구분',category_l:'대분류',order_status:'주문상태',order_type:'비즈니스구분',product_division:'아울렛',payment_method:'결제수단',platform:'결제기기',member_grade:'구매자등급',age_band:'연령대',buyer_gender:'성별',region_sido:'지역',customer_type:'거래구분',seller_grade:'판매자등급',join_year:'가입연도',ship_origin:'배송구분',naver_discount_applied:'네이버CPS'};
 function fmtParams(p){ if(!p)return '<span style="color:#c0bdb5">조건 정보 없음</span>';
   var parts=[]; if(p['조회'])parts.push('<b>조회</b> '+esc(p['조회'])); if(p['비교'])parts.push('<b>비교</b> '+esc(p['비교']));
@@ -55,10 +73,10 @@ function render(){
   if(!list.length){ $("list").innerHTML='<p class="empty">해당하는 인사이트가 없습니다.</p>'; return; }
   var focus=new URLSearchParams(location.search).get('id');
   $("list").innerHTML=list.map(function(x){
-    var dt=(x.created_at||'').replace('T',' ').slice(0,16);
+    var dt=fmtKST(x.created_at)+' <span style="color:#b8b5ad;font-weight:400">KST</span>';
     var open=(String(x.id)===String(focus))?' open':'';
     return '<div class="ins" id="ins-'+x.id+'">'+
-      '<div class="meta"><b>'+dt+'</b> · '+esc(x.author||'-')+' <span class="dash">'+esc(x.dashboard||'-')+'</span>'+
+      '<div class="meta"><b>'+dt+'</b> · '+esc(x.author||'-')+' '+dashChip(x.dashboard)+
         '<button class="copy" data-id="'+x.id+'">🔗 링크 복사</button></div>'+
       '<div class="cond">'+fmtParams(x.params)+'</div>'+
       '<details'+open+'><summary>'+esc(x.question||'(질문 없음)')+'</summary>'+
@@ -73,7 +91,13 @@ function render(){
 }
 function load(){
   $("list").innerHTML='<p class="empty">불러오는 중…</p>';
-  window.MUSTIT.fn('ai-insight',{history:true,limit:200}).then(function(r){
+  Promise.all([
+    window.MUSTIT.fn('ai-insight',{history:true,limit:200}),
+    Promise.resolve(window.MUSTIT.rpc('dash_list',{})).catch(function(){return [];})
+  ]).then(function(res){
+    var r=res[0]||{};
+    var dl=res[1]; if(dl&&dl.dash_list)dl=dl.dash_list; if(!Array.isArray(dl))dl=[];
+    TITLE2FILE={}; dl.forEach(function(d){ if(d&&d.title&&d.file) TITLE2FILE[d.title]=d.file; });
     ALL=r.history||[];
     var dashes=[]; ALL.forEach(function(x){ if(x.dashboard&&dashes.indexOf(x.dashboard)<0)dashes.push(x.dashboard); });
     $("fdash").innerHTML='<option value="">전체 대시보드</option>'+dashes.map(function(d){return '<option value="'+esc(d)+'">'+esc(d)+'</option>';}).join('');

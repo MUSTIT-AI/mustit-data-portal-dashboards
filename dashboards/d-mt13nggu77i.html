@@ -57,11 +57,12 @@
   .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
   @media(max-width:1100px){.kpis{grid-template-columns:repeat(3,1fr)}}
   @media(max-width:640px){.kpis{grid-template-columns:repeat(2,1fr)}}
-  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:11px 13px}
-  .kpi .l{font-size:11px;color:var(--sub);margin-bottom:5px}
-  .kpi .v{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+  .kpi{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px 16px;text-align:center}
+  .kpi .l{font-size:12px;color:#b0aca3;margin-bottom:10px;font-weight:600}
+  .kpi .v{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em;white-space:nowrap}
   .kpi .v.red{color:var(--red)}
-  .kpi .note2{font-size:10px;color:var(--sub);margin-top:4px}
+  .kpi .note2{font-size:10px;color:var(--sub);margin-top:6px}
+  .sectri{cursor:pointer;margin-right:5px;font-size:11px;color:var(--sub);user-select:none;display:inline-block}
   .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
   @media(max-width:900px){.grid2{grid-template-columns:1fr}}
   .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:12px}
@@ -118,7 +119,7 @@
   .achead{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
   .achead .kpi{flex:1;min-width:150px}
   .acgrp{margin-bottom:8px}
-  .delta{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:700;vertical-align:middle}
+  .delta{display:inline-block;margin-left:7px;padding:2px 9px;border-radius:12px;font-size:11.5px;font-weight:700;vertical-align:middle}
   .delta.up{background:#e3f6ea;color:#1f8a4c}
   .delta.down{background:#fdeaea;color:#c8102e}
   .loading{position:fixed;inset:0;background:rgba(255,255,255,.55);display:none;align-items:center;justify-content:center;z-index:80;font-weight:700;color:var(--red)}
@@ -139,17 +140,21 @@
 </div>
 
 <div class="wrap">
-  <div class="sechead">요약 위젯 <span style="font-weight:400">(AU·획득유저·결제유저·매출 지표 — 여러 개 추가 가능, 각자 독립된 기간)</span></div>
-  <div id="summary_widgets"></div>
-  <button class="btn go" id="sw_add" type="button" style="margin-bottom:14px">+ 요약 위젯 추가</button>
-  <button class="btn reset" id="sw_refresh_all" type="button" style="margin-bottom:14px">🔄 전체 요약 조회</button>
-  <p class="note">데이터 소스: <b>dash_daily_conversion</b>(주문DB × 앰플리튜드 amp_daily 캐시) + <b>획득유저</b>·<b>WAU</b>·<b>MAU</b>는 조회 시점 앰플리튜드 실시간 조회(WAU=이번 주 월~일, MAU=이번 달 1일~말일, 진행 중이면 부분 집계). 위젯 구성은 <b>이 브라우저에만</b> 저장됩니다(localStorage, 공유 안 됨). "페이지 열 때 자동조회"가 꺼져 있으면(신규 위젯 기본값) 버튼을 눌러야 조회됩니다.</p>
+  <div class="sechead"><span class="sectri" data-target="summarySection">▼</span>요약 위젯 <span style="font-weight:400">(AU·획득유저·결제유저·매출 지표 — 여러 개 추가 가능, 각자 독립된 기간)</span></div>
+  <div class="secbody" id="summarySection">
+    <div id="summary_widgets"></div>
+    <button class="btn go" id="sw_add" type="button" style="margin-bottom:14px">+ 요약 위젯 추가</button>
+    <button class="btn reset" id="sw_refresh_all" type="button" style="margin-bottom:14px">🔄 전체 요약 조회</button>
+    <p class="note">데이터 소스: <b>dash_daily_conversion</b>(주문DB × 앰플리튜드 amp_daily 캐시) + <b>획득유저</b>·<b>WAU</b>·<b>MAU</b>는 조회 시점 앰플리튜드 실시간 조회(WAU=이번 주 월~일, MAU=이번 달 1일~말일, 진행 중이면 부분 집계). 위젯 구성은 <b>이 브라우저에만</b> 저장됩니다(localStorage, 공유 안 됨). "페이지 열 때 자동조회"가 꺼져 있으면(신규 위젯 기본값) 버튼을 눌러야 조회됩니다.</p>
+  </div>
 
-  <div class="sechead">DAU / WAU / MAU 분석 위젯 <span style="font-weight:400">(각자 독립된 기간·세그먼트·필터, 위젯별로 자동조회 켜고 끌 수 있음)</span></div>
-  <div id="au_components"></div>
-  <button class="btn go" id="ac_add" type="button" style="margin-bottom:14px">+ 위젯 추가</button>
-  <button class="btn reset" id="ac_refresh_all" type="button" style="margin-bottom:14px">🔄 전체 위젯 조회</button>
-  <p class="note">위젯 구성(제목·차트종류·세그먼트·순서 등)은 <b>이 브라우저에만</b> 저장됩니다(localStorage) — 다른 사람에게는 공유되지 않고, 캐시를 지우면 초기화됩니다. 각 위젯의 "페이지 열 때 자동조회"가 꺼져 있으면(기본값) 버튼을 눌러야 조회됩니다.</p>
+  <div class="sechead"><span class="sectri" data-target="auSection">▼</span>DAU / WAU / MAU 분석 위젯 <span style="font-weight:400">(각자 독립된 기간·세그먼트·필터, 위젯별로 자동조회 켜고 끌 수 있음)</span></div>
+  <div class="secbody" id="auSection">
+    <div id="au_components"></div>
+    <button class="btn go" id="ac_add" type="button" style="margin-bottom:14px">+ 위젯 추가</button>
+    <button class="btn reset" id="ac_refresh_all" type="button" style="margin-bottom:14px">🔄 전체 위젯 조회</button>
+    <p class="note">위젯 구성(제목·차트종류·세그먼트·순서 등)은 <b>이 브라우저에만</b> 저장됩니다(localStorage) — 다른 사람에게는 공유되지 않고, 캐시를 지우면 초기화됩니다. 각 위젯의 "페이지 열 때 자동조회"가 꺼져 있으면(기본값) 버튼을 눌러야 조회됩니다.</p>
+  </div>
 </div>
 
 <!-- 대시보드 설정 모달 (소유자/관리자) -->
@@ -756,7 +761,7 @@ function sum(arr){ return arr.reduce(function(a,x){return a+(Number(x)||0);},0);
 function avg(arr){ var v=arr.filter(function(x){return x!=null;}); return v.length? v.reduce(function(a,b){return a+b;},0)/v.length : 0; }
 function paintTiles(elId, tiles){
   $(elId).innerHTML = tiles.map(function(t){
-    return '<div class="kpi"><div class="l">'+t.l+'</div><div class="v'+(t.red?" red":"")+'">'+t.v+'</div>'+
+    return '<div class="kpi"><div class="l">'+t.l+'</div><div class="v'+(t.red?" red":"")+'">'+t.v+(t.badge||"")+'</div>'+
       (t.note?'<div class="note2">'+esc(t.note)+'</div>':'')+'</div>';
   }).join("");
 }
@@ -785,7 +790,7 @@ var SW_DT_COLS = [
   ["net_rev","순매출"],["arpu","ARPU"],["arppu","ARPPU"],["conv_pct","구매전환율"]
 ];
 function defaultSummaryWidgets(){
-  return [{id:"sw_main", title:"유저·매출 지표 요약", from:null, to:null, collapsed:true}];
+  return [{id:"sw_main", title:"유저·매출 지표 요약", note:"", from:null, to:null, compare:"none", collapsed:true}];
 }
 function loadSummaryWidgets(){
   try{
@@ -793,7 +798,7 @@ function loadSummaryWidgets(){
     if(raw){
       var arr=JSON.parse(raw);
       if(Array.isArray(arr)&&arr.length){
-        arr.forEach(function(s){ if(s.collapsed==null) s.collapsed=true; });
+        arr.forEach(function(s){ if(s.collapsed==null) s.collapsed=true; if(s.note==null) s.note=""; if(!s.compare) s.compare="none"; });
         // 데이터 무결성 가드: id 없는(깨진) 항목은 걸러내고 새 id 부여
         arr = arr.filter(Boolean).map(function(s){ if(!s.id) s.id = newSummaryWidgetId(); return s; });
         if(arr.length) return arr;
@@ -803,10 +808,11 @@ function loadSummaryWidgets(){
   return defaultSummaryWidgets();
 }
 function saveSummaryWidgets(){ try{ localStorage.setItem(SW_KEY, JSON.stringify(SUMMARY_WIDGETS.map(function(s){
-  return {id:s.id,title:s.title,from:s.from,to:s.to,collapsed:s.collapsed};
+  return {id:s.id,title:s.title,note:s.note,from:s.from,to:s.to,compare:s.compare,collapsed:s.collapsed};
 }))); }catch(e){} }
 function newSummaryWidgetId(){ return "sw_"+Date.now()+"_"+Math.floor(Math.random()*1000); }
 function summaryWidgetHTML(sw){
+  var cmpOpts = COMPARE_OPTS.map(function(o){return '<option value="'+o[0]+'">'+esc(o[1])+'</option>';}).join("");
   return ''+
   '<div class="card sw" id="'+sw.id+'">'+
     '<div class="achdr">'+
@@ -815,9 +821,11 @@ function summaryWidgetHTML(sw){
       '<button type="button" class="btn del sw_del">🗑 삭제</button>'+
     '</div>'+
     '<div class="wbody">'+
+      '<input type="text" class="ac_note" placeholder="설명(주석)" value="'+esc(sw.note||"")+'">'+
       '<div class="acfilters">'+
         '<div class="fld"><label>시작일</label><input type="date" class="sw_from"></div>'+
         '<div class="fld"><label>종료일</label><input type="date" class="sw_to"></div>'+
+        '<div class="fld"><label>비교</label><select class="sw_compare">'+cmpOpts+'</select></div>'+
         '<button type="button" class="btn go sw_go">조회</button>'+
         '<button type="button" class="btn reset sw_reset">초기화</button>'+
       '</div>'+
@@ -854,19 +862,56 @@ function downloadSWCSV(sw){
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 }
-function refreshSummaryWidget(sw){
-  var root = $(sw.id);
-  if(!root) return Promise.resolve();
-  var from=root.querySelector(".sw_from").value, to=root.querySelector(".sw_to").value;
-  sw.from=from; sw.to=to; saveSummaryWidgets();
-  $(sw.id+"_note").textContent = "불러오는 중…";
+// 요약 위젯 KPI 타일 정의: key는 computeSummaryAggregates()가 반환하는 값의 키와 일치해야 함
+var SW_USER_TILE_DEFS = [
+  {key:"auSum", l:function(a){return "AU (합계, 조회기간 일별 순유저 합)";}},
+  {key:"auAvg", l:function(a){return "AU (평균, 합계÷"+a.days+"일)";}},
+  {key:"dauLatest", l:"DAU (최근일)"},
+  {key:"wau", l:"WAU (이번주, 월~일 기준·진행중)"},
+  {key:"mau", l:"MAU (이번달, 달력 기준·진행중)"},
+  {key:"sticky", l:"Stickiness (DAU÷MAU, 이번달)", isPct:true},
+  {key:"signAvg", l:"평균 획득유저(가입자)"},
+  {key:"buyAvg", l:"평균 결제 유저수"}
+];
+var SW_REV_TILE_DEFS = [
+  {key:"netSum", l:"총 순매출", won:true, red:1},
+  {key:"arpuAvg", l:"평균 ARPU", won:true, red:1},
+  {key:"arppuAvg", l:"평균 ARPPU", won:true, red:1},
+  {key:"convAvg", l:"평균 구매전환율", isPct:true}
+];
+function fmtSWTile(def, v){
+  if(v==null) return "—";
+  if(def.isPct) return pct(v);
+  if(def.won) return "₩"+won(v);
+  return won(v);
+}
+function buildSWTiles(defs, agg, prevAgg, range){
+  return defs.map(function(def){
+    var v = agg[def.key];
+    var t = { l:(typeof def.l==="function"?def.l(agg):def.l), v:fmtSWTile(def,v), red:def.red };
+    if(def.key==="auSum" || def.key==="auAvg") t.note = range;
+    if(prevAgg){
+      var pv = prevAgg[def.key];
+      if(v!=null && pv!=null && pv!==0) t.badge = deltaBadge(v, pv);
+    }
+    return t;
+  });
+}
+function computeSummaryAggregates(rows, wau, mau){
+  var auSum=sum(rows.map(function(r){return r.dau;})), auAvg=avg(rows.map(function(r){return r.dau;}));
+  var dauLatest = rows.length ? rows[rows.length-1].dau : null;
+  var sticky = (dauLatest!=null && mau) ? (dauLatest/mau) : null;
+  var signAvg=avg(rows.map(function(r){return r.signups;})), buyAvg=avg(rows.map(function(r){return r.buyers;}));
+  var netSum=rows.reduce(function(a,r){return a+(Number(r.net_rev)||0);},0);
+  var arpuAvg=avg(rows.map(function(r){return r.arpu;})), arppuAvg=avg(rows.map(function(r){return r.arppu;})), convAvg=avg(rows.map(function(r){return r.conv;}));
+  return { days:rows.length, auSum:auSum, auAvg:auAvg, dauLatest:dauLatest, wau:wau, mau:mau, sticky:sticky, signAvg:signAvg, buyAvg:buyAvg, netSum:netSum, arpuAvg:arpuAvg, arppuAvg:arppuAvg, convAvg:convAvg };
+}
+// 한 기간(from~to)의 요약 데이터를 통째로 가져와 집계까지 계산 — 현재 기간·비교 기간 양쪽에 재사용
+function fetchSummaryPeriod(from, to){
   var p = { from:from, to:to };
-  // 앰플리튜드 호출은 순차 실행(동시 호출 시 429 위험) — 주문DB RPC와는 병렬
   var ampChain = fetchSignups(p.from, p.to).then(function(signMap){
     return fetchAUBucket(p.to, 14, 7).then(function(wau){
-      return fetchAUBucket(p.to, 40, 30).then(function(mau){
-        return { signMap:signMap, wau:wau, mau:mau };
-      });
+      return fetchAUBucket(p.to, 40, 30).then(function(mau){ return { signMap:signMap, wau:wau, mau:mau }; });
     });
   });
   return Promise.all([
@@ -881,40 +926,38 @@ function refreshSummaryWidget(sw){
       r.arppu = (r.buyers>0) ? Math.round((Number(r.net_rev)||0)/r.buyers) : null;
       r.conv_pct = pct(r.conv);
     });
+    return { rows:rows, agg: computeSummaryAggregates(rows, res[1].wau, res[1].mau) };
+  });
+}
+function refreshSummaryWidget(sw){
+  var root = $(sw.id);
+  if(!root) return Promise.resolve();
+  var from=root.querySelector(".sw_from").value, to=root.querySelector(".sw_to").value;
+  var cmpSel = root.querySelector(".sw_compare");
+  var cmpMode = cmpSel ? cmpSel.value : "none";
+  sw.from=from; sw.to=to; sw.compare=cmpMode; saveSummaryWidgets();
+  $(sw.id+"_note").textContent = "불러오는 중…";
+  // 앰플리튜드 호출은 순차 실행(동시 호출 시 429 위험): 현재기간 → (비교기간 켜져있으면) 비교기간
+  return fetchSummaryPeriod(from, to).then(function(cur){
+    var rows = cur.rows;
     sw._rows = rows; sw._loaded = true;
     var dates = rows.map(function(r){ return md(r.d); });
-    var auSum=sum(rows.map(function(r){return r.dau;})), auAvg=avg(rows.map(function(r){return r.dau;}));
-    var dauLatest = rows.length ? rows[rows.length-1].dau : null;
-    var wau=res[1].wau, mau=res[1].mau;
-    var sticky = (dauLatest!=null && mau) ? (dauLatest/mau) : null;
-    var signAvg=avg(rows.map(function(r){return r.signups;})), buyAvg=avg(rows.map(function(r){return r.buyers;}));
-    var netSum=rows.reduce(function(a,r){return a+(Number(r.net_rev)||0);},0);
-    var arpuAvg=avg(rows.map(function(r){return r.arpu;})), arppuAvg=avg(rows.map(function(r){return r.arppu;})), convAvg=avg(rows.map(function(r){return r.conv;}));
     var range = rows.length ? (d10(rows[0].d)+" ~ "+d10(rows[rows.length-1].d)) : "";
-    paintTiles(sw.id+"_ku", [
-      {l:"AU (합계, 조회기간 일별 순유저 합)", v:won(auSum), note:range},
-      {l:"AU (평균, 합계÷"+rows.length+"일)", v:won(auAvg), note:range},
-      {l:"DAU (최근일)", v:won(dauLatest)},
-      {l:"WAU (이번주, 월~일 기준·진행중)", v: wau==null?"—":won(wau)},
-      {l:"MAU (이번달, 달력 기준·진행중)", v: mau==null?"—":won(mau)},
-      {l:"Stickiness (DAU÷MAU, 이번달)", v: sticky==null?"—":pct(sticky)},
-      {l:"평균 획득유저(가입자)", v:won(signAvg)},
-      {l:"평균 결제 유저수", v:won(buyAvg)}
-    ]);
-    paintTiles(sw.id+"_kr", [
-      {l:"총 순매출", v:"₩"+won(netSum), red:1},
-      {l:"평균 ARPU", v:"₩"+won(arpuAvg), red:1},
-      {l:"평균 ARPPU", v:"₩"+won(arppuAvg), red:1},
-      {l:"평균 구매전환율", v:pct(convAvg)}
-    ]);
-    barLine(sw.id+"_cau", dates, "AU", rows.map(function(r){return r.dau;}), [
-      { name:"획득유저(가입자)", data:rows.map(function(r){return r.signups;}), color:"#2fae8f" },
-      { name:"결제 유저수", data:rows.map(function(r){return r.buyers;}), color:"#c8102e" }
-    ]);
-    singleBar(sw.id+"_crev", dates, "순매출", rows.map(function(r){return r.net_rev;}), wonFmt);
-    paintSWTable(sw, rows);
-    $(sw.id+"_csv").disabled = rows.length===0;
-    $(sw.id+"_note").textContent = "";
+    var cmp = compareRange(from, to, cmpMode);
+    var prevP = cmp ? fetchSummaryPeriod(cmp.from, cmp.to).then(function(p){return p;}).catch(function(){return null;}) : Promise.resolve(null);
+    return prevP.then(function(prev){
+      var prevAgg = prev && prev.agg;
+      paintTiles(sw.id+"_ku", buildSWTiles(SW_USER_TILE_DEFS, cur.agg, prevAgg, range));
+      paintTiles(sw.id+"_kr", buildSWTiles(SW_REV_TILE_DEFS, cur.agg, prevAgg, range));
+      barLine(sw.id+"_cau", dates, "AU", rows.map(function(r){return r.dau;}), [
+        { name:"획득유저(가입자)", data:rows.map(function(r){return r.signups;}), color:"#2fae8f" },
+        { name:"결제 유저수", data:rows.map(function(r){return r.buyers;}), color:"#c8102e" }
+      ]);
+      singleBar(sw.id+"_crev", dates, "순매출", rows.map(function(r){return r.net_rev;}), wonFmt);
+      paintSWTable(sw, rows);
+      $(sw.id+"_csv").disabled = rows.length===0;
+      $(sw.id+"_note").textContent = cmp ? ("비교기간: "+cmp.from+" ~ "+cmp.to) : "";
+    });
   }).catch(function(e){ $(sw.id+"_note").textContent = "오류: "+e.message; });
 }
 function wireSummaryWidget(sw){
@@ -922,7 +965,9 @@ function wireSummaryWidget(sw){
   var d = (sw.from && sw.to) ? {from:sw.from,to:sw.to} : acDefaultDates(THUMB?14:30);
   root.querySelector(".sw_from").value = d.from;
   root.querySelector(".sw_to").value = d.to;
+  root.querySelector(".sw_compare").value = sw.compare||"none";
   root.querySelector(".ac_title").addEventListener("change", function(e){ sw.title=e.target.value; saveSummaryWidgets(); });
+  root.querySelector(".ac_note").addEventListener("change", function(e){ sw.note=e.target.value; saveSummaryWidgets(); });
   root.querySelector(".sw_del").onclick = function(){
     if(!confirm('"'+sw.title+'" 요약 위젯을 삭제할까요? (이 브라우저에서만 사라집니다)')) return;
     SUMMARY_WIDGETS = SUMMARY_WIDGETS.filter(function(x){ return x.id!==sw.id; });
@@ -948,7 +993,7 @@ function renderSummaryWidgets(){
   });
 }
 function addSummaryWidget(){
-  var sw = {id:newSummaryWidgetId(), title:"새 요약 위젯", from:null, to:null, collapsed:false};
+  var sw = {id:newSummaryWidgetId(), title:"새 요약 위젯", note:"", from:null, to:null, compare:"none", collapsed:false};
   SUMMARY_WIDGETS.push(sw);
   saveSummaryWidgets();
   renderSummaryWidgets();
@@ -1040,6 +1085,16 @@ function deleteDash(name){
   });
 }
 
+// 섹션(요약 위젯 / DAU·WAU·MAU 위젯) 전체를 펼치고 접는 토글 — 로그인 여부와 무관하게 항상 동작
+[].forEach.call(document.querySelectorAll(".sectri"), function(tri){
+  var target = document.getElementById(tri.getAttribute("data-target"));
+  if(!target) return;
+  tri.onclick = function(){
+    var hide = target.style.display!=="none";
+    target.style.display = hide ? "none" : "";
+    tri.textContent = hide ? "▶" : "▼";
+  };
+});
 $("sw_add").onclick=addSummaryWidget;
 $("sw_refresh_all").onclick=function(){ refreshAllSummaryWidgets(); };
 $("ac_add").onclick=addWidget;

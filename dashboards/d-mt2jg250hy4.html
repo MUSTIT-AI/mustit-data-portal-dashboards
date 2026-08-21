@@ -118,8 +118,8 @@
   <div class="kpis" id="kpis"></div>
 
   <div class="card">
-    <h3>판매자별 매칭율</h3>
-    <span class="h-sub">매칭율 상위 30명 (신규 등록 있는 판매자 기준)</span>
+    <h3>판매자별 매칭수</h3>
+    <span class="h-sub">매칭수 상위 30명 · 막대 옆 숫자는 매칭율</span>
     <div id="c_sellers" class="chart"></div>
   </div>
 
@@ -177,22 +177,19 @@ window.addEventListener("resize", function(){ Object.keys(CH).forEach(function(k
 var TIP = { trigger:"axis", confine:true, textStyle:{fontSize:11} };
 function legend(names){ return { data:names, top:2, left:2, itemWidth:12, itemHeight:8, itemGap:8, textStyle:{fontSize:10,color:"#555"} }; }
 
-// rows: [{seller_id, matched, rate}] 매칭율(rate) 없는 판매자는 제외하고 매칭율 내림차순 상위 30명 표시
+// rows: [{seller_id, matched, rate}] 매칭수 내림차순 상위 30명 · 막대 옆에 매칭율(%) 라벨 표시
 function renderChart(rows){
-  var sorted = rows.filter(function(r){ return r.rate!=null; })
-    .slice().sort(function(a,b){ return b.rate-a.rate; }).slice(0,30);
+  var sorted = rows.slice().sort(function(a,b){ return b.matched-a.matched; }).slice(0,30);
   sorted.reverse();
   var names = sorted.map(function(r){ return r.seller_id; });
   chart("c_sellers").setOption({
-    grid:{ left:110, right:24, top:26, bottom:26 },
-    tooltip:{ trigger:"axis", confine:true, textStyle:{fontSize:11}, formatter:function(p){
-      var r = sorted[p[0].dataIndex];
-      return r.seller_id+"<br/>매칭율 "+pct(r.rate)+" (매칭 "+won(r.matched)+" / 신규 "+won(r.new_items)+")";
-    }},
-    xAxis:{ type:"value", max:1, axisLabel:{formatter:function(v){return (v*100).toFixed(0)+"%";},fontSize:9,color:"#999"}, splitLine:{lineStyle:{color:"#eee"}} },
+    grid:{ left:110, right:60, top:26, bottom:26 }, tooltip:TIP,
+    xAxis:{ type:"value", axisLabel:{fontSize:9,color:"#999"}, splitLine:{lineStyle:{color:"#eee"}} },
     yAxis:{ type:"category", data:names, axisLabel:{fontSize:10,color:"#555"}, axisTick:{show:false}, axisLine:{lineStyle:{color:"#ddd"}} },
     series:[
-      { name:"매칭율", type:"bar", data:sorted.map(function(r){return r.rate;}), itemStyle:{color:"#2fae8f"}, barMaxWidth:18 }
+      { name:"매칭수", type:"bar", data:sorted.map(function(r){return r.matched;}), itemStyle:{color:"#2fae8f"}, barMaxWidth:18,
+        label:{ show:true, position:"right", fontSize:9, color:"#666",
+          formatter:function(p){ return pct(sorted[p.dataIndex].rate); } } }
     ]
   }, true);
 }

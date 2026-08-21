@@ -27,9 +27,8 @@
   @keyframes pulse{0%{opacity:1}50%{opacity:.35}100%{opacity:1}}
 
   /* 페이지 탭(최상단) */
-  .pagetabs{display:flex;gap:8px;background:#fff;border-bottom:1px solid var(--border);padding:10px 16px}
-  @media(max-width:700px){.pagetabs{flex-direction:column}}
-  .pagetabs button{flex:1;border:1px solid var(--border);background:#fff;border-radius:10px;padding:12px 14px;font-size:13.5px;font-weight:800;cursor:pointer;color:#555;text-align:center;transition:background .15s}
+  .pagetabs{display:flex;gap:6px;background:#fff;border-bottom:1px solid var(--border);padding:7px 16px;justify-content:flex-start}
+  .pagetabs button{flex:0 0 auto;border:1px solid var(--border);background:#fff;border-radius:8px;padding:6px 20px;font-size:12px;font-weight:800;cursor:pointer;color:#555;text-align:center;transition:background .15s}
   .pagetabs button.on{background:var(--red);color:#fff;border-color:var(--red)}
   .pagetabs button:not(.on):hover{background:#f6f5f2}
 
@@ -133,9 +132,16 @@
     <div class="sechd">Summary <span class="n" id="daily_period"></span></div>
     <div class="kpigrid" id="daily_kpis"></div>
 
-    <div class="sechd">최근 30일 추이 <span class="badge real">실데이터</span></div>
+    <div class="sechd">기간별 추이 <span class="badge real">실데이터</span>
+      <div style="margin-left:auto;display:flex;align-items:flex-end;gap:6px">
+        <div class="fld"><input type="date" id="daily_trend_from" style="height:26px;font-size:11.5px;padding:3px 6px"></div>
+        <span style="color:#aaa;font-size:11px">~</span>
+        <div class="fld"><input type="date" id="daily_trend_to" style="height:26px;font-size:11.5px;padding:3px 6px"></div>
+        <button class="gobtn" id="daily_trend_apply" style="height:26px;padding:0 12px;font-size:11.5px">적용</button>
+      </div>
+    </div>
     <div class="card">
-      <p class="csub">막대=일별 신규 유저 수(Amplitude) · 선=일별 신규 구매 유저 수(주문DB, 생애 최초 주문 기준)</p>
+      <p class="csub">막대=일별 신규 유저 수(Amplitude) · 선=일별 신규 구매 유저 수(주문DB, 생애 최초 주문 기준) · 기본값은 최근 30일</p>
       <div class="chart" id="c_daily_trend"></div>
     </div>
     <div class="tblwrap" style="margin-top:10px">
@@ -245,6 +251,18 @@ function fetchSignupDaily(fromISO,toISO){
       return map;
     });
 }
+function fetchActiveDaily(fromISO,toISO){
+  return amp("events/segmentation",{e:[JSON.stringify(ev("_active"))], m:"uniques", i:1, start:ad(fromISO), end:ad(toISO)})
+    .then(function(d){
+      var xv=segXValues(d), series=segSeries(d)[0]||[];
+      var map={};
+      xv.forEach(function(x,i){
+        var day=String(x).slice(0,10);
+        var v=series[i]; map[day]= typeof v==="object" ? (Number(v&&v.value)||0) : (Number(v)||0);
+      });
+      return map;
+    });
+}
 function fetchNewBuyers(fromISO,toISO){
   return rpc("dash_new_buyers",{from:fromISO,to:toISO}).then(function(rows){
     var map={}; (rows||[]).forEach(function(r){ map[r.d]=r; });
@@ -277,11 +295,12 @@ function deltaDays(cur,prev){
   var r=cur-prev;
   return {t:(r>=0?"▲ ":"▼ ")+Math.abs(r).toFixed(1)+"일", c:(Math.abs(r)<0.05?"flat":r>0?"up":"down")};
 }
-function kpiCard(title,valueStr,cmpArr){
+function kpiCard(title,valueStr,cmpArr,subText){
   var chips=(cmpArr||[]).map(function(c){
     return '<div class="kpichip"><span>'+esc(c.label)+'</span><span class="chg '+c.delta.c+'">'+c.delta.t+'</span></div>';
   }).join("");
-  return '<div class="kpicard"><div class="kt">'+esc(title)+'</div><div class="kv">'+valueStr+'</div>'+chips+'</div>';
+  var sub = subText ? '<div style="font-size:10.5px;color:var(--sub);margin:-5px 0 8px">'+subText+'</div>' : "";
+  return '<div class="kpicard"><div class="kt">'+esc(title)+'</div><div class="kv">'+valueStr+'</div>'+sub+chips+'</div>';
 }
 
 // ── ECharts helpers ──
@@ -311,15 +330,16 @@ function loadDailyTab(){
   var ref = $("refdate").value || ymd(new Date());
   var winStart = ymdAdd(ref,-400);
   var d1=ymdAdd(ref,-1), d7=ymdAdd(ref,-7), d364=ymdAdd(ref,-364);
-  return fetchSignupDaily(winStart,ref).then(function(signupMap){
+  return Promise.all([fetchSignupDaily(winStart,ref), fetchActiveDaily(winStart,ref)]).then(function(res){
+    var signupMap=res[0], dauMap=res[1];
     return fetchNewBuyers(winStart,ref).then(function(buyerMap){
       hideDbPending();
-      STATE.daily={ref:ref,d1:d1,d7:d7,d364:d364,signupMap:signupMap,buyerMap:buyerMap};
+      STATE.daily={ref:ref,d1:d1,d7:d7,d364:d364,coverFrom:winStart,coverTo:ref,signupMap:signupMap,dauMap:dauMap,buyerMap:buyerMap};
       renderDailyAll();
     }).catch(function(e){
       console.error(e);
       markDbPending("신규 구매 유저·매출 데이터는 아직 준비 중이에요(주문DB 사전집계 설정 필요) — 설정 완료 전까지 관련 카드/차트는 \"-\"로 표시됩니다.");
-      STATE.daily={ref:ref,d1:d1,d7:d7,d364:d364,signupMap:signupMap,buyerMap:null};
+      STATE.daily={ref:ref,d1:d1,d7:d7,d364:d364,coverFrom:winStart,coverTo:ref,signupMap:signupMap,dauMap:dauMap,buyerMap:null};
       renderDailyAll();
     });
   }).catch(function(e){
@@ -329,7 +349,9 @@ function loadDailyTab(){
 }
 function renderDailyAll(){
   renderDailyKPIs();
-  renderDailyTrend();
+  $("daily_trend_from").value = ymdAdd(STATE.daily.ref,-29);
+  $("daily_trend_to").value = STATE.daily.ref;
+  renderDailyTrendRange(ymdAdd(STATE.daily.ref,-29), STATE.daily.ref);
   renderDailyPeriod("w");
   loadDailyAi();
 }
@@ -342,23 +364,42 @@ function renderDailyKPIs(){
   $("daily_period").textContent="(기준일 "+d.ref+")";
   function get(map,day){ return (map && map[day]!=null) ? map[day] : null; }
   function seriesFor(fn){ return {cur:fn(d.ref), d1:fn(d.d1), d7:fn(d.d7), d364:fn(d.d364)}; }
-  var signup = seriesFor(function(day){ return get(d.signupMap,day); });
-  var buyer  = seriesFor(function(day){ var r=buyerRowOf(d,day); return r? r.new_buyers : null; });
-  var revenue= seriesFor(function(day){ var r=buyerRowOf(d,day); return r? r.revenue : null; });
-  var cvr    = seriesFor(function(day){ var s=get(d.signupMap,day), r=buyerRowOf(d,day); return (s&&r&&s>0)? r.new_buyers/s : null; });
-  var aov    = seriesFor(function(day){ var r=buyerRowOf(d,day); return (r&&r.new_buyers>0)? r.revenue/r.new_buyers : null; });
+  var dau     = seriesFor(function(day){ return get(d.dauMap,day); });
+  var signup  = seriesFor(function(day){ return get(d.signupMap,day); });
+  var buyer   = seriesFor(function(day){ var r=buyerRowOf(d,day); return r? r.new_buyers : null; });
+  var revenue = seriesFor(function(day){ var r=buyerRowOf(d,day); return r? r.revenue : null; });
+  var cvr     = seriesFor(function(day){ var s=get(d.signupMap,day), r=buyerRowOf(d,day); return (s&&r&&s>0)? r.new_buyers/s : null; });
+  var aov     = seriesFor(function(day){ var r=buyerRowOf(d,day); return (r&&r.new_buyers>0)? r.revenue/r.new_buyers : null; });
   function cmp3(s,fn){ return [{label:"전일",delta:fn(s.cur,s.d1)},{label:"전주 동일요일",delta:fn(s.cur,s.d7)},{label:"전년 동일일",delta:fn(s.cur,s.d364)}]; }
+  var dauShare = (dau.cur && signup.cur!=null) ? signup.cur/dau.cur : null;
   var html="";
-  html+=kpiCard("신규 유저 수", signup.cur==null?"-":won(signup.cur)+"명", cmp3(signup,deltaPct));
+  html+=kpiCard("DAU(전체 활성 유저)", dau.cur==null?"-":won(dau.cur)+"명", cmp3(dau,deltaPct));
+  html+=kpiCard("신규 유저 수", signup.cur==null?"-":won(signup.cur)+"명", cmp3(signup,deltaPct),
+    dauShare==null?"":("DAU 대비 "+pct1(dauShare)));
   html+=kpiCard("신규 구매 유저 수", buyer.cur==null?"-":won(buyer.cur)+"명", cmp3(buyer,deltaPct));
   html+=kpiCard("신규 구매 전환율", cvr.cur==null?"-":pct1(cvr.cur), cmp3(cvr,deltaPP));
   html+=kpiCard("신규 구매 매출", revenue.cur==null?"-":won(revenue.cur)+"원", cmp3(revenue,deltaPct));
   html+=kpiCard("신규 구매 객단가", aov.cur==null?"-":won(aov.cur)+"원", cmp3(aov,deltaPct));
   $("daily_kpis").innerHTML=html;
 }
-function renderDailyTrend(){
+function ensureDailyCoverage(fromISO,toISO){
+  var d=STATE.daily;
+  var needs=[];
+  if(fromISO < d.coverFrom) needs.push([fromISO, ymdAdd(d.coverFrom,-1)]);
+  if(toISO > d.coverTo) needs.push([ymdAdd(d.coverTo,1), toISO]);
+  if(!needs.length) return Promise.resolve();
+  return Promise.all(needs.map(function(r){
+    var p = fetchSignupDaily(r[0],r[1]).then(function(sm){ Object.assign(d.signupMap,sm); });
+    if(d.buyerMap!=null){ p = p.then(function(){ return fetchNewBuyers(r[0],r[1]).then(function(bm){ Object.assign(d.buyerMap,bm); }); }); }
+    return p;
+  })).then(function(){
+    if(fromISO<d.coverFrom) d.coverFrom=fromISO;
+    if(toISO>d.coverTo) d.coverTo=toISO;
+  });
+}
+function renderDailyTrendRange(fromISO,toISO){
   var d=STATE.daily; if(!d) return;
-  var days=[]; for(var i=29;i>=0;i--) days.push(ymdAdd(d.ref,-i));
+  var days=enumerateDates(fromISO,toISO);
   var labels=days.map(function(s){return s.slice(5,10);});
   var signupArr=days.map(function(day){ var v=d.signupMap[day]; return v==null?0:v; });
   var buyerArr=days.map(function(day){ var r=buyerRowOf(d,day); return r? r.new_buyers : 0; });
@@ -383,6 +424,12 @@ function renderDailyTrend(){
   }).join("");
   $("daily_table_body").innerHTML = rows;
 }
+$("daily_trend_apply").onclick=function(){
+  var f=$("daily_trend_from").value, t=$("daily_trend_to").value;
+  if(!f||!t||f>t||!STATE.daily) return;
+  $("loading").classList.add("on");
+  ensureDailyCoverage(f,t).then(function(){ renderDailyTrendRange(f,t); }).catch(function(e){ console.error(e); }).finally(function(){ $("loading").classList.remove("on"); });
+};
 function bucketDailyBy(d,mode){
   var dates=Object.keys(d.signupMap).sort();
   var buckets={};

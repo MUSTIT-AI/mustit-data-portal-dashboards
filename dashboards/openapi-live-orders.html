@@ -101,6 +101,7 @@
   <div id="cmpfull" style="font-size:12px;color:#6b6a66;margin:0 0 8px"></div>
   <div class="kpis" id="kpis"></div>
   <div class="card"><h3>시간대별 거래액 추이</h3><div class="chart" id="c_hourly" style="height:280px"></div></div>
+  <div class="card"><h3>시간대별 거래건수 추이</h3><div class="chart" id="c_hourly_cnt" style="height:280px"></div></div>
   <div class="card"><h3>대분류 · 중분류별 <span class="muted" id="catback"></span></h3><div class="chart" id="c_cat" style="height:300px"></div></div>
   <div class="grid4">
     <div class="card"><h3>결제수단별</h3><div class="chart" id="c_pay"></div></div>
@@ -277,6 +278,7 @@
       $("cmpfull").textContent='비교기간('+cr+') 전체 거래액: '+won(d.cmpFullGmv)+' 원';
       var hours=[];for(var h=0;h<24;h++)hours.push(String(h).padStart(2,'0'));
       vbar("c_hourly",hours,d.cur.hourly,d.cmp.hourly,false);
+      vbar("c_hourly_cnt",hours,d.cur.hourlyCnt||[],d.cmp.hourlyCnt||[],false);
       CAT={catL:d.catL||[],catChildren:d.catChildren||{}}; drawCatL();
       var p=pairMap(d.cur.payment,d.cmp.payment,PAYLBL); vbar("c_pay",p.cats,p.cur,p.cmp,true);
       var cp=pairMap(d.cur.coupons,d.cmp.coupons,null); vbar("c_coupon",cp.cats,cp.cur,cp.cmp,true);

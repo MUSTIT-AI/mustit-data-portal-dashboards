@@ -56,7 +56,6 @@
   .ms .panel .opt{display:flex;align-items:center;gap:7px;padding:4px 6px;border-radius:5px;cursor:pointer;font-size:12.5px}
   .ms .panel .opt:hover{background:#f3f2ee}
   .ms .panel .opt input{margin:0}
-  .ms .panel .sel-group{border-bottom:1px solid #eee;margin-bottom:4px;padding-bottom:4px}
   .btns{display:flex;gap:6px;margin-left:auto}
   .btn{border:0;border-radius:7px;padding:6px 15px;font-size:12.5px;font-weight:700;cursor:pointer;height:29px}
   .btn.go{background:var(--red);color:#fff}
@@ -90,6 +89,10 @@
   table.sellers tr:hover td{background:#fafaf7}
   table.sellers tr.err td{background:#fdf0ee;color:var(--warn)}
   .empty{color:var(--sub);font-size:12.5px;padding:30px 10px;text-align:center}
+  .pager{display:flex;align-items:center;justify-content:center;gap:10px;margin-top:10px;font-size:12.5px;color:var(--sub)}
+  .pager button{border:1px solid #d6d4ce;background:#fff;border-radius:7px;padding:5px 12px;font-size:12.5px;cursor:pointer;font-weight:600}
+  .pager button:disabled{opacity:.4;cursor:default}
+  .pager .pp{font-variant-numeric:tabular-nums;min-width:92px;text-align:center}
   .loading{position:fixed;inset:0;background:rgba(255,255,255,.55);display:none;align-items:center;justify-content:center;z-index:80;font-weight:700;color:var(--red)}
   .loading.on{display:flex}
   .err{color:var(--red);padding:10px 14px;font-size:12.5px}
@@ -106,6 +109,7 @@
 </div>
 
 <div class="filters" id="filters">
+  <div class="fld"><label>판매자 검색</label><input type="text" id="sellerq" placeholder="판매자ID 일부 입력"></div>
   <div id="dropdowns" style="display:contents"></div>
   <div class="btns">
     <button class="btn go" id="go">조회</button>
@@ -116,26 +120,28 @@
 
 <div class="wrap">
   <p class="note">
+    <b>전체 판매자 목록</b>입니다(검색은 이미 불러온 목록을 즉시 좁혀볼 뿐 — DB를 다시 조회하지 않습니다).
     <b>등록 상품수</b> = 해당 판매자ID로 <code>mustit_products</code>(머스트잇 Open API 상품 마스터, 매일 08:00 갱신)에 등록된 상품 총건수(선택한 상품상태 기준).
     <b>카탈로그 매칭 상품수</b> = 그중 <code>catalog_id</code>가 배정된(=카탈로그에 연결된) 상품수(단순 판정: 배정 여부만 봄).
     <span style="color:var(--warn)">※ 카탈로그 자체의 실제 판매 매칭도(<code>matchedItemCount≥2</code> 등 정교한 판정)가 필요하면 <a href="_starter.html?f=d-mszs5qkscg4.html" style="color:var(--red);font-weight:700">「[카탈로그] 매칭 현황」</a> 대시보드를 참고하세요.</span>
-    행 데이터를 브라우저로 내려받지 않고 서버에서 건수만 집계해 조회합니다.
+    340만 행 원본을 브라우저로 내려받지 않고, 서버에서 판매자당 1행으로 미리 집계한 결과(<code>mustit_sellers_list</code> RPC)만 받아옵니다.
   </p>
 
   <div class="kpis" id="kpis"></div>
 
   <div class="card">
     <h3>판매자별 등록·매칭 상품수</h3>
-    <span class="h-sub">입력한 판매자ID · 등록 상품수 내림차순</span>
+    <span class="h-sub">등록 상품수 상위 30명</span>
     <div id="c_sellers" class="chart"></div>
   </div>
 
   <div class="tblwrap">
     <div class="tblhead">
-      <h3>판매자별 상세</h3>
+      <h3>판매자별 전체 목록</h3>
       <span class="tblcount" id="sellercount"></span>
     </div>
     <div class="tblscroll"><table class="sellers" id="sellers"></table></div>
+    <div class="pager" id="pager"></div>
   </div>
 </div>
 
@@ -169,96 +175,6 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){retur
 
 // 홈 썸네일(iframe #thumb)로 뜰 땐 무거운 조회를 건너뛴다.
 var THUMB = location.hash.indexOf("thumb") >= 0;
-
-var MAX_SELLERS = 50;
-
-// ── 판매자ID 멀티셀렉트 (자유 텍스트 아님 — 입력한 글자로 시작하는 실제 seller_id를
-//    mustit_products에서 그때그때 조회해 체크리스트로 보여준다. 3.4M행 전체를 한 번에
-//    가져올 수 없어 "목록"은 검색으로 좁힌 실존값만 노출한다) ──
-var SELLER_SEL = new Set();  // 선택된 seller_id (실데이터에서 검증된 값만 들어감)
-function escLike(s){ return String(s).replace(/[%_\\]/g, "\\$&"); }
-function buildSellerFilter(){
-  var fld = document.createElement("div"); fld.className = "fld";
-  fld.innerHTML = '<label>판매자ID (실존 값 · 최대 '+MAX_SELLERS+'개)</label>';
-  var ms = document.createElement("div"); ms.className = "ms";
-  var btn = document.createElement("button");
-  btn.innerHTML = '<span class="v">선택 안 함</span><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 3l4 4 4-4" stroke="#333" fill="none" stroke-width="1.5"/></svg>';
-  var panel = document.createElement("div"); panel.className = "panel";
-  panel.addEventListener("click", function(e){ e.stopPropagation(); });
-  var search = document.createElement("input"); search.className = "search"; search.placeholder = "판매자ID 앞부분 2글자 이상 입력…";
-  panel.appendChild(search);
-  var list = document.createElement("div");
-  panel.appendChild(list);
-
-  function updateBtn(){
-    var n = SELLER_SEL.size;
-    btn.querySelector(".v").textContent = n===0 ? "선택 안 함" : (n===1 ? Array.from(SELLER_SEL)[0] : n+"개 선택");
-  }
-  function selectedGroupHtml(){
-    if(!SELLER_SEL.size) return "";
-    return '<div class="sel-group">'+Array.from(SELLER_SEL).map(function(id){
-      return '<label class="opt"><input type="checkbox" class="selchk" data-id="'+esc(id)+'" checked> '+esc(id)+'</label>';
-    }).join("")+"</div>";
-  }
-  // state: undefined(입력 전) | "loading" | Array(검색결과) | Error객체
-  function renderList(state){
-    list.innerHTML = selectedGroupHtml();
-    if(state===undefined){ list.innerHTML += '<div class="hint">판매자ID 앞부분을 입력하면 실제 존재하는 ID만 골라 보여줍니다.</div>'; return; }
-    if(state==="loading"){ list.innerHTML += '<div class="hint">조회 중…</div>'; return; }
-    if(state instanceof Error){ list.innerHTML += '<div class="hint">조회 실패: '+esc(state.message)+'</div>'; return; }
-    var shown = state.filter(function(id){ return !SELLER_SEL.has(id); });
-    if(!shown.length){ list.innerHTML += '<div class="hint">일치하는 판매자ID가 없습니다.</div>'; return; }
-    shown.forEach(function(id){
-      var row = document.createElement("label"); row.className = "opt";
-      var cb = document.createElement("input"); cb.type = "checkbox";
-      cb.onchange = function(){
-        if(cb.checked){
-          if(SELLER_SEL.size >= MAX_SELLERS){ alert("최대 "+MAX_SELLERS+"개까지 선택할 수 있습니다."); cb.checked=false; return; }
-          SELLER_SEL.add(id);
-        } else { SELLER_SEL.delete(id); }
-        updateBtn(); renderList(state);
-      };
-      row.appendChild(cb); row.appendChild(document.createTextNode(" "+id));
-      list.appendChild(row);
-    });
-  }
-  list.addEventListener("change", function(e){
-    var t = e.target;
-    if(t && t.classList.contains("selchk")){
-      if(!t.checked) SELLER_SEL.delete(t.getAttribute("data-id"));
-      updateBtn(); renderList(LAST_RESULT);
-    }
-  });
-  var LAST_RESULT; var SEQ = 0; var debTimer = null;
-  function doSearch(q){
-    var mySeq = ++SEQ;
-    renderList("loading");
-    window.MUSTIT.client.from("mustit_products").select("seller_id").ilike("seller_id", escLike(q)+"%").limit(300)
-      .then(function(res){
-        if(mySeq!==SEQ) return; // 늦게 도착한 응답 무시
-        if(res.error){ LAST_RESULT=new Error(res.error.message); renderList(LAST_RESULT); return; }
-        var seen={}, uniq=[];
-        (res.data||[]).forEach(function(r){ var id=r.seller_id; if(id && !seen[id]){ seen[id]=1; uniq.push(id); } });
-        uniq.sort(function(a,b){ return a.localeCompare(b); });
-        LAST_RESULT = uniq.slice(0,50);
-        renderList(LAST_RESULT);
-      });
-  }
-  search.addEventListener("input", function(){
-    var q = search.value.trim();
-    clearTimeout(debTimer);
-    if(q.length < 2){ LAST_RESULT=undefined; renderList(undefined); return; }
-    debTimer = setTimeout(function(){ doSearch(q); }, 300);
-  });
-  renderList(undefined);
-  btn.onclick = function(e){ e.stopPropagation();
-    document.querySelectorAll(".ms.open").forEach(function(o){ if(o!==ms) o.classList.remove("open"); });
-    ms.classList.toggle("open"); if(ms.classList.contains("open")) search.focus();
-  };
-  ms.appendChild(btn); ms.appendChild(panel);
-  fld.appendChild(ms);
-  return fld;
-}
 
 // ── 상품상태 멀티셀렉트 (필터는 항상 복수선택) ──
 var STATUS_OPTS = [
@@ -294,7 +210,6 @@ function buildStatusFilter(){
 }
 function buildFilters(){
   var host = $("dropdowns"); host.innerHTML = "";
-  host.appendChild(buildSellerFilter());
   host.appendChild(buildStatusFilter());
 }
 document.addEventListener("click", function(){ document.querySelectorAll(".ms.open").forEach(function(o){o.classList.remove("open");}); });
@@ -311,9 +226,9 @@ window.addEventListener("resize", function(){ Object.keys(CH).forEach(function(k
 var TIP = { trigger:"axis", confine:true, textStyle:{fontSize:11} };
 function legend(names){ return { data:names, top:2, left:2, itemWidth:12, itemHeight:8, itemGap:8, textStyle:{fontSize:10,color:"#555"} }; }
 
-// rows: [{seller_id, total, matched, unmatched}] 등록 상품수 내림차순, 최대 30명 표시
+// rows: [{seller_id, product_count, matched_count, unmatched}] 등록 상품수 내림차순, 상위 30명 표시
 function renderChart(rows){
-  var sorted = rows.filter(function(r){ return !r.error; }).slice().sort(function(a,b){ return b.total-a.total; }).slice(0,30);
+  var sorted = rows.slice().sort(function(a,b){ return b.product_count-a.product_count; }).slice(0,30);
   sorted.reverse();
   var names = sorted.map(function(r){ return r.seller_id; });
   chart("c_sellers").setOption({
@@ -321,19 +236,18 @@ function renderChart(rows){
     xAxis:{ type:"value", axisLabel:{fontSize:9,color:"#999"}, splitLine:{lineStyle:{color:"#eee"}} },
     yAxis:{ type:"category", data:names, axisLabel:{fontSize:10,color:"#555"}, axisTick:{show:false}, axisLine:{lineStyle:{color:"#ddd"}} },
     series:[
-      { name:"매칭",   type:"bar", stack:"s", data:sorted.map(function(r){return r.matched;}),   itemStyle:{color:"#2fae8f"}, barMaxWidth:18 },
-      { name:"미매칭", type:"bar", stack:"s", data:sorted.map(function(r){return r.unmatched;}), itemStyle:{color:"#ee3b52"}, barMaxWidth:18 }
+      { name:"매칭",   type:"bar", stack:"s", data:sorted.map(function(r){return r.matched_count;}), itemStyle:{color:"#2fae8f"}, barMaxWidth:18 },
+      { name:"미매칭", type:"bar", stack:"s", data:sorted.map(function(r){return r.unmatched;}),      itemStyle:{color:"#ee3b52"}, barMaxWidth:18 }
     ]
   }, true);
 }
 
 // ── KPI ──
 function renderKPI(rows){
-  var ok = rows.filter(function(r){ return !r.error; });
-  var total = ok.reduce(function(a,r){ return a+r.total; }, 0);
-  var matched = ok.reduce(function(a,r){ return a+r.matched; }, 0);
+  var total = rows.reduce(function(a,r){ return a+r.product_count; }, 0);
+  var matched = rows.reduce(function(a,r){ return a+r.matched_count; }, 0);
   var items = [
-    { l:"조회 판매자 수", v: won(ok.length)+"명" },
+    { l:"전체 판매자 수", v: won(rows.length)+"명" },
     { l:"총 등록 상품수", v: won(total)+"건" },
     { l:"카탈로그 매칭 상품수", v: won(matched)+"건" },
     { l:"평균 매칭률", v: pct(total ? matched/total : null), rate:1 }
@@ -343,16 +257,16 @@ function renderKPI(rows){
   }).join("");
 }
 
-// ── 테이블 ──
-var ROWS = [];
-var SORT = { key:"total", dir:"desc" };
+// ── 테이블 (전체 판매자 · 검색은 이미 불러온 목록을 즉시 필터링) ──
+var ALL_SELLERS = [];
+var SORT = { key:"product_count", dir:"desc" };
+var PAGE_SIZE = 30, PAGE = 0;
 var COLS = [
-  ["seller_id","판매자ID"], ["total","등록 상품수"], ["matched","카탈로그 매칭"], ["unmatched","미매칭"], ["rate","매칭률"]
+  ["seller_id","판매자ID"], ["product_count","등록 상품수"], ["matched_count","카탈로그 매칭"], ["unmatched","미매칭"], ["rate","매칭률"]
 ];
-function sortRows(){
+function sortAll(){
   var k = SORT.key, dir = SORT.dir==="asc" ? 1 : -1;
-  ROWS.sort(function(a,b){
-    if(a.error && !b.error) return 1; if(!a.error && b.error) return -1;
+  ALL_SELLERS.sort(function(a,b){
     var av=a[k], bv=b[k];
     if(av==null && bv==null) return 0;
     if(av==null) return 1; if(bv==null) return -1;
@@ -360,20 +274,27 @@ function sortRows(){
     return dir*(av-bv);
   });
 }
+function filteredSellers(){
+  var q = $("sellerq").value.trim().toLowerCase();
+  return q ? ALL_SELLERS.filter(function(s){ return String(s.seller_id||"").toLowerCase().indexOf(q)>=0; }) : ALL_SELLERS;
+}
 function paintTable(){
-  if(!ROWS.length){ $("sellers").innerHTML=""; $("sellercount").textContent=""; $("csv").disabled=true; return; }
+  var rows = filteredSellers();
+  var total = rows.length;
+  if(!ALL_SELLERS.length){ $("sellers").innerHTML=""; $("sellercount").textContent=""; $("pager").innerHTML=""; $("csv").disabled=true; return; }
+  if(!total){ $("sellers").innerHTML='<tr><td class="empty">일치하는 판매자가 없습니다.</td></tr>'; $("sellercount").textContent="0명"; $("pager").innerHTML=""; $("csv").disabled=true; return; }
+  var pages = Math.max(1, Math.ceil(total/PAGE_SIZE));
+  if(PAGE>pages-1) PAGE=pages-1; if(PAGE<0) PAGE=0;
+  var slice = rows.slice(PAGE*PAGE_SIZE, PAGE*PAGE_SIZE+PAGE_SIZE);
   var thead = "<thead><tr>"+COLS.map(function(c){
     var arrow = SORT.key===c[0] ? (SORT.dir==="asc"?"▲":"▼") : "";
     return '<th data-k="'+c[0]+'">'+c[1]+'<span class="arrow">'+arrow+'</span></th>';
   }).join("")+"</tr></thead>";
-  var tbody = "<tbody>"+ROWS.map(function(r){
-    if(r.error){
-      return '<tr class="err"><td>'+esc(r.seller_id)+'</td><td colspan="4">조회 실패: '+esc(r.error)+'</td></tr>';
-    }
+  var tbody = "<tbody>"+slice.map(function(r){
     return '<tr>'+
       '<td>'+esc(r.seller_id)+'</td>'+
-      '<td class="num">'+won(r.total)+'</td>'+
-      '<td class="num">'+won(r.matched)+'</td>'+
+      '<td class="num">'+won(r.product_count)+'</td>'+
+      '<td class="num">'+won(r.matched_count)+'</td>'+
       '<td class="num">'+won(r.unmatched)+'</td>'+
       '<td class="num">'+pct(r.rate)+'</td>'+
     '</tr>';
@@ -383,20 +304,26 @@ function paintTable(){
     th.onclick=function(){
       var k = th.getAttribute("data-k");
       SORT.dir = (SORT.key===k && SORT.dir==="asc") ? "desc" : "asc";
-      SORT.key = k; sortRows(); paintTable();
+      SORT.key = k; sortAll(); PAGE=0; paintTable();
     };
   });
-  $("sellercount").textContent = "총 "+won(ROWS.length)+"명";
+  $("sellercount").textContent = "총 "+won(total)+"명"+(total!==ALL_SELLERS.length ? " (전체 "+won(ALL_SELLERS.length)+"명 중 검색됨)" : "");
+  var from = total===0?0:PAGE*PAGE_SIZE+1, to = Math.min(total,(PAGE+1)*PAGE_SIZE);
+  $("pager").innerHTML =
+    '<button id="pgprev"'+(PAGE<=0?" disabled":"")+'>◀ 이전</button>'+
+    '<span class="pp">'+from+'–'+to+' / '+won(total)+'</span>'+
+    '<button id="pgnext"'+(PAGE>=pages-1?" disabled":"")+'>다음 ▶</button>';
+  var pv=$("pgprev"), nx=$("pgnext");
+  if(pv) pv.onclick=function(){ PAGE--; paintTable(); };
+  if(nx) nx.onclick=function(){ PAGE++; paintTable(); };
   $("csv").disabled = false;
 }
 function csvCell(v){ v=(v==null?"":String(v)); return /[",\n]/.test(v) ? '"'+v.replace(/"/g,'""')+'"' : v; }
 function downloadCSV(){
-  if(!ROWS.length) return;
+  var rows = filteredSellers();
+  if(!rows.length) return;
   var head = COLS.map(function(c){return csvCell(c[1]);}).join(",");
-  var body = ROWS.map(function(r){
-    if(r.error) return [r.seller_id,"","","","조회실패:"+r.error].map(csvCell).join(",");
-    return COLS.map(function(c){ return csvCell(r[c[0]]); }).join(",");
-  }).join("\r\n");
+  var body = rows.map(function(r){ return COLS.map(function(c){ return csvCell(r[c[0]]); }).join(","); }).join("\r\n");
   var blob = new Blob(["﻿"+head+"\r\n"+body], {type:"text/csv;charset=utf-8;"});
   var url = URL.createObjectURL(blob);
   var a = document.createElement("a"); a.href=url; a.download="판매자별_카탈로그매칭.csv";
@@ -404,52 +331,41 @@ function downloadCSV(){
   setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 }
 
-// 판매자 1명 = COUNT 전용 요청 2건(head:true → 행 데이터는 내려받지 않음)
-function countFor(sellerId, statuses){
-  var base = window.MUSTIT.client.from("mustit_products").select("item_no", {count:"exact", head:true}).eq("seller_id", sellerId);
-  var baseMatched = window.MUSTIT.client.from("mustit_products").select("item_no", {count:"exact", head:true}).eq("seller_id", sellerId).not("catalog_id", "is", null);
-  if(statuses && statuses.length){ base = base.in("product_status", statuses); baseMatched = baseMatched.in("product_status", statuses); }
-  return Promise.all([base, baseMatched]).then(function(res){
-    if(res[0].error) throw res[0].error;
-    if(res[1].error) throw res[1].error;
-    var total = res[0].count||0, matched = res[1].count||0;
-    return { seller_id:sellerId, total:total, matched:matched, unmatched:total-matched, rate: total? matched/total : null };
-  }).catch(function(e){
-    return { seller_id:sellerId, error:(e&&e.message)||String(e) };
-  });
-}
-
-// ── refresh ──
+// ── refresh: mustit_sellers_list RPC 1회 호출로 판매자 전체를 서버에서 미리 집계해 받아온다 ──
 function refresh(){
-  if(THUMB){ renderChart([]); return; }
-  var ids = Array.from(SELLER_SEL);
   $("err").textContent = "";
-  if(!ids.length){
-    ROWS = []; $("kpis").innerHTML=""; paintTable();
-    chart("c_sellers").clear();
-    $("sellers").innerHTML = "";
-    $("err").textContent = "판매자ID를 1개 이상 선택하세요.";
-    return;
-  }
+  if(THUMB){ renderChart([]); return; }
   var statuses = Array.from(STATUS_SEL);
   $("loading").classList.add("on");
-  Promise.all(ids.map(function(id){ return countFor(id, statuses); }))
+  window.MUSTIT.rpc("mustit_sellers_list", { p_statuses: statuses.length ? statuses : null })
     .then(function(rows){
-      ROWS = rows; sortRows();
-      renderKPI(rows);
-      renderChart(rows);
+      ALL_SELLERS = (rows||[]).map(function(r){
+        var total = Number(r.product_count)||0, matched = Number(r.matched_count)||0;
+        return { seller_id:r.seller_id, product_count:total, matched_count:matched, unmatched:total-matched, rate: total ? matched/total : null };
+      });
+      sortAll(); PAGE=0;
+      renderKPI(ALL_SELLERS);
+      renderChart(ALL_SELLERS);
       paintTable();
     })
-    .catch(function(e){ $("err").textContent = "오류: "+((e&&e.message)||e); })
+    .catch(function(e){
+      var msg = (e&&e.message) || String(e);
+      if(/mustit_sellers_list/i.test(msg) || /does not exist/i.test(msg) || /42883/.test(msg) || /404/.test(msg)){
+        msg = "집계 함수(mustit_sellers_list)가 아직 DB에 없습니다. 관리자에게 Supabase SQL 적용을 요청하세요.";
+      }
+      $("err").textContent = "오류: "+msg;
+      ALL_SELLERS=[]; $("kpis").innerHTML=""; paintTable(); chart("c_sellers").clear();
+    })
     .finally(function(){ $("loading").classList.remove("on"); });
 }
 
 $("go").onclick = refresh;
 $("csv").onclick = downloadCSV;
+$("sellerq").addEventListener("input", function(){ PAGE=0; paintTable(); });
 $("reset").onclick = function(){
-  SELLER_SEL.clear(); STATUS_SEL.clear(); buildFilters();
-  ROWS=[]; $("kpis").innerHTML=""; $("sellers").innerHTML=""; $("sellercount").textContent=""; $("csv").disabled=true;
-  chart("c_sellers").clear();
+  STATUS_SEL.clear(); buildFilters();
+  $("sellerq").value = ""; PAGE = 0;
+  refresh();
 };
 buildFilters();
 

@@ -85,7 +85,6 @@
   .achdr .ac_title{font-size:14px;font-weight:700;border:1px solid transparent;border-radius:6px;padding:4px 6px;flex:1;min-width:120px;background:transparent}
   .achdr .ac_title:hover,.achdr .ac_title:focus{border-color:#d6d4ce;background:#fff}
   .achdr select{border:1px solid #d6d4ce;border-radius:6px;padding:4px 6px;font-size:11.5px;height:27px;background:#fff}
-  .achdr .ac_revlbl{font-size:11px;color:var(--sub);display:flex;align-items:center;gap:4px;white-space:nowrap}
   .achdr .btn.del{background:#fff;border:1px solid #c8102e;color:#c8102e;padding:4px 10px}
   .achdr .btn.del:hover{background:#c8102e;color:#fff}
   .ac_note{width:100%;border:1px solid transparent;border-radius:6px;padding:4px 6px;font-size:11.5px;color:var(--sub);margin-bottom:8px;background:transparent}
@@ -114,20 +113,22 @@
   .condval_opt{padding:5px 8px;font-size:11.5px;cursor:pointer;white-space:nowrap}
   .condval_opt:hover{background:#f3f2ee}
   .achead{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px}
-  .achead .kpi{flex:1;min-width:150px}
+  .achead .kpi{flex:0 1 220px;min-width:150px}
   .acgrp{margin-bottom:8px}
   .delta{display:inline-block;margin-left:7px;padding:2px 9px;border-radius:12px;font-size:11.5px;font-weight:700;vertical-align:middle}
   .delta.up{background:#e3f6ea;color:#1f8a4c}
   .delta.down{background:#fdeaea;color:#c8102e}
   /* 지표 타일(요약 위젯) */
-  .tilegrid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-  @media(max-width:900px){.tilegrid{grid-template-columns:repeat(2,1fr)}}
-  @media(max-width:560px){.tilegrid{grid-template-columns:1fr}}
-  .mtile{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:22px 16px;text-align:center;cursor:pointer;transition:box-shadow .15s}
+  .tilegrid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px}
+  @media(max-width:1200px){.tilegrid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+  @media(max-width:900px){.tilegrid{grid-template-columns:repeat(3,minmax(0,1fr))}}
+  @media(max-width:700px){.tilegrid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:420px){.tilegrid{grid-template-columns:1fr}}
+  .mtile{background:var(--panel);border:1px solid var(--border);border-radius:14px;padding:18px 10px;text-align:center;cursor:pointer;transition:box-shadow .15s;min-width:0}
   .mtile:hover{box-shadow:0 4px 14px rgba(0,0,0,.10)}
   .mtile.dragging{opacity:.4}
-  .mtile_l{font-size:12px;color:#b0aca3;margin-bottom:10px;font-weight:600}
-  .mtile_v{font-size:24px;font-weight:800;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .mtile_l{font-size:11.5px;color:#b0aca3;margin-bottom:8px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mtile_v{font-size:19px;font-weight:800;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis}
   .tm_presets{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 10px}
   .tm_presets button{border:1px solid #d6d4ce;background:#fff;border-radius:20px;padding:5px 13px;font-size:12px;font-weight:600;cursor:pointer}
   .tm_presets button:hover{border-color:var(--red);color:var(--red)}
@@ -468,9 +469,9 @@ var WKEY = "auc_widgets_"+FILE;
 var WIDGETS = [];
 function defaultWidgets(){
   return [
-    {id:"w_dau", title:"DAU", note:"일 단위 Any Active Event 순유저(기본 1일)", event:"_active", vis:"bar", days:1, gran:1, compare:"none", segments:[], showRevenue:false, collapsed:true},
-    {id:"w_wau", title:"WAU", note:"주 단위 Any Active Event 순유저(기본 7일)", event:"_active", vis:"bar", days:7, gran:1, compare:"none", segments:[], showRevenue:false, collapsed:true},
-    {id:"w_mau", title:"MAU (+ARPU·ARPPU)", note:"월 단위 Any Active Event 순유저(기본 30일) · 매출은 주문DB 순매출", event:"_active", vis:"bar", days:30, gran:1, compare:"none", segments:[], showRevenue:true, collapsed:true}
+    {id:"w_dau", title:"DAU", note:"일 단위 Any Active Event 순유저(기본 1일)", event:"_active", vis:"bar", days:1, gran:1, compare:"none", segments:[], collapsed:true},
+    {id:"w_wau", title:"WAU", note:"주 단위 Any Active Event 순유저(기본 7일)", event:"_active", vis:"bar", days:7, gran:1, compare:"none", segments:[], collapsed:true},
+    {id:"w_mau", title:"MAU", note:"월 단위 Any Active Event 순유저(기본 30일)", event:"_active", vis:"bar", days:30, gran:1, compare:"none", segments:[], collapsed:true}
   ];
 }
 function loadWidgets(){
@@ -504,7 +505,7 @@ function loadWidgets(){
 }
 function saveWidgets(){ try{ localStorage.setItem(WKEY, JSON.stringify(WIDGETS.map(function(w){
   // 함수·DOM 참조 없이 순수 데이터만 저장(_xs/_ys 등 런타임 캐시 제외)
-  return {id:w.id,title:w.title,note:w.note,event:w.event,vis:w.vis,days:w.days,from:w.from,to:w.to,gran:w.gran,compare:w.compare,segments:w.segments,showRevenue:w.showRevenue,collapsed:w.collapsed};
+  return {id:w.id,title:w.title,note:w.note,event:w.event,vis:w.vis,days:w.days,from:w.from,to:w.to,gran:w.gran,compare:w.compare,segments:w.segments,collapsed:w.collapsed};
 }))); }catch(e){} }
 function newWidgetId(){ return "w_"+Date.now()+"_"+Math.floor(Math.random()*1000); }
 
@@ -521,7 +522,6 @@ function widgetHTML(w){
       '<input type="text" class="ac_title" value="'+esc(w.title)+'">'+
       '<select class="ac_event">'+evOpts+'</select>'+
       '<select class="ac_vis">'+visOpts+'</select>'+
-      '<label class="ac_revlbl"><input type="checkbox" class="ac_rev"> ARPU·ARPPU</label>'+
       '<button class="btn del ac_del" type="button">🗑 삭제</button>'+
     '</div>'+
     '<div class="wbody">'+
@@ -729,7 +729,7 @@ function refreshWidget(w){
       paintAcKpis("auc_"+w.id+"_kpis", [{l:w.title+" (세그먼트 "+names.length+"개 비교)", v:""}]);
       w._xs = xs; w._ys = res.series||[]; w._names = names;
       renderTrendChart(chartId, names, xs, res.series||[], w.vis||"bar");
-      $("auc_"+w.id+"_note").textContent = "세그먼트 "+names.length+"개를 비교 중입니다(ARPU·ARPPU·비교기간은 세그먼트 미사용 시에만 지원)."+
+      $("auc_"+w.id+"_note").textContent = "세그먼트 "+names.length+"개를 비교 중입니다(비교기간은 세그먼트 미사용 시에만 지원)."+
         (inputs.mismatched>0 ? (" ⚠ 이벤트속성 조건 "+inputs.mismatched+"개는 현재 위젯 이벤트와 달라 적용되지 않았습니다.") : "");
     } else {
       $("auc_"+w.id+"_grp").innerHTML = "";
@@ -744,22 +744,6 @@ function refreshWidget(w){
             if(headline!=null && prevVal!=null){ tiles[0].badge = deltaBadge(headline, prevVal); }
             tiles.push({l:"비교기간("+cmp.from+"~"+cmp.to+")", v: prevVal==null?"—":won(prevVal)});
           }).catch(function(){});
-        });
-      }
-      if(w.showRevenue){
-        chainP = chainP.then(function(){
-          return queryAURange("complete_order", from, to, inputs.eventConds, [], gran).then(function(payRes){
-            var payingUnique = (payRes.overall&&payRes.overall.length) ? payRes.overall[0] : null;
-            return window.MUSTIT.rpc("dash_daily_conversion", {p:{from:from,to:to}}).then(function(drows){
-              var netSum = (drows||[]).reduce(function(a,r){return a+(Number(r.net_rev)||0);},0);
-              var arpu = (headline>0) ? Math.round(netSum/headline) : null;
-              var arppu = (payingUnique>0) ? Math.round(netSum/payingUnique) : null;
-              tiles.push({l:"결제유저(구간 전체 순유저·유니크)", v: payingUnique==null?"—":won(payingUnique)});
-              tiles.push({l:"순매출(구간 합계)", v:"₩"+won(netSum), red:1});
-              tiles.push({l:"ARPU (순매출÷AU)", v: arpu==null?"—":"₩"+won(arpu), red:1});
-              tiles.push({l:"ARPPU (순매출÷결제유저)", v: arppu==null?"—":"₩"+won(arppu), red:1});
-            }).catch(function(e){ tiles.push({l:"매출 조회 오류", v:e.message}); });
-          }).catch(function(e){ tiles.push({l:"결제유저 조회 오류", v:e.message}); });
         });
       }
       return chainP.then(function(){
@@ -787,7 +771,6 @@ function wireWidget(w){
   renderSegments(root, w);
   root.querySelector(".ac_event").value = w.event||"_active";
   root.querySelector(".ac_vis").value = w.vis||"bar";
-  root.querySelector(".ac_rev").checked = !!w.showRevenue;
 
   root.querySelector(".ac_title").addEventListener("change", function(e){ w.title=e.target.value; saveWidgets(); });
   root.querySelector(".ac_note").addEventListener("change", function(e){ w.note=e.target.value; saveWidgets(); });
@@ -796,7 +779,6 @@ function wireWidget(w){
     w.vis=e.target.value; saveWidgets();
     if(w._xs && w._ys) renderTrendChart("auc_"+w.id+"_chart", w._names||w.title, w._xs, w._ys, w.vis);
   });
-  root.querySelector(".ac_rev").addEventListener("change", function(e){ w.showRevenue=e.target.checked; saveWidgets(); refreshWidget(w); });
   root.querySelector(".ac_seg_add").onclick = function(){
     if(w.segments.length>=10){ alert("세그먼트는 최대 10개까지 추가할 수 있습니다."); return; }
     w.segments.push(newSegment(w.segments.length+1));
@@ -843,7 +825,7 @@ function renderWidgets(){
   try{ wireDragReorder(); }catch(e){ console.error("wireDragReorder 실패:", e); }
 }
 function addWidget(){
-  var w = {id:newWidgetId(), title:"새 위젯", note:"", event:"_active", vis:"bar", days:7, gran:1, compare:"none", segments:[], showRevenue:false, collapsed:false};
+  var w = {id:newWidgetId(), title:"새 위젯", note:"", event:"_active", vis:"bar", days:7, gran:1, compare:"none", segments:[], collapsed:false};
   WIDGETS.push(w);
   saveWidgets();
   renderWidgets();
@@ -942,14 +924,19 @@ function loadTilesRange(){
 function saveTilesRange(){ try{ localStorage.setItem(TILE_RANGE_KEY, JSON.stringify({from:$("tiles_from").value, to:$("tiles_to").value})); }catch(e){} }
 
 // ── 지표 계산: leaf = {op:"sum",field} 또는 {op:"countUnique",event,conds:[{scope,key,op,values,join}]} ──
+// 반환값은 항상 {value, approx} — approx=true면 앰플리튜드가 구간 전체 순유저(overallSeries)를 안 줘서
+// 일별 버킷 합산으로 근사한 값(중복 유저 있으면 과대집계될 수 있음)이라는 뜻. 타일에 "~" 표시로 구분.
 function computeLeaf(leaf, from, to, dailyRowsCache){
   if(leaf.op==="sum"){
-    return dailyRowsCache.then(function(rows){ return sum((rows||[]).map(function(r){ return r[leaf.field]; })); });
+    return dailyRowsCache.then(function(rows){ return {value: sum((rows||[]).map(function(r){ return r[leaf.field]; })), approx:false}; });
   }
   var userConds = (leaf.conds||[]).filter(function(c){return c.scope==="user" && c.key;}).map(function(c){return {key:c.key,op:c.op,values:c.values};});
   var eventConds = (leaf.conds||[]).filter(function(c){return c.scope==="event" && c.key;}).map(function(c){return {key:c.key,op:c.op,values:c.values};});
   return queryAURange(leaf.event, from, to, eventConds, userConds.length?[userConds]:[], 1).then(function(res){
-    return (res.overall && res.overall.length) ? res.overall[0] : null;
+    if(res.overall && res.overall.length && res.overall[0]!=null) return {value:res.overall[0], approx:false};
+    var daily = (res.series && res.series[0]) || [];
+    if(daily.length) return {value: sum(daily), approx:true};
+    return {value:null, approx:false};
   });
 }
 function computeMetric(metric, from, to, dailyRowsCache){
@@ -957,18 +944,24 @@ function computeMetric(metric, from, to, dailyRowsCache){
     return Promise.all([
       computeLeaf(metric.num, from, to, dailyRowsCache),
       computeLeaf(metric.den, from, to, dailyRowsCache)
-    ]).then(function(r){ var n=r[0], d=r[1]; return (n!=null && d) ? n/d : null; });
+    ]).then(function(r){
+      var n=r[0], d=r[1];
+      var val = (n.value!=null && d.value) ? n.value/d.value : null;
+      return {value:val, approx: n.approx||d.approx};
+    });
   }
   return computeLeaf(metric, from, to, dailyRowsCache);
 }
-function fmtTileValue(metric, v){
+function fmtTileValue(metric, res){
+  var v = res && res.value;
   if(v==null) return "—";
+  var prefix = (res && res.approx) ? "~" : "";
   if(metric.op==="div"){
     var numIsMoney = metric.num.op==="sum";
-    return numIsMoney ? ("₩"+won(Math.round(v))) : pct(v);
+    return prefix + (numIsMoney ? ("₩"+won(Math.round(v))) : pct(v));
   }
-  if(metric.op==="sum" && (metric.field==="net_rev"||metric.field==="gmv")) return "₩"+won(v);
-  return won(v);
+  if(metric.op==="sum" && (metric.field==="net_rev"||metric.field==="gmv")) return prefix+"₩"+won(v);
+  return prefix+won(v);
 }
 
 // ── 타일 그리드 렌더링 + 드래그 순서변경 ──
@@ -1010,15 +1003,16 @@ function syncTileOrderFromDOM(){
 // ── 타일 값 계산·표시(공유 기간 필터 사용, 앰플리튜드 호출은 타일마다 순차) ──
 function refreshTile(t, from, to, dailyRowsCache){
   var elV = $("tile_"+t.id+"_v");
-  return computeMetric(t.metric, from, to, dailyRowsCache).then(function(v){
-    t._value = v;
+  return computeMetric(t.metric, from, to, dailyRowsCache).then(function(res){
+    t._value = res.value;
     var cmp = compareRange(from, to, t.compare);
     var chainP = cmp
-      ? computeMetric(t.metric, cmp.from, cmp.to, window.MUSTIT.rpc("dash_daily_conversion",{p:{from:cmp.from,to:cmp.to}}).then(function(r){return r||[];})).catch(function(){return null;})
+      ? computeMetric(t.metric, cmp.from, cmp.to, window.MUSTIT.rpc("dash_daily_conversion",{p:{from:cmp.from,to:cmp.to}}).then(function(r){return r||[];})).catch(function(){return {value:null,approx:false};})
       : Promise.resolve(null);
-    return chainP.then(function(prevV){
-      var badge = (v!=null && prevV!=null && prevV!==0) ? deltaBadge(v, prevV) : "";
-      if(elV) elV.innerHTML = fmtTileValue(t.metric, v) + badge;
+    return chainP.then(function(prevRes){
+      var prevV = prevRes && prevRes.value;
+      var badge = (res.value!=null && prevV!=null && prevV!==0) ? deltaBadge(res.value, prevV) : "";
+      if(elV) elV.innerHTML = fmtTileValue(t.metric, res) + badge + (res.approx ? ' <span title="앰플리튜드가 구간 전체 순유저값을 주지 않아 일별 합산으로 근사한 값입니다(중복 유저가 있으면 실제보다 클 수 있음)" style="cursor:help">ⓘ</span>' : "");
     });
   }).catch(function(e){ console.error("타일 계산 실패:", t.id, e); if(elV) elV.textContent = "오류"; });
 }

@@ -106,6 +106,8 @@
   table.chtbl td.imm{color:#b7b3aa}
   table.chtbl tbody tr:nth-child(even){background:#faf9f6}
   table.chtbl tbody tr:hover{background:#f2f0ea}
+  #cohort_table .detailcol{display:none}
+  #cohort_table.show-detail .detailcol{display:table-cell}
   .tblwrap{max-height:420px;overflow:auto;border:1px solid var(--border);border-radius:10px;margin-top:16px}
   .tblwrap table.chtbl th{position:sticky;top:0;z-index:2}
   .tblwrap table.chtbl th:first-child{z-index:3}
@@ -128,6 +130,7 @@
   .steprow .stepcard .stepval{font-size:18px;font-weight:800;font-variant-numeric:tabular-nums}
   .steprow .stepcard .steppct{font-size:10.5px;color:var(--sub);margin-top:2px}
   @media(max-width:900px){.steprow{overflow-x:auto}.steprow .stepcards{min-width:560px}}
+  @media(max-width:640px){.card>div[style*="grid-template-columns:1fr 1fr"]{grid-template-columns:1fr!important}}
 
   .defbox{background:#f7f6f2;border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:11.5px;color:var(--sub);line-height:1.8;margin-top:6px}
   .defbox b{color:var(--ink)}
@@ -236,14 +239,51 @@
     </div>
     <div class="kpigrid four" id="cohort_kpis"></div>
     <div class="defbox" id="cohort_defbox" style="display:none">
-      코호트 기준일(가입일)=Amplitude complete_signup 이벤트일 · 첫구매 전환=같은 회원의 실제 주문DB 기준 생애 최초 주문일이 가입일로부터 N일 이내인 경우 · 취소/환불 여부와 무관하게 주문 발생 시점 기준입니다.
-      <br><b>주의</b> · D7/D30 전환율은 가입 후 해당 일수가 <b>실제로 지난 코호트만</b> 비교 대상에 포함됩니다(아직 안 지난 코호트를 낮은 전환율로 오인하지 않도록 "집계중"으로 별도 표시). "이전 동일기간 대비"도 같은 성숙도 기준으로만 비교합니다.
+      <b>코호트 기준일(가입일)</b> = 주문DB 실제 가입일(<code>mustit_api.member_status_daily.agg_date</code> 기준 그날 실제 가입 회원 수) · <b>Amplitude complete_signup이 아닙니다</b> — Amplitude 이벤트에는 회원 식별자(member_no)가 없어서 "이 가입자가 실제로 첫구매했는지"를 회원 단위로 추적할 방법이 없기 때문입니다(데일리 탭의 "신규 가입자 수"와 이 탭의 가입자 수가 다를 수 있는 이유이며, 각각 나름의 근거를 가진 서로 다른 소스입니다).
+      <br>· <b>첫구매 전환</b> = 같은 회원의 생애 최초 유효 주문(<code>customer_type</code> 기준, 가입 전 주문 이력이 있는 회원은 처음부터 대상에서 제외됨)이 가입일로부터 D일 이내에 발생. <b>유니크 회원수 기준</b>이며, 주문 발생일(결제/배송 확정이 아닌 주문 시점) 기준입니다 — 취소·환불 여부와 무관하게 카운트되며, 첫구매 주문의 취소·환불률은 별도로 확인해야 합니다.
+      <br><b>주의</b> · D7/D30 전환율은 가입 후 해당 일수가 <b>실제로 지난 코호트만</b> 비교 대상에 포함됩니다(아직 안 지난 코호트를 낮은 전환율로 오인하지 않도록 "집계중"으로 별도 표시, 가입자 0명이면 "N/A", 데이터 연결 실패는 "—"). "이전 동일기간 대비"도 같은 성숙도 기준으로만 비교합니다.
+      <br>· <b>첫구매 소요일</b>은 실제로 첫구매를 완료한 회원만 대상으로 계산합니다(미구매자는 제외) — 평균은 전체적인 속도 변화를, 중앙값·P75는 극단값 영향을 줄인 대표값입니다.
+      <br>· 유입 채널·캠페인, 쿠폰, 랜딩페이지 기준 세그먼트는 주문DB에 그 정보 자체가 없어서 만들지 않았습니다(Amplitude를 붙여도 해결 안 되는 문제라 제외). <b>성별·연령대(주문DB 기준)</b>는 아래에 추가했습니다 — 분모는 <code>member_status_daily</code>의 성별/연령대별 가입자 집계, 분자는 <code>orders_v</code>의 buyer_gender/age_band 기준이며 둘 다 Amplitude 없이 주문DB 데이터로만 계산합니다. "기타"(성별 미기재)/"미상"(연령 미기재)는 표본 특성상 전환율이 구조적으로 낮게 나오니 참고용으로만 보세요.
     </div>
 
-    <div class="sechd">최근 30일 가입 코호트 <span class="badge real">실데이터</span></div>
+    <div class="sechd">주차별 코호트 전환 추이 <span class="badge real">실데이터</span></div>
+    <div class="ctrlrow">
+      <div class="ntoggle" id="cohorttrendtoggle"><button data-k="d7" class="on">D7</button><button data-k="d0">D0</button><button data-k="d30">D30</button></div>
+    </div>
+    <div class="card">
+      <p class="csub">점선/옅은색 = 아직 해당 일수가 지나지 않아 비교 대상에서 제외된 주차(성숙 코호트만 비교) · 비교는 전주가 아니라 직전 동일 길이의 성숙 코호트 구간과 합니다</p>
+      <div class="chart" id="c_cohort_trend" style="height:240px"></div>
+    </div>
+
+    <div class="sechd">첫구매 발생 구간 <span class="n" id="segbucket_period"></span></div>
+    <div class="card">
+      <p class="csub">누적 전환율이 같아도 구매가 "언제" 몰렸는지는 다를 수 있습니다 — 성숙한 코호트(가입 후 30일 이상 경과)만 집계한 구간별 신규 전환 회원 수</p>
+      <div class="chart" id="c_seg_bucket" style="height:200px"></div>
+    </div>
+
+    <div class="sechd">성별·연령대 첫구매 전환 <span class="badge real">주문DB 기준</span> <span class="n" id="seg_demo_period"></span></div>
+    <div class="ctrlrow">
+      <div class="ntoggle" id="segdemotoggle"><button data-k="d7" class="on">D7</button><button data-k="d0">D0</button><button data-k="d30">D30</button></div>
+    </div>
+    <div class="card">
+      <p class="csub" id="seg_demo_sub">Amplitude 없이 주문DB(가입자 성별·연령대 집계 + 첫구매 이력)만으로 계산 · "기타"/"미상"은 표본이 작아 참고용</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+        <div><div class="csub" style="margin-bottom:2px;font-weight:700">성별</div><div class="chart" id="c_seg_gender" style="height:160px"></div></div>
+        <div><div class="csub" style="margin-bottom:2px;font-weight:700">연령대</div><div class="chart" id="c_seg_age" style="height:160px"></div></div>
+      </div>
+    </div>
+
+    <div class="sechd">가입일별 코호트 <span class="badge real">실데이터</span></div>
+    <div class="ctrlrow">
+      <button class="deftoggle" id="cohort_detail_toggle" type="button">D1 · D3 · D14 상세보기 ▾</button>
+    </div>
     <div class="tblwrap">
-      <table class="chtbl">
-        <thead><tr><th>가입일</th><th>신규 유저</th><th>D0</th><th>D7</th><th>D30</th></tr></thead>
+      <table class="chtbl" id="cohort_table">
+        <thead><tr>
+          <th>가입 코호트</th><th>신규 가입자</th><th>D0</th>
+          <th class="detailcol">D1</th><th class="detailcol">D3</th>
+          <th>D7</th><th class="detailcol">D14</th><th>D30</th>
+        </tr></thead>
         <tbody id="cohort_table_body"></tbody>
       </table>
     </div>
@@ -252,12 +292,6 @@
     <div class="card">
       <p class="csub" id="dist_sub">불러오는 중…</p>
       <div class="chart" id="c_distribution" style="height:220px"></div>
-    </div>
-
-    <div class="sechd">코호트 전환 추이(주간, D7) <span class="badge real">실데이터</span></div>
-    <div class="card">
-      <p class="csub">점선/옅은색 = 아직 D7이 지나지 않아 집계 대상에서 제외된 주차</p>
-      <div class="chart" id="c_cohort_trend" style="height:240px"></div>
     </div>
 
     <div class="sechd">인사이트 · 액션</div>
@@ -381,14 +415,31 @@ function fetchFirstPurchaseDaily(fromISO,toISO){
     return map;
   });
 }
-function fetchCohortConversion(fromISO,toISO){
-  return rpc("dash_cohort_conversion",{from:fromISO,to:toISO}).then(function(rows){
-    var map={}; (rows||[]).forEach(function(r){ map[r.d]=r; });
+// 코호트 가입일별 D0~D30 유니크 첫구매 회원수(누적) + 신규 가입자 수(주문DB 실제 가입, member_status_daily 기준)
+// + 첫구매 주문의 취소/환불 건수(보조 진단용). 아직 admin이 setup_dash_cohort.sql을 실행하지 않았다면
+// dash_cohort_daily 함수 자체가 없어서 에러가 나고, 호출부에서 "준비 중" 배너로 처리함.
+function fetchCohortDaily(fromISO,toISO){
+  return rpc("dash_cohort_daily",{from:fromISO,to:toISO}).then(function(rows){
+    var map={}; (rows||[]).forEach(function(r){ map[String(r.d).slice(0,10)]=r; });
     return map;
   });
 }
 function fetchDistribution(fromISO,toISO){
   return rpc("dash_first_purchase_distribution",{from:fromISO,to:toISO});
+}
+// 성별·연령대별 첫구매 전환(주문DB 기준, Amplitude 미사용). rows: {dim,seg,d,signup,d0,d7,d30}
+// → {gender:{seg:{day:row}}, age_band:{seg:{day:row}}} 형태로 재구성.
+function fetchCohortSegmentDaily(fromISO,toISO){
+  return rpc("dash_cohort_segment_daily",{from:fromISO,to:toISO}).then(function(rows){
+    var out={gender:{}, age_band:{}};
+    (rows||[]).forEach(function(r){
+      var day=String(r.d).slice(0,10);
+      if(!out[r.dim]) out[r.dim]={};
+      if(!out[r.dim][r.seg]) out[r.dim][r.seg]={};
+      out[r.dim][r.seg][day]=r;
+    });
+    return out;
+  });
 }
 
 // ── 가입 후 구매 퍼널(Amplitude) ──
@@ -848,50 +899,55 @@ function loadDailyAi(){
 // ══════════════════════════════════════════════════════════════════
 // TAB 2: 코호트
 // ══════════════════════════════════════════════════════════════════
+// 코호트 탭은 이제 Amplitude를 전혀 쓰지 않음 — 가입자 수(분모)와 첫구매 전환(분자)을 모두
+// 주문DB 쪽(mustit_api.member_status_daily + mustit_orders.orders_v)에서만 가져와서, 분자/분모가
+// 항상 같은 모집단(회원 단위)을 가리키도록 함(데일리 탭 전환율에서 지적됐던 population mismatch를
+// 코호트에서는 원천적으로 피함). dash_cohort_daily RPC가 아직 없으면(admin이 setup_dash_cohort.sql을
+// 실행하기 전) 에러가 나고 "준비 중" 배너로 처리됨.
+var COHORT_TREND_METRIC = "d7";
 function loadCohortTab(){
   var ref = $("refdate").value || ymd(new Date());
-  var winStart = ymdAdd(ref,-100);
+  var winStart = ymdAdd(ref,-130); // 12주 추이 + D30 성숙 판정 여유분
   var curFrom=ymdAdd(ref,-29), curTo=ref;
   var prevFrom=ymdAdd(ref,-59), prevTo=ymdAdd(ref,-30);
   var distTo=ymdAdd(ref,-30), distFrom=ymdAdd(distTo,-29);
   var distPrevTo=ymdAdd(distTo,-30), distPrevFrom=ymdAdd(distFrom,-30);
-  return fetchSignupDaily(winStart,ref).then(function(signupMap){
-    return fetchCohortConversion(winStart,ref).then(function(cohortMap){
-      hideDbPending();
-      return Promise.all([
-        fetchDistribution(distFrom,distTo).catch(function(){return null;}),
-        fetchDistribution(distPrevFrom,distPrevTo).catch(function(){return null;})
-      ]).then(function(distRes){
-        STATE.cohort={ref:ref,signupMap:signupMap,cohortMap:cohortMap,curFrom:curFrom,curTo:curTo,prevFrom:prevFrom,prevTo:prevTo,
-          dist:distRes[0], distPrev:distRes[1], distFrom:distFrom, distTo:distTo};
-        renderCohortAll();
-      });
-    }).catch(function(e){
-      console.error(e);
-      markDbPending("코호트 첫구매 전환 데이터는 아직 준비 중이에요(주문DB 사전집계 설정 필요) — 설정 완료 전까지 D0/D7/D30 등은 \"-\"로 표시됩니다.");
-      STATE.cohort={ref:ref,signupMap:signupMap,cohortMap:null,curFrom:curFrom,curTo:curTo,prevFrom:prevFrom,prevTo:prevTo,
-        dist:null, distPrev:null, distFrom:distFrom, distTo:distTo};
+  return fetchCohortDaily(winStart,ref).then(function(cohortMap){
+    hideDbPending();
+    return Promise.all([
+      fetchDistribution(distFrom,distTo).catch(function(){return null;}),
+      fetchDistribution(distPrevFrom,distPrevTo).catch(function(){return null;}),
+      fetchCohortSegmentDaily(curFrom,curTo).catch(function(){return null;})
+    ]).then(function(res){
+      STATE.cohort={ref:ref,cohortMap:cohortMap,curFrom:curFrom,curTo:curTo,prevFrom:prevFrom,prevTo:prevTo,
+        dist:res[0], distPrev:res[1], distFrom:distFrom, distTo:distTo, segMap:res[2]};
       renderCohortAll();
     });
   }).catch(function(e){
     console.error(e);
-    $("cohort_kpis").innerHTML='<div class="secload" style="color:#c8102e">데이터 로드 실패: '+esc(e.message)+'</div>';
+    markDbPending("코호트 전환 데이터는 아직 준비 중이에요(주문DB 집계 RPC 설정 필요) — 설정 완료 전까지 D0/D7/D30 등은 \"—\"로 표시됩니다.");
+    STATE.cohort={ref:ref,cohortMap:null,curFrom:curFrom,curTo:curTo,prevFrom:prevFrom,prevTo:prevTo,
+      dist:null, distPrev:null, distFrom:distFrom, distTo:distTo, segMap:null};
+    renderCohortAll();
   });
 }
 function renderCohortAll(){
   renderCohortKPIs();
+  renderCohortTrend();
+  renderCohortSegBuckets();
+  renderCohortSegmentDemo();
   renderCohortTable();
   renderCohortDistribution();
-  renderCohortTrend();
   loadCohortAi();
 }
+// 성숙 코호트만 집계(예: D7은 가입 후 7일 이상 지난 코호트만) — 미성숙 코호트를 0%로 오인하지 않도록.
 function computeCohortAgg(fromISO,toISO,refISO){
   var c=STATE.cohort;
   var days=enumerateDates(fromISO,toISO);
   var sums={d0:{num:0,den:0}, d7:{num:0,den:0}, d30:{num:0,den:0}};
   days.forEach(function(day){
-    var signup=c.signupMap[day]; if(signup==null) signup=0;
     var row=c.cohortMap ? c.cohortMap[day] : null;
+    var signup=row? (row.signup||0) : 0;
     var age=daysBetween(day,refISO);
     sums.d0.den+=signup; if(row) sums.d0.num+=(row.d0||0);
     if(age>=7){ sums.d7.den+=signup; if(row) sums.d7.num+=(row.d7||0); }
@@ -909,32 +965,112 @@ function renderCohortKPIs(){
   var cur=computeCohortAgg(c.curFrom,c.curTo,c.ref);
   var prev=computeCohortAgg(c.prevFrom,c.prevTo,c.ref);
   var html="";
-  html+=kpiCard("D0 첫구매 전환율(가입 당일)", cur.d0==null?"-":pct1(cur.d0), [{label:"이전 동일기간 대비",delta:deltaPP(cur.d0,prev.d0)}]);
-  html+=kpiCard("D7 누적 첫구매 전환율", cur.d7==null?"-":pct1(cur.d7), [{label:"이전 동일기간 대비(성숙 코호트만)",delta:deltaPP(cur.d7,prev.d7)}]);
-  html+=kpiCard("D30 누적 첫구매 전환율", cur.d30==null?"-":pct1(cur.d30), [{label:"이전 동일기간 대비(성숙 코호트만)",delta:deltaPP(cur.d30,prev.d30)}]);
+  html+=kpiCard("D0 첫구매 전환율(가입 당일)", cur.d0==null?"—":pct1(cur.d0), [{label:"직전 성숙 동일기간 대비",delta:deltaPP(cur.d0,prev.d0)}],
+    "가입 당일 첫구매한 유니크 회원 ÷ 신규 가입자");
+  html+=kpiCard("D7 누적 첫구매 전환율", cur.d7==null?"—":pct1(cur.d7), [{label:"직전 성숙 동일기간 대비",delta:deltaPP(cur.d7,prev.d7)}],
+    "가입 후 7일 이내 · 성숙 코호트(가입 후 7일 경과)만 집계");
+  html+=kpiCard("D30 누적 첫구매 전환율", cur.d30==null?"—":pct1(cur.d30), [{label:"직전 성숙 동일기간 대비",delta:deltaPP(cur.d30,prev.d30)}],
+    "가입 후 30일 이내 · 성숙 코호트(가입 후 30일 경과)만 집계");
   var dist=c.dist, distPrev=c.distPrev;
-  var avgV = dist? dist.avg_days : null, medV = dist? dist.median_days : null;
-  var avgTxt = avgV==null?"-":(Number(avgV).toFixed(1)+"일");
-  var medTxt = medV==null?"" : (" · 중앙값 "+Number(medV).toFixed(0)+"일");
-  html+=kpiCard("첫구매까지 소요일(평균·중앙값)", avgTxt+medTxt,
-    [{label:"이전 동일기간 대비(평균)", delta:deltaDays(avgV, distPrev?distPrev.avg_days:null)}]);
+  var avgV = dist? dist.avg_days : null, medV = dist? dist.median_days : null, p75V = dist? dist.p75_days : null;
+  var avgTxt = avgV==null?"—":(Number(avgV).toFixed(1)+"일");
+  var subTxt = "첫구매를 완료한 회원만 대상"+(medV==null?"":(" · 중앙값 "+Number(medV).toFixed(0)+"일 · P75 "+(p75V==null?"—":Number(p75V).toFixed(0)+"일")));
+  html+=kpiCard("첫구매까지 소요일(평균)", avgTxt,
+    [{label:"직전 성숙 동일기간 대비(평균)", delta:deltaDays(avgV, distPrev?distPrev.avg_days:null)}], subTxt);
   $("cohort_kpis").innerHTML=html;
+}
+// 첫구매 발생 구간(D0/D1~3/D4~7/D8~14/D15~30/D31+): 성숙(가입 후 30일 경과)한 코호트만 합산해서
+// 누적치(d0~d30)의 차분으로 구간별 "신규 전환 회원 수"를 구함. D31+는 첫구매 소요기간 분포 카드에서 별도 확인.
+function renderCohortSegBuckets(){
+  var c=STATE.cohort; if(!c) return;
+  $("segbucket_period").textContent="(가입일 "+c.curFrom+" ~ "+c.curTo+" · 가입 후 30일 이상 경과한 코호트만)";
+  var sums={d0:0,d1:0,d3:0,d7:0,d14:0,d30:0,signup:0};
+  var any=false;
+  enumerateDates(c.curFrom,c.curTo).forEach(function(day){
+    if(daysBetween(day,c.ref)<30) return; // 성숙 코호트만
+    var row=c.cohortMap? c.cohortMap[day] : null; if(!row) return;
+    any=true;
+    sums.signup+=(row.signup||0);
+    ["d0","d1","d3","d7","d14","d30"].forEach(function(k){ sums[k]+=(row[k]||0); });
+  });
+  if(!any){ chart("c_seg_bucket").clear(); return; }
+  var buckets=[
+    ["D0",sums.d0],
+    ["D1~3",Math.max(0,sums.d3-sums.d1)],
+    ["D4~7",Math.max(0,sums.d7-sums.d3)],
+    ["D8~14",Math.max(0,sums.d14-sums.d7)],
+    ["D15~30",Math.max(0,sums.d30-sums.d14)]
+  ];
+  chart("c_seg_bucket").setOption({
+    grid:{left:60,right:60,top:14,bottom:24},
+    tooltip:{trigger:"axis",formatter:function(p){ var b=p[0]; return b.axisValueLabel+": "+won(b.value)+"명 (가입자 "+won(sums.signup)+"명 중)"; }},
+    xAxis:{type:"value",axisLabel:{fontSize:9,color:"#999"}},
+    yAxis:{type:"category",data:buckets.map(function(b){return b[0];}),axisLabel:{fontSize:10.5,color:"#555"}},
+    series:[{type:"bar",data:buckets.map(function(b){return b[1];}),barMaxWidth:22,itemStyle:{color:"#e8a33d"},
+      label:{show:true,position:"right",formatter:function(p){ return won(p.value)+"명"; },fontSize:11}}]
+  },true);
+}
+// 성별·연령대별 D0/D7/D30 전환율(주문DB 기준). 세그먼트별로 성숙도가 다를 수 있으므로 segMap 내에서 개별 계산.
+var COHORT_SEG_METRIC = "d7";
+function computeSegAgg(segDayMap,fromISO,toISO,refISO,metric){
+  var threshold={d0:0,d7:7,d30:30}[metric];
+  var num=0, den=0, any=false;
+  enumerateDates(fromISO,toISO).forEach(function(day){
+    var row=segDayMap? segDayMap[day] : null; if(!row) return;
+    any=true;
+    var age=daysBetween(day,refISO);
+    if(age<threshold) return;
+    den+=(Number(row.signup)||0);
+    num+=(Number(row[metric])||0);
+  });
+  if(!any) return null;
+  return den? num/den : null;
+}
+function renderCohortSegmentDemo(){
+  var c=STATE.cohort; if(!c) return;
+  $("seg_demo_period").textContent="(가입일 "+c.curFrom+" ~ "+c.curTo+")";
+  var metric=COHORT_SEG_METRIC;
+  var segMap=c.segMap;
+  if(segMap==null){
+    $("seg_demo_sub").textContent="성별·연령대 데이터는 아직 준비 중입니다(주문DB 집계 RPC 설정 필요).";
+    chart("c_seg_gender").clear(); chart("c_seg_age").clear();
+    return;
+  }
+  $("seg_demo_sub").textContent="Amplitude 없이 주문DB(가입자 성별·연령대 집계 + 첫구매 이력)만으로 계산 · \"기타\"/\"미상\"은 표본이 작아 참고용";
+  function barOpt(order,map,color){
+    var rows=order.map(function(seg){
+      var v=computeSegAgg(map[seg]||{}, c.curFrom, c.curTo, c.ref, metric);
+      return {seg:seg, v:v};
+    });
+    return {
+      grid:{left:64,right:60,top:6,bottom:20},
+      tooltip:{trigger:"axis",formatter:function(p){ var b=p[0]; return b.name+": "+(b.value==null?"—":b.value+"%"); }},
+      xAxis:{type:"value",max:function(v){return Math.max(20,Math.ceil(v.max/10)*10);},axisLabel:{fontSize:9,color:"#999",formatter:"{value}%"}},
+      yAxis:{type:"category",data:rows.map(function(r){return r.seg;}),axisLabel:{fontSize:10.5,color:"#555"}},
+      series:[{type:"bar",data:rows.map(function(r){return r.v==null?null:+(r.v*100).toFixed(1);}),barMaxWidth:18,itemStyle:{color:color},
+        label:{show:true,position:"right",formatter:function(p){ return p.value==null?"—":p.value+"%"; },fontSize:10.5}}]
+    };
+  }
+  chart("c_seg_gender").setOption(barOpt(["남성","여성","기타"], segMap.gender||{}, "#7b9ff2"),true);
+  chart("c_seg_age").setOption(barOpt(["10대이하","20대","30대","40대","50대","60대이상","미상"], segMap.age_band||{}, "#e8a33d"),true);
 }
 function renderCohortTable(){
   var c=STATE.cohort; if(!c) return;
   var days=enumerateDates(c.curFrom,c.curTo).slice().reverse();
   var rows=days.map(function(day){
-    var signup=c.signupMap[day]; if(signup==null) signup=0;
     var row=c.cohortMap ? c.cohortMap[day] : null;
+    var signup = row? (row.signup||0) : 0;
     var age=daysBetween(day,c.ref);
-    function cell(threshold,key){
-      if(c.cohortMap==null) return '<td>-</td>';
-      if(age<threshold) return '<td class="imm">집계중</td>';
+    function cell(threshold,key,detail){
+      var cls=detail?' class="detailcol"':'';
+      if(c.cohortMap==null) return '<td'+cls+'>—</td>';
+      if(signup===0) return '<td'+cls+'>N/A</td>';
+      if(age<threshold) return '<td'+(detail?' class="detailcol imm"':' class="imm"')+'>집계중</td>';
       var n=row? (row[key]||0) : 0;
-      var v=signup? n/signup : null;
-      return '<td>'+(v==null?"-":pct1(v))+'</td>';
+      var v=n/signup;
+      return '<td'+cls+' title="'+won(n)+'명 / 가입자 '+won(signup)+'명">'+pct1(v)+' <span style="color:#b7b3aa;font-size:10.5px">('+won(n)+'/'+won(signup)+')</span></td>';
     }
-    return '<tr><td>'+day+'</td><td>'+won(signup)+'</td>'+cell(0,'d0')+cell(7,'d7')+cell(30,'d30')+'</tr>';
+    return '<tr><td>'+day+'</td><td>'+won(signup)+'</td>'+cell(0,'d0')+cell(1,'d1',true)+cell(3,'d3',true)+cell(7,'d7')+cell(14,'d14',true)+cell(30,'d30')+'</tr>';
   }).join("");
   $("cohort_table_body").innerHTML=rows;
 }
@@ -942,42 +1078,48 @@ function renderCohortDistribution(){
   var c=STATE.cohort; if(!c) return;
   $("dist_period").textContent="(가입일 "+c.distFrom+" ~ "+c.distTo+" · 가입 후 30일 이상 경과한 코호트)";
   var d=c.dist;
-  $("dist_sub").textContent = d==null
-    ? "데이터 준비 중입니다."
-    : "이 기간 가입자 중 실제로 첫구매를 완료한 유저 "+won(d.total)+"명의 소요기간 분포(전체 가입자 대비 비율이 아닌, 구매완료자 내 비율입니다)";
-  if(d==null){ chart("c_distribution").clear(); return; }
+  if(d==null){ $("dist_sub").textContent="데이터 준비 중입니다."; chart("c_distribution").clear(); return; }
+  var totalSignup=0; enumerateDates(c.distFrom,c.distTo).forEach(function(day){ var row=c.cohortMap?c.cohortMap[day]:null; if(row) totalSignup+=(row.signup||0); });
+  $("dist_sub").innerHTML = "이 기간 가입자 중 실제로 첫구매를 완료한 회원 "+won(d.total)+"명의 소요기간 분포. "
+    + "막대 옆 첫 번째 %는 <b>구매 완료자 내 비중</b>, 괄호 안은 <b>전체 가입자("+won(totalSignup)+"명) 대비 비중</b>입니다 — 두 비율은 다릅니다.";
+  var completer=d.total||1;
   var buckets=[["D0(당일)",d.d0],["D1~7",d.d1_7],["D8~30",d.d8_30],["D30+",d.d30p]];
-  var total=d.total||1;
   chart("c_distribution").setOption({
-    grid:{left:60,right:60,top:14,bottom:24},
+    grid:{left:60,right:110,top:14,bottom:24},
     tooltip:{trigger:"axis"},
     xAxis:{type:"value",axisLabel:{fontSize:9,color:"#999"}},
     yAxis:{type:"category",data:buckets.map(function(b){return b[0];}),axisLabel:{fontSize:10.5,color:"#555"}},
     series:[{type:"bar",data:buckets.map(function(b){return b[1];}),barMaxWidth:26,itemStyle:{color:"#7b9ff2"},
-      label:{show:true,position:"right",formatter:function(p){ return won(p.value)+"명 ("+((p.value/total)*100).toFixed(1)+"%)"; },fontSize:11}}]
+      label:{show:true,position:"right",formatter:function(p){
+        var completerPct=((p.value/completer)*100).toFixed(1);
+        var allPct = totalSignup? ((p.value/totalSignup)*100).toFixed(1) : "—";
+        return won(p.value)+"명 · 완료자내 "+completerPct+"% (전체가입자 "+allPct+"%)";
+      },fontSize:10.5}}]
   },true);
 }
 function renderCohortTrend(){
   var c=STATE.cohort; if(!c) return;
+  var metric=COHORT_TREND_METRIC, threshold={d0:0,d7:7,d30:30}[metric];
+  var label={d0:"D0 전환율",d7:"D7 누적 전환율",d30:"D30 누적 전환율"}[metric];
   var weeks=[]; for(var i=0;i<12;i++){ var wEnd=ymdAdd(c.ref,-7*i); var wStart=ymdAdd(wEnd,-6); weeks.unshift({from:wStart,to:wEnd,label:wStart.slice(5)+"~"+wEnd.slice(5)}); }
   var pts=weeks.map(function(w){
-    var mature = daysBetween(w.to,c.ref) >= 7;
+    var mature = daysBetween(w.to,c.ref) >= threshold;
     if(!mature || c.cohortMap==null) return {label:w.label, v:null, mature:mature};
     var num=0,den=0;
     enumerateDates(w.from,w.to).forEach(function(day){
-      var signup=c.signupMap[day]||0; den+=signup;
-      var row=c.cohortMap[day]; if(row) num+=(row.d7||0);
+      var row=c.cohortMap[day]; var signup=row?(row.signup||0):0; den+=signup;
+      if(row) num+=(row[metric]||0);
     });
     return {label:w.label, v: den? num/den : null, mature:true};
   });
-  var s={name:"D7 전환율",type:"line",lineStyle:{width:2,color:"#c8102e"},itemStyle:{color:"#c8102e"},symbol:"circle",symbolSize:6,
+  var s={name:label,type:"line",lineStyle:{width:2,color:"#c8102e"},itemStyle:{color:"#c8102e"},symbol:"circle",symbolSize:6,
     data: pts.map(function(p){
       var v=p.v==null?null:+(p.v*100).toFixed(2);
       return p.mature ? v : {value:v, itemStyle:{color:"#ccc"}, symbol:"emptyCircle"};
     })};
   chart("c_cohort_trend").setOption({
     grid:{left:46,right:20,top:20,bottom:36},
-    tooltip:{trigger:"axis"},
+    tooltip:{trigger:"axis",formatter:function(p){ var b=p[0]; return b.axisValueLabel+"<br>"+label+": "+(b.value==null?"집계중":b.value+"%"); }},
     xAxis:{type:"category",data:pts.map(function(p){return p.label;}),axisLabel:{fontSize:9,color:"#999"}},
     yAxis:{type:"value",axisLabel:{fontSize:9,color:"#999",formatter:"{value}%"},splitLine:{lineStyle:{color:"#eee"}}},
     series:[s]
@@ -988,21 +1130,35 @@ function buildCohortAiContext(){
   var cur=computeCohortAgg(c.curFrom,c.curTo,c.ref);
   var prev=computeCohortAgg(c.prevFrom,c.prevTo,c.ref);
   var days=enumerateDates(c.curFrom,c.curTo).map(function(day){
-    var signup=c.signupMap[day]; var row=c.cohortMap?c.cohortMap[day]:null;
-    return {가입일:day, 신규유저:signup, D0:row?row.d0:null, D7:row?row.d7:null, D30:row?row.d30:null};
+    var row=c.cohortMap?c.cohortMap[day]:null;
+    return {가입일:day, 신규가입자:row?row.signup:null, D0:row?row.d0:null, D7:row?row.d7:null, D30:row?row.d30:null};
   });
-  return { 기간:c.curFrom+"~"+c.curTo, 현재:cur, 이전동일기간:prev, 일별:days };
+  return { 기간:c.curFrom+"~"+c.curTo, 현재:cur, 직전성숙동일기간:prev, 일별:days };
 }
 function loadCohortAi(){
   if(THUMB) return;
   var ctx=buildCohortAiContext();
   return window.MUSTIT.fn("ai-insight",{
-    context:"신규유저 첫구매 전환 대시보드 — 코호트 탭. 코호트=가입일(Amplitude), 전환=주문DB 생애최초주문 기준.", data:ctx,
+    context:"신규유저 첫구매 전환 대시보드 — 코호트 탭. 가입 코호트=주문DB 실제 가입일(Amplitude 아님), 전환=같은 회원의 주문DB 생애최초주문이 가입 후 N일 이내인지, 유니크 회원 기준.", data:ctx,
     question:"전환율이 타임라인 상 '어느 시점(며칠~며칠 사이 가입 코호트)'에서 바뀌었는지에 집중해서 2~3문장으로 알려줘. 아직 성숙하지 않은(집계중) 코호트를 낮은 전환율로 오인하지 말고, 비교는 성숙도가 맞는 코호트끼리만 근거로 삼아줘. "+TONE_GUIDE,
     dashboard:"d-msztl4gqh03", params:{refdate:$("refdate").value}
   }).then(function(r){ renderAiNote("ai_cohort", r.insight); })
     .catch(function(e){ renderAiNote("ai_cohort",""); console.error(e); });
 }
+$("cohorttrendtoggle").addEventListener("click",function(e){
+  var b=e.target.closest("button"); if(!b) return;
+  [].forEach.call($("cohorttrendtoggle").querySelectorAll("button"),function(x){x.classList.remove("on");});
+  b.classList.add("on"); COHORT_TREND_METRIC=b.getAttribute("data-k"); renderCohortTrend();
+});
+$("segdemotoggle").addEventListener("click",function(e){
+  var b=e.target.closest("button"); if(!b) return;
+  [].forEach.call($("segdemotoggle").querySelectorAll("button"),function(x){x.classList.remove("on");});
+  b.classList.add("on"); COHORT_SEG_METRIC=b.getAttribute("data-k"); renderCohortSegmentDemo();
+});
+$("cohort_detail_toggle").addEventListener("click",function(){
+  var t=$("cohort_table"); var open=t.classList.toggle("show-detail");
+  $("cohort_detail_toggle").textContent = open? "D1 · D3 · D14 접기 ▴" : "D1 · D3 · D14 상세보기 ▾";
+});
 
 // ── 탭별 지연 로딩(현재 보는 탭만 조회) ──
 var CUR_TAB=1;

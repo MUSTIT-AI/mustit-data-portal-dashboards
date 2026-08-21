@@ -63,6 +63,7 @@
   .ainote-wrap .axstrip.compact .axcard.k0{border-left:4px solid var(--warn)}
   .ainote-wrap .axstrip.compact .axcard.k1{border-left:4px solid #7b9ff2}
   .ainote-wrap .axstrip.compact .axcard.k2{border-left:4px solid var(--ok)}
+  .ainote-wrap .axstrip.compact .axcard.k3{border-left:4px solid var(--red)}
   .ainote-wrap .axstrip.compact .kind{font-size:9.5px;margin-bottom:3px;letter-spacing:.06em;color:#9aa0a6;font-weight:800;text-transform:uppercase}
   .ainote-wrap .axstrip.compact .body{font-size:11.5px;line-height:1.55}
   .ainote-wrap .axstrip.compact .body b{color:#fff}
@@ -92,6 +93,8 @@
   .kpichip{display:flex;justify-content:space-between;align-items:center;font-size:10.8px;color:var(--sub);padding:2px 0;border-top:1px dashed #ece9e2}
   .kpichip:first-child{border-top:0}
   .kpichip.sub{opacity:.55}
+  .kpichip.custom{border-top:1px solid #d8d5cc;margin-top:1px}
+  .kpichip.custom span:first-child{font-weight:800;color:var(--ink)}
   .chg{font-size:11px;font-weight:800}
   .chg.up{color:var(--up)}.chg.down{color:var(--down)}.chg.flat{color:var(--sub)}
 
@@ -160,8 +163,9 @@
 
 <div class="ctrlbar">
   <div class="fld"><label>조회 기준일</label><input type="date" id="refdate"></div>
+  <div class="fld"><label>직접 비교(선택)</label><input type="date" id="cmpdate"></div>
   <button class="gobtn" id="go">조회</button>
-  <span class="txt" style="margin-left:auto;max-width:300px">이 대시보드 전체의 기준일입니다(차트 내부 기간과는 별개). 기본값=전일(주문DB 반영 지연 때문).</span>
+  <span class="txt" style="margin-left:auto;max-width:300px">이 대시보드 전체의 기준일입니다(차트 내부 기간과는 별개). 기본값=전일(주문DB 반영 지연 때문). 직접 비교는 데일리 탭 Summary 카드에만 추가로 표시됩니다.</span>
 </div>
 <div class="srcnote">📌 <b>신규 가입자</b>: Amplitude / <b>첫구매 주문·매출</b>: 주문DB 생애 최초 주문 기준 — KST · 국내 트래픽만 · 봇/크롤러 제외, 지표별 정확한 정의는 아래 <b>용어 정의</b> 참고</div>
 <div class="dbwarn" id="dbwarn"></div>
@@ -276,6 +280,7 @@
     <div class="sechd">가입일별 코호트 <span class="badge real">실데이터</span></div>
     <div class="ctrlrow">
       <button class="deftoggle" id="cohort_detail_toggle" type="button">D1 · D3 상세보기 ▾</button>
+      <span class="txt">진한 초록색일수록 전환율이 높은 셀입니다(이 표에 보이는 기간 안에서의 상대 비교, 절대 기준 아님)</span>
     </div>
     <div class="tblwrap">
       <table class="chtbl" id="cohort_table">
@@ -509,21 +514,29 @@ function renderAiNote(elId,text){
 // ══════════════════════════════════════════════════════════════════
 var STATE={daily:null, cohort:null};
 
+// 특정일 직접 비교(선택): refdate 옆 #cmpdate에 값이 있으면 STATE.daily.cmp에 저장하고,
+// 기존 400일 커버리지 범위 밖이면 ensureDailyCoverage로 그 날짜만 추가 fetch함(전체 재조회 아님).
+function ensureCmpCoverage(){
+  var d=STATE.daily; if(!d || !d.cmp) return Promise.resolve();
+  if(d.cmp>=d.coverFrom && d.cmp<=d.coverTo) return Promise.resolve();
+  return ensureDailyCoverage(d.cmp,d.cmp).catch(function(e){ console.error(e); });
+}
 function loadDailyTab(){
   var ref = $("refdate").value || ymd(new Date());
   var winStart = ymdAdd(ref,-400);
   var d1=ymdAdd(ref,-1), d7=ymdAdd(ref,-7), d364=ymdAdd(ref,-364);
+  var cmp = ($("cmpdate").value || "").trim() || null;
   return Promise.all([fetchSignupDaily(winStart,ref), fetchActiveDaily(winStart,ref)]).then(function(res){
     var signupMap=res[0], dauMap=res[1];
     return fetchFirstPurchaseDaily(winStart,ref).then(function(buyerMap){
       hideDbPending();
-      STATE.daily={ref:ref,d1:d1,d7:d7,d364:d364,coverFrom:winStart,coverTo:ref,signupMap:signupMap,dauMap:dauMap,buyerMap:buyerMap};
-      renderDailyAll();
+      STATE.daily={ref:ref,d1:d1,d7:d7,d364:d364,cmp:cmp,coverFrom:winStart,coverTo:ref,signupMap:signupMap,dauMap:dauMap,buyerMap:buyerMap};
+      return ensureCmpCoverage().then(renderDailyAll);
     }).catch(function(e){
       console.error(e);
       markDbPending("첫구매 건수·매출 데이터를 불러오지 못했어요. 잠시 후 다시 시도해주세요.");
-      STATE.daily={ref:ref,d1:d1,d7:d7,d364:d364,coverFrom:winStart,coverTo:ref,signupMap:signupMap,dauMap:dauMap,buyerMap:null};
-      renderDailyAll();
+      STATE.daily={ref:ref,d1:d1,d7:d7,d364:d364,cmp:cmp,coverFrom:winStart,coverTo:ref,signupMap:signupMap,dauMap:dauMap,buyerMap:null};
+      return ensureCmpCoverage().then(renderDailyAll);
     });
   }).catch(function(e){
     console.error(e);
@@ -700,18 +713,25 @@ function moneySpan(v){ return '<span title="'+won(v)+'원(정확한 값)">'+wonA
 function kpiCard2(title,valueStr,cmpArr,subText,big){
   var chips=(cmpArr||[]).map(function(c){
     var t = c.date ? (c.label+" ("+c.date+")") : c.label;
-    return '<div class="kpichip'+(c.primary?"":" sub")+'" title="'+esc(t)+'"><span>'+esc(c.label)+'</span><span class="chg '+c.delta.c+'">'+c.delta.t+'</span></div>';
+    var cls = "kpichip"+(c.primary?"":" sub")+(c.custom?" custom":"");
+    return '<div class="'+cls+'" title="'+esc(t)+'"><span>'+esc(c.label)+'</span><span class="chg '+c.delta.c+'">'+c.delta.t+'</span></div>';
   }).join("");
   var sub = subText ? '<div style="font-size:10.5px;color:var(--sub);margin:-5px 0 8px">'+subText+'</div>' : "";
   return '<div class="kpicard'+(big?" big":"")+'"><div class="kt">'+esc(title)+'</div><div class="kv">'+valueStr+'</div>'+sub+chips+'</div>';
 }
+function fmtMD(iso){ var p=String(iso).split("-"); return Number(p[1])+"/"+Number(p[2]); }
 // 비교값: 전주 동일요일을 기본(강조)으로, 전일·전년은 보조(옅게)로. 칩에 마우스를 올리면 실제 비교 날짜가 보임.
+// d.cmp(직접 비교일, 선택)가 설정된 경우에만 4번째 칩을 덧붙임 — 미선택 시 기존 3칩 그대로.
 function cmp3(d,s,fn){
-  return [
+  var arr=[
     {label:"전주 동일요일",delta:fn(s.cur,s.d7),primary:true,date:d.d7},
     {label:"전일",delta:fn(s.cur,s.d1),date:d.d1},
     {label:"전년 동일일",delta:fn(s.cur,s.d364),date:d.d364}
   ];
+  if(d.cmp){
+    arr.push({label:fmtMD(d.cmp)+" 대비", delta:fn(s.cur,s.cmp), date:d.cmp, custom:true});
+  }
+  return arr;
 }
 function renderDailyKPIs(){
   var d=STATE.daily; if(!d) return;
@@ -720,7 +740,8 @@ function renderDailyKPIs(){
   function seriesFor(pick){
     return {
       cur: pick(metricsFor(d,d.ref)), d1: pick(metricsFor(d,d.d1)),
-      d7: pick(metricsFor(d,d.d7)), d364: pick(metricsFor(d,d.d364))
+      d7: pick(metricsFor(d,d.d7)), d364: pick(metricsFor(d,d.d364)),
+      cmp: d.cmp ? pick(metricsFor(d,d.cmp)) : null
     };
   }
   var notAggregated = (d.buyerMap==null); // 첫구매 fetch 자체가 실패한 경우 "-" 대신 "집계 중"으로 표시
@@ -975,7 +996,7 @@ function renderCohortKPIs(){
   var avgV = dist? dist.avg_days : null, medV = dist? dist.median_days : null, p75V = dist? dist.p75_days : null;
   var avgTxt = avgV==null?"—":(Number(avgV).toFixed(1)+"일");
   var subTxt = "첫구매를 완료한 회원만 대상"+(medV==null?"":(" · 중앙값 "+Number(medV).toFixed(0)+"일 · P75 "+(p75V==null?"—":Number(p75V).toFixed(0)+"일")));
-  html+=kpiCard("첫구매까지 소요일(평균)", avgTxt,
+  html+=kpiCard("첫구매까지 소요일(평균, =신규구매간격)", avgTxt,
     [{label:"직전 성숙 동일기간 대비(평균)", delta:deltaDays(avgV, distPrev?distPrev.avg_days:null)}], subTxt);
   $("cohort_kpis").innerHTML=html;
 }
@@ -1054,21 +1075,42 @@ function renderCohortSegmentDemo(){
   chart("c_seg_gender").setOption(barOpt(["남성","여성","기타"], segMap.gender||{}, "#7b9ff2"),true);
   chart("c_seg_age").setOption(barOpt(["10대이하","20대","30대","40대","50대","60대이상","미상"], segMap.age_band||{}, "#e8a33d"),true);
 }
+// 히트맵: 표 안에서 실제로 나온 값들 중 최댓값을 기준으로 상대적 색 농도를 계산(고정 스케일이 아님 —
+// 기간을 바꾸면 색 기준도 그 기간 안에서 다시 잡힘). 집계중/N/A/연결실패 셀은 색을 넣지 않음.
 function renderCohortTable(){
   var c=STATE.cohort; if(!c) return;
   var days=enumerateDates(c.curFrom,c.curTo).slice().reverse();
-  var rows=days.map(function(day){
+  var thresholds={d0:0,d1:1,d3:3,d7:7,d14:14,d30:30};
+  var maxV=0;
+  var rowsData=days.map(function(day){
     var row=c.cohortMap ? c.cohortMap[day] : null;
     var signup = row? (row.signup||0) : 0;
     var age=daysBetween(day,c.ref);
+    var vals={};
+    Object.keys(thresholds).forEach(function(key){
+      var threshold=thresholds[key];
+      if(c.cohortMap==null || signup===0 || age<threshold){ vals[key]=null; return; }
+      var n=row? (row[key]||0) : 0;
+      var v=n/signup;
+      vals[key]=v; if(v>maxV) maxV=v;
+    });
+    return {day:day, signup:signup, row:row, age:age, vals:vals};
+  });
+  function heatStyle(v){
+    if(v==null || maxV<=0) return "";
+    var t=Math.min(1, v/maxV);
+    return ' style="background-color:rgba(47,174,143,'+(0.08+t*0.55).toFixed(3)+')"';
+  }
+  var rows=rowsData.map(function(rd){
+    var day=rd.day, row=rd.row, signup=rd.signup, age=rd.age;
     function cell(threshold,key,detail){
       var cls=detail?' class="detailcol"':'';
       if(c.cohortMap==null) return '<td'+cls+'>—</td>';
       if(signup===0) return '<td'+cls+'>N/A</td>';
       if(age<threshold) return '<td'+(detail?' class="detailcol imm"':' class="imm"')+'>집계중</td>';
       var n=row? (row[key]||0) : 0;
-      var v=n/signup;
-      return '<td'+cls+' title="'+won(n)+'명 / 가입자 '+won(signup)+'명">'+pct1(v)+' <span style="color:#b7b3aa;font-size:10.5px">('+won(n)+'/'+won(signup)+')</span></td>';
+      var v=rd.vals[key];
+      return '<td'+cls+heatStyle(v)+' title="'+won(n)+'명 / 가입자 '+won(signup)+'명">'+pct1(v)+' <span style="color:#6b6a66;font-size:10.5px">('+won(n)+'/'+won(signup)+')</span></td>';
     }
     return '<tr><td>'+day+'</td><td>'+won(signup)+'</td>'+cell(0,'d0')+cell(1,'d1',true)+cell(3,'d3',true)+cell(7,'d7')+cell(14,'d14')+cell(30,'d30')+'</tr>';
   }).join("");
@@ -1140,9 +1182,9 @@ function loadCohortAi(){
   var ctx=buildCohortAiContext();
   return window.MUSTIT.fn("ai-insight",{
     context:"신규유저 첫구매 전환 대시보드 — 코호트 탭. 가입 코호트=주문DB 실제 가입일(Amplitude 아님), 전환=같은 회원의 주문DB 생애최초주문이 가입 후 N일 이내인지, 유니크 회원 기준.", data:ctx,
-    question:"전환율이 타임라인 상 '어느 시점(며칠~며칠 사이 가입 코호트)'에서 바뀌었는지에 집중해서 2~3문장으로 알려줘. 아직 성숙하지 않은(집계중) 코호트를 낮은 전환율로 오인하지 말고, 비교는 성숙도가 맞는 코호트끼리만 근거로 삼아줘. "+TONE_GUIDE,
+    question:"아래 데이터를 보고 [변화]→[가능한 원인]→[확인할 데이터]→[이번 주 액션 아이템] 4파트로 '---' 구분해서 써줘. 앞 3개는 각 1~2문장. [변화]는 전환율이 타임라인 상 '어느 시점(며칠~며칠 사이 가입 코호트)'에서 바뀌었는지에 집중하고, 아직 성숙하지 않은(집계중) 코호트를 낮은 전환율로 오인하지 말고 비교는 성숙도가 맞는 코호트끼리만 근거로 삼아줘. 마지막 [이번 주 액션 아이템]은 실행 가능한 액션을 1~2개, 우선순위(1순위/2순위)를 붙여 제안하고 각 액션 옆에 예상 기대효과를 괄호로 짧게 붙여줘(예: '1순위: OO 재점검 (D7 전환율 소폭 개선 예상)'). 인과관계를 확신하듯 말하지 말고 '~일 가능성' 정도로. 특이 변화가 없으면 그렇다고 짧게 말해줘. "+TONE_GUIDE,
     dashboard:"d-msztl4gqh03", params:{refdate:$("refdate").value}
-  }).then(function(r){ renderAiNote("ai_cohort", r.insight); })
+  }).then(function(r){ renderTriNote("ai_cohort", r.insight, ["변화","가능한 원인","확인할 데이터","이번 주 액션 아이템"]); })
     .catch(function(e){ renderAiNote("ai_cohort",""); console.error(e); });
 }
 $("cohorttrendtoggle").addEventListener("click",function(e){

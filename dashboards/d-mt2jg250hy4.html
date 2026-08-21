@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" type="image/svg+xml" href="../favicon.svg">
-<title>[상품] 판매자별 카탈로그 매칭 · MUST IT</title>
+<title>[상품] 판매자별 상품수 · MUST IT</title>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="../auth.js"></script>
@@ -42,20 +42,6 @@
   .fld{display:flex;flex-direction:column;gap:3px}
   .fld label{font-size:10.5px;color:var(--sub);font-weight:600;letter-spacing:.02em}
   .fld input[type=text]{border:1px solid #d6d4ce;border-radius:6px;padding:5px 7px;font-size:12px;background:#fff;height:29px}
-  /* multiselect */
-  .ms{position:relative}
-  .ms>button{border:1px solid #d6d4ce;border-radius:6px;background:#fff;padding:5px 8px;font-size:12px;height:29px;min-width:96px;max-width:220px;
-    display:flex;align-items:center;justify-content:space-between;gap:6px;cursor:pointer;white-space:nowrap;overflow:hidden}
-  .ms>button .v{overflow:hidden;text-overflow:ellipsis}
-  .ms>button svg{flex:none;opacity:.5}
-  .ms .panel{position:absolute;top:32px;left:0;z-index:60;background:#fff;border:1px solid #cfcdc7;border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.14);
-    min-width:230px;max-height:290px;overflow:auto;padding:6px;display:none}
-  .ms.open .panel{display:block}
-  .ms .panel .search{width:100%;border:1px solid #e0ded8;border-radius:5px;padding:5px 7px;margin-bottom:5px;font-size:12px;box-sizing:border-box}
-  .ms .panel .hint{color:var(--sub);font-size:11px;padding:6px 4px;line-height:1.5}
-  .ms .panel .opt{display:flex;align-items:center;gap:7px;padding:4px 6px;border-radius:5px;cursor:pointer;font-size:12.5px}
-  .ms .panel .opt:hover{background:#f3f2ee}
-  .ms .panel .opt input{margin:0}
   .btns{display:flex;gap:6px;margin-left:auto}
   .btn{border:0;border-radius:7px;padding:6px 15px;font-size:12.5px;font-weight:700;cursor:pointer;height:29px}
   .btn.go{background:var(--red);color:#fff}
@@ -65,8 +51,8 @@
   .wrap{max-width:100%;padding:14px 20px}
   .note{color:var(--sub);font-size:11.5px;margin:0 0 10px;line-height:1.6}
   .note b{color:var(--ink)}
-  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px}
-  @media(max-width:900px){.kpis{grid-template-columns:repeat(2,1fr)}}
+  .kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-bottom:14px}
+  @media(max-width:560px){.kpis{grid-template-columns:1fr}}
   .kpi{background:#fff;padding:14px 16px;text-align:center}
   .kpi .l{color:var(--sub);font-size:11.5px;margin-bottom:6px}
   .kpi .v{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.02em}
@@ -110,7 +96,6 @@
 
 <div class="filters" id="filters">
   <div class="fld"><label>판매자 검색</label><input type="text" id="sellerq" placeholder="판매자ID 일부 입력"></div>
-  <div id="dropdowns" style="display:contents"></div>
   <div class="btns">
     <button class="btn go" id="go">조회</button>
     <button class="btn reset" id="reset">초기화</button>
@@ -121,17 +106,15 @@
 <div class="wrap">
   <p class="note">
     <b>전체 판매자 목록</b>입니다(검색은 이미 불러온 목록을 즉시 좁혀볼 뿐 — DB를 다시 조회하지 않습니다).
-    <b>등록 상품수</b> = 해당 판매자ID로 <code>mustit_products</code>(머스트잇 Open API 상품 마스터, 매일 08:00 갱신)에 등록된 상품 총건수(선택한 상품상태 기준).
-    <b>카탈로그 매칭 상품수</b> = 그중 <code>catalog_id</code>가 배정된(=카탈로그에 연결된) 상품수(단순 판정: 배정 여부만 봄).
-    <span style="color:var(--warn)">※ 카탈로그 자체의 실제 판매 매칭도(<code>matchedItemCount≥2</code> 등 정교한 판정)가 필요하면 <a href="_starter.html?f=d-mszs5qkscg4.html" style="color:var(--red);font-weight:700">「[카탈로그] 매칭 현황」</a> 대시보드를 참고하세요.</span>
+    <b>상품수</b> = 해당 판매자ID로 <code>mustit_products</code>(머스트잇 Open API 상품 마스터, 매일 08:00 갱신)에 등록된 <code>product_status</code> 건수.
     340만 행 원본을 브라우저로 내려받지 않고, 서버에서 판매자당 1행으로 미리 집계한 결과(<code>mustit_sellers_list</code> RPC)만 받아옵니다.
   </p>
 
   <div class="kpis" id="kpis"></div>
 
   <div class="card">
-    <h3>판매자별 등록·매칭 상품수</h3>
-    <span class="h-sub">등록 상품수 상위 30명</span>
+    <h3>판매자별 상품수</h3>
+    <span class="h-sub">상품수 상위 30명</span>
     <div id="c_sellers" class="chart"></div>
   </div>
 
@@ -176,44 +159,6 @@ function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){retur
 // 홈 썸네일(iframe #thumb)로 뜰 땐 무거운 조회를 건너뛴다.
 var THUMB = location.hash.indexOf("thumb") >= 0;
 
-// ── 상품상태 멀티셀렉트 (필터는 항상 복수선택) ──
-var STATUS_OPTS = [
-  ["IN_STOCK","판매중"], ["OUT_OF_STOCK","품절"], ["SUSPENDED","판매중지"]
-];
-var STATUS_SEL = new Set();
-function buildStatusFilter(){
-  var fld = document.createElement("div"); fld.className = "fld";
-  fld.innerHTML = '<label>상품상태</label>';
-  var ms = document.createElement("div"); ms.className = "ms";
-  var btn = document.createElement("button");
-  btn.innerHTML = '<span class="v">전체</span><svg width="10" height="10" viewBox="0 0 10 10"><path d="M1 3l4 4 4-4" stroke="#333" fill="none" stroke-width="1.5"/></svg>';
-  var panel = document.createElement("div"); panel.className = "panel";
-  panel.addEventListener("click", function(e){ e.stopPropagation(); });
-  STATUS_OPTS.forEach(function(o){
-    var row = document.createElement("label"); row.className = "opt";
-    var cb = document.createElement("input"); cb.type = "checkbox"; cb.checked = STATUS_SEL.has(o[0]);
-    cb.onchange = function(){ if(cb.checked) STATUS_SEL.add(o[0]); else STATUS_SEL.delete(o[0]); updateBtn(); };
-    row.appendChild(cb); row.appendChild(document.createTextNode(" "+o[1]));
-    panel.appendChild(row);
-  });
-  function updateBtn(){
-    var n = STATUS_SEL.size;
-    btn.querySelector(".v").textContent = n===0 ? "전체" : (n===1 ? STATUS_OPTS.filter(function(o){return STATUS_SEL.has(o[0]);})[0][1] : n+"개 선택");
-  }
-  btn.onclick = function(e){ e.stopPropagation();
-    document.querySelectorAll(".ms.open").forEach(function(o){ if(o!==ms) o.classList.remove("open"); });
-    ms.classList.toggle("open");
-  };
-  ms.appendChild(btn); ms.appendChild(panel);
-  fld.appendChild(ms);
-  return fld;
-}
-function buildFilters(){
-  var host = $("dropdowns"); host.innerHTML = "";
-  host.appendChild(buildStatusFilter());
-}
-document.addEventListener("click", function(){ document.querySelectorAll(".ms.open").forEach(function(o){o.classList.remove("open");}); });
-
 // ── ECharts ──
 var CH = {};
 function chart(id){
@@ -226,18 +171,17 @@ window.addEventListener("resize", function(){ Object.keys(CH).forEach(function(k
 var TIP = { trigger:"axis", confine:true, textStyle:{fontSize:11} };
 function legend(names){ return { data:names, top:2, left:2, itemWidth:12, itemHeight:8, itemGap:8, textStyle:{fontSize:10,color:"#555"} }; }
 
-// rows: [{seller_id, product_count, matched_count, unmatched}] 등록 상품수 내림차순, 상위 30명 표시
+// rows: [{seller_id, product_count}] 상품수 내림차순, 상위 30명 표시
 function renderChart(rows){
   var sorted = rows.slice().sort(function(a,b){ return b.product_count-a.product_count; }).slice(0,30);
   sorted.reverse();
   var names = sorted.map(function(r){ return r.seller_id; });
   chart("c_sellers").setOption({
-    grid:{ left:110, right:24, top:26, bottom:26 }, tooltip:TIP, legend:legend(["매칭","미매칭"]),
+    grid:{ left:110, right:24, top:26, bottom:26 }, tooltip:TIP,
     xAxis:{ type:"value", axisLabel:{fontSize:9,color:"#999"}, splitLine:{lineStyle:{color:"#eee"}} },
     yAxis:{ type:"category", data:names, axisLabel:{fontSize:10,color:"#555"}, axisTick:{show:false}, axisLine:{lineStyle:{color:"#ddd"}} },
     series:[
-      { name:"매칭",   type:"bar", stack:"s", data:sorted.map(function(r){return r.matched_count;}), itemStyle:{color:"#2fae8f"}, barMaxWidth:18 },
-      { name:"미매칭", type:"bar", stack:"s", data:sorted.map(function(r){return r.unmatched;}),      itemStyle:{color:"#ee3b52"}, barMaxWidth:18 }
+      { name:"상품수", type:"bar", data:sorted.map(function(r){return r.product_count;}), itemStyle:{color:"#7b9ff2"}, barMaxWidth:18 }
     ]
   }, true);
 }
@@ -245,12 +189,9 @@ function renderChart(rows){
 // ── KPI ──
 function renderKPI(rows){
   var total = rows.reduce(function(a,r){ return a+r.product_count; }, 0);
-  var matched = rows.reduce(function(a,r){ return a+r.matched_count; }, 0);
   var items = [
     { l:"전체 판매자 수", v: won(rows.length)+"명" },
-    { l:"총 등록 상품수", v: won(total)+"건" },
-    { l:"카탈로그 매칭 상품수", v: won(matched)+"건" },
-    { l:"평균 매칭률", v: pct(total ? matched/total : null), rate:1 }
+    { l:"총 상품수", v: won(total)+"건" }
   ];
   $("kpis").innerHTML = items.map(function(k){
     return '<div class="kpi"><div class="l">'+k.l+'</div><div class="v'+(k.rate?" rate":"")+'">'+k.v+'</div></div>';
@@ -262,7 +203,7 @@ var ALL_SELLERS = [];
 var SORT = { key:"product_count", dir:"desc" };
 var PAGE_SIZE = 30, PAGE = 0;
 var COLS = [
-  ["seller_id","판매자ID"], ["product_count","등록된 상품수"], ["matched_count","카탈로그 매칭 수"], ["rate","매칭률"]
+  ["seller_id","판매자ID"], ["product_count","상품수"]
 ];
 function sortAll(){
   var k = SORT.key, dir = SORT.dir==="asc" ? 1 : -1;
@@ -294,8 +235,6 @@ function paintTable(){
     return '<tr>'+
       '<td>'+esc(r.seller_id)+'</td>'+
       '<td class="num">'+won(r.product_count)+'</td>'+
-      '<td class="num">'+won(r.matched_count)+'</td>'+
-      '<td class="num">'+pct(r.rate)+'</td>'+
     '</tr>';
   }).join("")+"</tbody>";
   $("sellers").innerHTML = thead+tbody;
@@ -325,22 +264,21 @@ function downloadCSV(){
   var body = rows.map(function(r){ return COLS.map(function(c){ return csvCell(r[c[0]]); }).join(","); }).join("\r\n");
   var blob = new Blob(["﻿"+head+"\r\n"+body], {type:"text/csv;charset=utf-8;"});
   var url = URL.createObjectURL(blob);
-  var a = document.createElement("a"); a.href=url; a.download="판매자별_카탈로그매칭.csv";
+  var a = document.createElement("a"); a.href=url; a.download="판매자별_상품수.csv";
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
 }
 
-// ── refresh: mustit_sellers_list RPC 1회 호출로 판매자 전체를 서버에서 미리 집계해 받아온다 ──
+// ── refresh: mustit_sellers_list RPC 1회 호출로 판매자 전체(seller_id, 상품수)를
+//    서버에서 미리 집계해 받아온다 ──
 function refresh(){
   $("err").textContent = "";
   if(THUMB){ renderChart([]); return; }
-  var statuses = Array.from(STATUS_SEL);
   $("loading").classList.add("on");
-  window.MUSTIT.rpc("mustit_sellers_list", { p_statuses: statuses.length ? statuses : null })
+  window.MUSTIT.rpc("mustit_sellers_list", {})
     .then(function(rows){
       ALL_SELLERS = (rows||[]).map(function(r){
-        var total = Number(r.product_count)||0, matched = Number(r.matched_count)||0;
-        return { seller_id:r.seller_id, product_count:total, matched_count:matched, unmatched:total-matched, rate: total ? matched/total : null };
+        return { seller_id:r.seller_id, product_count: Number(r.product_status_count)||0 };
       });
       sortAll(); PAGE=0;
       renderKPI(ALL_SELLERS);
@@ -362,11 +300,9 @@ $("go").onclick = refresh;
 $("csv").onclick = downloadCSV;
 $("sellerq").addEventListener("input", function(){ PAGE=0; paintTable(); });
 $("reset").onclick = function(){
-  STATUS_SEL.clear(); buildFilters();
   $("sellerq").value = ""; PAGE = 0;
   refresh();
 };
-buildFilters();
 
 // ── 대시보드 설정 모달 / 상단바 (공통 패턴) ──
 var ACCESS=null;

@@ -269,12 +269,15 @@
     <div class="wrap" id="page_segment" style="display:none">
       <div class="segdatabox" id="segdatabox">
         <div class="segdatarow">
-          <button class="btn reset" id="seg_loaddata" type="button">📥 전체 고객 데이터 불러오기(브라우저 집계)</button>
-          <span class="hint" id="seg_data_status">아직 안 불러옴 — 세그먼트 미리보기 전에 먼저 눌러주세요.</span>
+          <div class="fld"><label>시작일</label><input type="date" id="seg_data_from"></div>
+          <div class="fld"><label>종료일</label><input type="date" id="seg_data_to"></div>
+          <button class="btn reset" id="seg_loaddata" type="button">📥 이 기간 불러오기(브라우저 집계)</button>
+          <span class="hint" id="seg_data_status">아직 안 불러옴 — 세그먼트 미리보기 전에 먼저 기간을 지정해 불러와주세요.</span>
         </div>
         <p class="note" style="margin:6px 0 0">
           ⚠ 서버 집계 함수(<code>dash_customer_segment_preview</code>)가 아직 배포되지 않아, 임시로 <b>주문 원본을 이 브라우저로 직접 받아 회원번호별로 묶는 방식</b>을 씁니다.
           기간을 나눠 순차 조회해서 <b>다소 시간이 걸리고</b>, 원본 전체 컬럼(<code>dash_raw_all</code>)을 쓰기 때문에 <b>개인정보 열람 권한이 있는 계정만</b> 사용할 수 있습니다.
+          이미 불러온 기간과 겹치는 부분은 <b>다시 불러오지 않습니다</b> — 기간을 늘려서 다시 누르면 새로 추가된 구간만 조회합니다.
           서버 함수가 배포되면 자동으로 그쪽을 우선 사용하도록 바뀔 예정입니다.
         </p>
       </div>
@@ -1532,38 +1535,68 @@ function fetchRangeRecursive(from, to, limit, aggMap, onProgress){
     onProgress(rows.length);
   });
 }
+// 이미 불러온 기간(LOADED_RANGE)과 새로 요청한 [fromD,toD]를 비교해 "아직 안 받은 부분"만 골라냄
+// (겹치는 가운데는 스킵). 연속된 하나의 구간으로만 관리하므로, 기존 구간과 떨어진(사이에 공백이 있는)
+// 기간을 불러오면 그 공백도 "이미 불러온 것"으로 합쳐진다 — 보통은 기간을 늘려가며 쓰는 용도라 이걸로 충분.
+function computeFetchSegments(fromD, toD, loadedRange){
+  if(!loadedRange) return [[fromD, toD]];
+  var segs = [];
+  var addDays = function(d, n){ var dt=new Date(d+"T00:00:00"); dt.setDate(dt.getDate()+n); return ymd(dt); };
+  if(fromD < loadedRange.min){ segs.push([fromD, toD < loadedRange.min ? toD : addDays(loadedRange.min,-1)]); }
+  if(toD > loadedRange.max){ segs.push([fromD > loadedRange.max ? fromD : addDays(loadedRange.max,1), toD]); }
+  return segs;
+}
+var CUSTOMER_AGG_MAP = {};   // 회원번호별 누적 원시 집계(fold된 상태) — 여러 번 불러와도 계속 쌓임
+var LOADED_RANGE = null;      // {min,max} — 지금까지 실제로 조회 완료한 날짜 구간
 function loadCustomerAggFromBrowser(){
   if(CUSTOMER_AGG_LOADING) return;
+  var fromD = $("seg_data_from").value, toD = $("seg_data_to").value;
+  if(!fromD || !toD || fromD>toD){ $("seg_data_status").textContent = "시작일/종료일을 올바르게 선택해주세요."; return; }
+  var segs = computeFetchSegments(fromD, toD, LOADED_RANGE);
+  if(!segs.length){
+    $("seg_data_status").textContent = "이미 불러온 기간입니다(불러온 구간: "+LOADED_RANGE.min+" ~ "+LOADED_RANGE.max+") — 새로 조회할 부분이 없습니다.";
+    return;
+  }
   CUSTOMER_AGG_LOADING = true;
   $("seg_loaddata").disabled = true;
-  var aggMap = {}, totalRows = 0, emptyStreak = 0;
   var WINDOW_DAYS = 14, LIMIT = 8000;
-  var end = new Date(); end.setDate(end.getDate()-1);
-  var EARLIEST = new Date("2005-01-01T00:00:00");
+  var totalRows = 0;
   function statusMsg(msg){ $("seg_data_status").textContent = msg; }
-  function step(){
-    if(end < EARLIEST || emptyStreak>=8){
-      CUSTOMER_AGG = finalizeAgg(aggMap);
-      CUSTOMER_AGG_LOADING = false;
-      $("seg_loaddata").disabled = false;
-      statusMsg("완료 — 고객 "+won(CUSTOMER_AGG.length)+"명, 주문행 "+won(totalRows)+"건 반영");
-      $("seg_rpc_hint").style.display = "none";
-      renderSegList();
-      return;
-    }
-    var toD = ymd(end);
-    var fromDate = new Date(end.getTime()); fromDate.setDate(fromDate.getDate()-(WINDOW_DAYS-1));
-    var fromD = ymd(fromDate);
-    statusMsg(fromD+" ~ "+toD+" 조회 중… (지금까지 고객 "+won(Object.keys(aggMap).length)+"명, 주문행 "+won(totalRows)+"건)");
-    fetchRangeRecursive(fromD, toD, LIMIT, aggMap, function(n){ totalRows+=n; emptyStreak = n===0 ? emptyStreak+1 : 0; })
-      .then(function(){ end = new Date(fromDate.getTime()); end.setDate(end.getDate()-1); step(); })
-      .catch(function(e){
-        CUSTOMER_AGG_LOADING = false;
-        $("seg_loaddata").disabled = false;
-        statusMsg("오류: "+e.message);
-      });
+  function finish(){
+    LOADED_RANGE = {
+      min: LOADED_RANGE ? (LOADED_RANGE.min < fromD ? LOADED_RANGE.min : fromD) : fromD,
+      max: LOADED_RANGE ? (LOADED_RANGE.max > toD ? LOADED_RANGE.max : toD) : toD
+    };
+    CUSTOMER_AGG = finalizeAgg(CUSTOMER_AGG_MAP);
+    CUSTOMER_AGG_LOADING = false;
+    $("seg_loaddata").disabled = false;
+    statusMsg("완료 — 불러온 기간 "+LOADED_RANGE.min+" ~ "+LOADED_RANGE.max+" · 고객 "+won(CUSTOMER_AGG.length)+"명, 이번에 새로 추가한 주문행 "+won(totalRows)+"건");
+    $("seg_rpc_hint").style.display = "none";
+    renderSegList();
   }
-  step();
+  function runSeg(segIdx){
+    if(segIdx>=segs.length){ finish(); return; }
+    var seg = segs[segIdx];
+    var cur = new Date(seg[0]+"T00:00:00");
+    var segEnd = new Date(seg[1]+"T00:00:00");
+    function chunkStep(){
+      if(cur > segEnd){ runSeg(segIdx+1); return; }
+      var chunkFrom = ymd(cur);
+      var chunkToDate = new Date(cur.getTime()); chunkToDate.setDate(chunkToDate.getDate()+WINDOW_DAYS-1);
+      if(chunkToDate > segEnd) chunkToDate = segEnd;
+      var chunkTo = ymd(chunkToDate);
+      statusMsg(chunkFrom+" ~ "+chunkTo+" 조회 중… (지금까지 고객 "+won(Object.keys(CUSTOMER_AGG_MAP).length)+"명, 새 주문행 "+won(totalRows)+"건)");
+      fetchRangeRecursive(chunkFrom, chunkTo, LIMIT, CUSTOMER_AGG_MAP, function(n){ totalRows+=n; })
+        .then(function(){ cur = new Date(chunkToDate.getTime()); cur.setDate(cur.getDate()+1); chunkStep(); })
+        .catch(function(e){
+          CUSTOMER_AGG_LOADING = false;
+          $("seg_loaddata").disabled = false;
+          statusMsg("오류: "+e.message);
+        });
+    }
+    chunkStep();
+  }
+  runSeg(0);
 }
 function evalCond(cust, cond){
   var f = segFieldByKey(cond.field);
@@ -1675,6 +1708,9 @@ function renderSegList(){
 function buildSegments(){
   SEGMENTS = loadSegments();
   renderSegList();
+  var d = acDefaultDates(90);
+  $("seg_data_from").value = d.from;
+  $("seg_data_to").value = d.to;
 }
 
 // ── 세그먼트 생성/편집 모달 ──

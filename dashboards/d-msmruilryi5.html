@@ -122,7 +122,7 @@
   <a class="logo" href="../index.html">🛍️ Data Portal</a>
   <div class="right">
     <span class="owner" id="dashowner"></span>
-    <div class="modeseg" id="modeseg"><button data-mode="view">조회</button><button data-mode="cmp" class="on">비교</button></div>
+    <div class="modeseg" id="modeseg"><button data-mode="view" class="on">조회</button><button data-mode="cmp">비교</button></div>
     <select id="dashnav" title="대시보드 이동"></select>
   </div>
 </div>
@@ -236,8 +236,8 @@
 <script>
 (function(){
 "use strict";
-var BUILD="v13";
-var OPTIN=null, MEMROWS=null, PUSHAGG=null;
+var BUILD="v14";
+var OPTIN=null, OPTIN_M=null, MEMROWS=null, PUSHAGG=null;
 var $=function(id){return document.getElementById(id);};
 var FILE="d-msmruilryi5.html", AIDASH="커머스 주요 실적";
 var THUMB=/(?:^|[#&])thumb/.test(location.hash);
@@ -470,19 +470,27 @@ function renderKpi3(){
     T("야간 수신동의(전체)",pushAggNight(),null);
 }
 /* ── ② 전체 회원 기준 옵트인 (public 뷰) ── */
+function pushAggNightAt(dateStr){if(!PUSHAGG||!PUSHAGG.length)return null;var md=null;for(var i=0;i<PUSHAGG.length;i++){if(aggd(PUSHAGG[i])<=dateStr){md=PUSHAGG[i].agg_date;break;}}if(md==null)return null;var s=0;PUSHAGG.forEach(function(r){if(r.agg_date===md&&(r.night_app_push_consent===true||r.night_app_push_consent==="true"))s+=Number(r.user_count)||0;});return s;}
 function renderOptinAll(){
   if(!MEMROWS||!MEMROWS.length){$("optin_all_kpi").innerHTML='<div class="kpi"><div class="l">전체 옵트인</div><div class="v" style="font-size:13px;color:#a7a49c">불러오는 중…</div></div>';return;}
   var L=MEMROWS[0],tot=Number(L.act_cnt)||0,night=pushAggNight();
-  function ot(l,n){return '<div class="kpi"><div class="l">'+l+'</div><div class="v">'+won(n)+'</div><div class="bw">'+pct(tot?n/tot:0)+'</div></div>';}
-  $("optin_all_kpi").innerHTML='<div class="kpi"><div class="l">전체 회원(활성)</div><div class="v">'+won(tot)+'</div><div class="bw">act_cnt</div></div>'+
-    ot("이메일",L.email_cnt)+ot("SMS",L.sms_cnt)+ot("카카오",L.kakao_cnt)+ot("앱푸시",L.app_push_cnt)+ot("야간푸시",night==null?0:night);
+  var cmp=(MODE==="cmp"),M=null,mnight=null;
+  if(cmp){var cto=$("cto").value;for(var i=0;i<MEMROWS.length;i++){if(aggd(MEMROWS[i])<=cto){M=MEMROWS[i];break;}}mnight=pushAggNightAt(cto);}
+  function ot(l,n,mv){return tile(l,won(n),{cmp:(cmp&&mv!=null)?won(mv):null,curNum:n,cmpNum:mv,bw:pct(tot?n/tot:0)});}
+  $("optin_all_kpi").innerHTML=
+    tile("전체 회원(활성)",won(tot),{cmp:(cmp&&M)?won(Number(M.act_cnt)||0):null,curNum:tot,cmpNum:M?Number(M.act_cnt)||0:null,bw:"act_cnt · 기준 "+aggd(L)})+
+    ot("이메일",Number(L.email_cnt)||0,(cmp&&M)?Number(M.email_cnt)||0:null)+
+    ot("SMS",Number(L.sms_cnt)||0,(cmp&&M)?Number(M.sms_cnt)||0:null)+
+    ot("카카오",Number(L.kakao_cnt)||0,(cmp&&M)?Number(M.kakao_cnt)||0:null)+
+    ot("앱푸시",Number(L.app_push_cnt)||0,(cmp&&M)?Number(M.app_push_cnt)||0:null)+
+    ot("야간푸시",night==null?0:night,cmp?(mnight==null?0:mnight):null);
   var rows=MEMROWS.slice(0,60).slice().reverse();
   ch("c_optin_all").setOption({grid:{left:52,right:16,top:24,bottom:34},tooltip:{trigger:"axis",valueFormatter:function(v){return won(v);}},legend:{data:["앱푸시","이메일","카카오"],top:0,right:0,itemWidth:10,itemHeight:8,textStyle:{fontSize:10}},
     xAxis:{type:"category",data:rows.map(aggd),axisLabel:{fontSize:8,color:"#999",rotate:38,interval:Math.max(0,Math.floor(rows.length/10))}},yAxis:{type:"value",axisLabel:{fontSize:9,color:"#999",formatter:axM},splitLine:{lineStyle:{color:"#eee"}}},
     series:[{name:"앱푸시",type:"line",symbol:"none",data:rows.map(function(r){return Number(r.app_push_cnt)||0;}),lineStyle:{color:"#ee3b52"},itemStyle:{color:"#ee3b52"}},
       {name:"이메일",type:"line",symbol:"none",data:rows.map(function(r){return Number(r.email_cnt)||0;}),lineStyle:{color:"#7a8bbf"},itemStyle:{color:"#7a8bbf"}},
       {name:"카카오",type:"line",symbol:"none",data:rows.map(function(r){return Number(r.kakao_cnt)||0;}),lineStyle:{color:"#2fae8f"},itemStyle:{color:"#2fae8f"}}]},true);
-  $("optin_all_sub").textContent="기준일 "+aggd(L)+" · 활성회원 "+won(tot)+"명";
+  $("optin_all_sub").textContent="기준일 "+aggd(L)+" · 활성회원 "+won(tot)+"명"+(cmp&&M?(" · 비교기준일 "+aggd(M)):"");
   $("ai_optin_all").innerHTML='<b>AI</b> 전체 회원(활성) '+won(tot)+'명 — 이메일 '+pct(tot?L.email_cnt/tot:0)+' · SMS '+pct(tot?L.sms_cnt/tot:0)+' · 카카오 '+pct(tot?L.kakao_cnt/tot:0)+' · 앱푸시 '+pct(tot?L.app_push_cnt/tot:0)+' · 야간 '+pct(tot&&night!=null?night/tot:0)+'.';
 }
 /* ── GMV 증감 분해(워터폴) ── */
@@ -672,18 +680,20 @@ function exportCSV(kind){
 /* ── USER OPT-IN (OpenAPI) ── */
 function agree(v){return v==="Y"||v===true||v==="true"||v==="동의"||v==="1";}
 function renderOptin(){
-  if(!OPTIN||!OPTIN.items){$("optin_kpi").innerHTML='<div class="kpi"><div class="l">유저 옵트인</div><div class="v" style="font-size:13px;color:#a7a49c">데이터 없음</div></div>';$("t_optin_attr").innerHTML="";$("ai_optin").textContent="";$("optin_sub").textContent="";return;}
+  if(!OPTIN||!OPTIN.items){$("optin_kpi").innerHTML='<div class="kpi"><div class="l">유저 옵트인</div><div class="v" style="font-size:13px;color:#a7a49c">데이터 없음/불러오는 중</div></div>';$("t_optin_attr").innerHTML="";$("ai_optin").textContent="";$("optin_sub").textContent="";return;}
   var it=OPTIN.items,tot=it.length;
-  function cnt(f){return it.filter(function(m){return agree(m[f]);}).length;}
-  var mk=cnt("marketingConsent"),sm=cnt("smsConsent"),em=cnt("emailConsent"),ka=cnt("kakaoConsent"),pu=cnt("pushConsent"),np=cnt("nightPushConsent");
-  function ot(l,n,noPct){return '<div class="kpi"><div class="l">'+l+'</div><div class="v">'+won(n)+'</div>'+(noPct?'':'<div class="bw">'+pct(tot?n/tot:0)+'</div>')+'</div>';}
-  $("optin_kpi").innerHTML=ot("가입자수",OPTIN.totalCount||tot,1)+ot("마케팅동의",mk)+ot("SMS",sm)+ot("이메일",em)+ot("카카오",ka)+ot("앱푸시",pu)+ot("야간푸시",np);
-  grpBar("c_optin",["마케팅","SMS","이메일","카카오","앱푸시","야간푸시"],[mk,sm,em,ka,pu,np],null,false);
+  var cmp=(MODE==="cmp"&&OPTIN_M&&OPTIN_M.items),itm=cmp?OPTIN_M.items:null;
+  function cnt(arr,f){return arr.filter(function(m){return agree(m[f]);}).length;}
+  var C={mk:cnt(it,"marketingConsent"),sm:cnt(it,"smsConsent"),em:cnt(it,"emailConsent"),ka:cnt(it,"kakaoConsent"),pu:cnt(it,"pushConsent"),np:cnt(it,"nightPushConsent")};
+  var Mv=cmp?{mk:cnt(itm,"marketingConsent"),sm:cnt(itm,"smsConsent"),em:cnt(itm,"emailConsent"),ka:cnt(itm,"kakaoConsent"),pu:cnt(itm,"pushConsent"),np:cnt(itm,"nightPushConsent")}:null;
+  function ot(l,n,mv,noPct){return tile(l,won(n),{cmp:(cmp&&mv!=null)?won(mv):null,curNum:n,cmpNum:mv,bw:noPct?"":pct(tot?n/tot:0)});}
+  $("optin_kpi").innerHTML=ot("가입자수",OPTIN.totalCount||tot,cmp?(OPTIN_M.totalCount||itm.length):null,1)+ot("마케팅동의",C.mk,cmp?Mv.mk:null)+ot("SMS",C.sm,cmp?Mv.sm:null)+ot("이메일",C.em,cmp?Mv.em:null)+ot("카카오",C.ka,cmp?Mv.ka:null)+ot("앱푸시",C.pu,cmp?Mv.pu:null)+ot("야간푸시",C.np,cmp?Mv.np:null);
+  grpBar("c_optin",["마케팅","SMS","이메일","카카오","앱푸시","야간푸시"],[C.mk,C.sm,C.em,C.ka,C.pu,C.np],cmp?[Mv.mk,Mv.sm,Mv.em,Mv.ka,Mv.pu,Mv.np]:null,false);
   function dist(f){var g={};it.forEach(function(m){var k=m[f]||"(미상)";g[k]=(g[k]||0)+1;});return Object.keys(g).map(function(k){return {k:k,v:g[k]};}).sort(function(a,b){return b.v-a.v;});}
   function seg(title,rows){return '<tr><th colspan="2" style="text-align:left">'+title+'</th></tr>'+rows.slice(0,6).map(function(r){return '<tr><td>'+esc(r.k)+'</td><td>'+won(r.v)+' ('+pct(tot?r.v/tot:0)+')</td></tr>';}).join("");}
   $("t_optin_attr").innerHTML='<tbody>'+seg("성별",dist("gender"))+seg("연령대",dist("ageGroup"))+seg("등급",dist("buyerGrade"))+'</tbody>';
-  $("optin_sub").textContent="조회기간 가입 회원 "+won(OPTIN.totalCount||tot)+"명 기준"+(OPTIN.truncated?" · 최대 1만 표본":"");
-  $("ai_optin").innerHTML='<b>AI</b> 가입 회원 동의율 — 마케팅 '+pct(tot?mk/tot:0)+' · 앱푸시 '+pct(tot?pu/tot:0)+' · 야간푸시 '+pct(tot?np/tot:0)+'. (전체 회원 상시 기준은 member_status_daily 읽기 RPC 추가 시 확장 가능)';
+  $("optin_sub").textContent="조회기간 가입 회원 "+won(OPTIN.totalCount||tot)+"명 기준"+(OPTIN.truncated?" · 최대 1만 표본":"")+(cmp?" · 비교기간 "+won(OPTIN_M.totalCount||itm.length)+"명":"");
+  $("ai_optin").innerHTML='<b>AI</b> 가입 회원 동의율 — 마케팅 '+pct(tot?C.mk/tot:0)+' · 앱푸시 '+pct(tot?C.pu/tot:0)+' · 야간푸시 '+pct(tot?C.np/tot:0)+'.';
 }
 function fetchExtras(from,to){
   // ① 가입 회원 옵트인(개별) — OpenAPI member-list (조회기간 가입, ≤1만)
@@ -691,6 +701,8 @@ function fetchExtras(from,to){
   window.MUSTIT.fn("member-list",{joinedFrom:from,joinedTo:to,withPurchases:false}).then(function(r){
     if(r&&r.error){OPTIN=null;$("ai_optin").innerHTML='<b style="color:#c8102e">가입회원 옵트인 오류:</b> '+esc(r.error);}else OPTIN=r||null;renderOptin();
   }).catch(function(e){OPTIN=null;$("ai_optin").innerHTML='<b style="color:#c8102e">가입회원 옵트인 실패:</b> '+esc(e&&e.message||e);renderOptin();});
+  OPTIN_M=null;
+  if(MODE==="cmp"){window.MUSTIT.fn("member-list",{joinedFrom:$("cfrom").value,joinedTo:$("cto").value,withPurchases:false}).then(function(r){OPTIN_M=(r&&!r.error)?r:null;renderOptin();}).catch(function(){OPTIN_M=null;renderOptin();});}
   // ② 전체 회원 · 기간 가입/로그인 — public 집계 뷰 직접조회
   var C=window.MUSTIT.client;
   C.from("mustit_member_status_daily").select("agg_date,member_reg_cnt,member_login_cnt,act_cnt,email_cnt,sms_cnt,kakao_cnt,app_push_cnt").order("agg_date",{ascending:false}).limit(400)
@@ -764,7 +776,7 @@ function setupTopbar(){
 window.MUSTIT.ready(function(){
   window.MUSTIT.rpc("dash_access",{p_dashboard:FILE}).then(function(a){
     if(!a || a.view===false){$("block").style.display="grid";return;}
-    ACCESS=a;setupTopbar();SEL.site=new Set(["사이트 내"]);wire();setMode("cmp");markPeriod("7d");setPeriod("7d");document.body.classList.remove("rt");
+    ACCESS=a;setupTopbar();SEL.site=new Set(["사이트 내"]);wire();setMode("view");markPeriod("7d");setPeriod("7d");document.body.classList.remove("rt");
     loadFilters().finally(function(){var h=location.hash;if(h&&h.indexOf("#s=")===0){if(applyState(h.slice(3))){markPeriod("");buildDropdowns();}}refresh();});
   }).catch(function(){$("block").style.display="grid";});
 });

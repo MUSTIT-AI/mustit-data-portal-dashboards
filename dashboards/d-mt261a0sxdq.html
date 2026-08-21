@@ -146,7 +146,7 @@ table{width:100%;border-collapse:collapse}th,td{padding:8px 9px;border-bottom:1p
   <div class="kpis" id="ct_kpis"></div>
   <div class="goal">
    <div class="card box"><div class="head"><h3>KR별 목표 · 실적</h3><button class="csv" data-csv="ct">CSV</button></div>
-     <table id="ct_table"><thead><tr><th>KR</th><th>조회7일</th><th>비교7일</th><th>증감</th><th>누적</th><th>목표</th><th>달성률</th><th>필요 일평균</th></tr></thead><tbody></tbody></table>
+     <table id="ct_table"><thead><tr><th>KR</th><th>조회</th><th class="cmp-only">비교</th><th class="cmp-only">증감</th><th>Q3 누적</th><th>Baseline(Q2)</th><th>목표</th><th>달성률</th><th>필요 일평균</th></tr></thead><tbody></tbody></table>
    </div>
    <div class="ai" id="ct_ai"><div class="title">🤖 AI 총평</div><span class="muted-block">조회 후 생성됩니다.</span></div>
   </div>
@@ -260,9 +260,19 @@ var $=function(id){return document.getElementById(id);};
 var THUMB=location.hash.indexOf("thumb")>=0;
 var CUR_FILE=decodeURIComponent(location.pathname.split("/").pop()||"d-mt261a0sxdq.html");
 
-/* ---------- 설정: Q3 목표(억) ---------- */
-var Q3_START="2026-07-01", Q3_END="2026-09-30";
-var TARGET={ gmv:150.5e8, rep:77.5e8, new:36.4e8, cps:11.4e8 };
+/* ---------- 설정: Q3 목표관리 (OKR) ----------
+   · 누적 진척도 = 주문일 기준 2026-07-01 ~ 2026-09-30 (조회기간과 무관, 고정)
+   · Baseline = 전분기(Q2) 실적 · 기준 = 총구매금액(GMV) · 온사이트(order_type=일반)
+   · 신규 첫구매 = customer_type IN (신규, 기존(첫구매)) · CPS·제휴 = 매출코드(partner77 주력) 별개 */
+var Q3_START="2026-07-01", Q3_FINAL="2026-09-30";
+var OKR={
+  rep:{name:"재구매",      base:6939188919, target:7746385874}, // GU-04
+  "new":{name:"신규 첫구매", base:3264698581, target:3644462669}, // GU-02 (신규+기존첫구매)
+  cps:{name:"CPS·제휴",    base:931629188,  target:1082130612}  // GU-03 (매출코드 partner77 주력)
+};
+var ONSITE_ORDER_TYPE="일반";        // 온사이트(사이트 내) 기준
+var CPS_MAIN="mustit_partner_77";    // CPS 주력 매출코드
+var MODE="compare";                  // compare(조회+비교) | view(조회만)
 /* 이상징후 임계 (spec §6 Step1) */
 var TH={ gmv:0.05, buyers:0.05, signup:0.05, rate:0.01, aov:0.05, cancel:0.03, seg:0.08 };
 var CANCEL3={"구매취소환불완료":1,"판매취소완료":1,"반품환불완료":1};
@@ -280,9 +290,9 @@ function parseYMD(s){var p=String(s).split("-");return new Date(+p[0],+p[1]-1,+p
 function daysBetween(a,b){return Math.round((parseYMD(d2(a))-parseYMD(d2(b)))/86400000);}
 function addDays(d,n){var x=new Date(d.getTime());x.setDate(x.getDate()+n);return x;}
 /* 증감: 금액·건수=%, 비율=%p */
-function chgPctHtml(cur,prev){ if(!prev){return cur?'<span class="up">신규</span>':'<span class="flat">-</span>';}
-  var r=(cur-prev)/prev; var c=r>0?"up":(r<0?"down":"flat"); var s=(r>0?"▲":(r<0?"▼":""))+" "+Math.abs(r*100).toFixed(1)+"%"; return '<span class="'+c+'">'+s+'</span>'; }
-function chgPpHtml(cur,prev){ var d=(cur-prev)*100; var c=d>0?"up":(d<0?"down":"flat"); return '<span class="'+c+'">'+(d>0?"▲":(d<0?"▼":""))+" "+Math.abs(d).toFixed(1)+"%p</span>"; }
+function chgPctHtml(cur,prev){ if(!prev){return cur?'<span class="up cmp-only">신규</span>':'<span class="flat cmp-only">-</span>';}
+  var r=(cur-prev)/prev; var c=r>0?"up":(r<0?"down":"flat"); var s=(r>0?"▲":(r<0?"▼":""))+" "+Math.abs(r*100).toFixed(1)+"%"; return '<span class="'+c+' cmp-only">'+s+'</span>'; }
+function chgPpHtml(cur,prev){ var d=(cur-prev)*100; var c=d>0?"up":(d<0?"down":"flat"); return '<span class="'+c+' cmp-only">'+(d>0?"▲":(d<0?"▼":""))+" "+Math.abs(d).toFixed(1)+"%p</span>"; }
 function ratio(cur,prev){ return prev? (cur-prev)/prev : (cur?1:0); }
 function esc(s){return String(s==null?"":s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
 
@@ -311,7 +321,9 @@ function buildMS(key){
 }
 document.addEventListener("click",function(){document.querySelectorAll(".ms.open").forEach(function(o){o.classList.remove("open");});});
 function buildAllMS(){ALL_KEYS.forEach(buildMS);}
-function serverFilters(){var f={};SERVER_KEYS.forEach(function(k){if(SEL[k]&&SEL[k].size)f[k]=Array.from(SEL[k]);});var sid=$("seller_id").value.trim();if(sid)f.seller_id=sid.split(",").map(function(s){return s.trim();}).filter(Boolean);return f;}
+function serverFilters(){var f={};SERVER_KEYS.forEach(function(k){if(SEL[k]&&SEL[k].size)f[k]=Array.from(SEL[k]);});var sid=$("seller_id").value.trim();if(sid)f.seller_id=sid.split(",").map(function(s){return s.trim();}).filter(Boolean);
+  if(!f.order_type) f.order_type=[ONSITE_ORDER_TYPE]; // 온사이트(사이트 내) 기본
+  return f;}
 function clientFilterPass(row){return CLIENT_KEYS.every(function(k){if(!SEL[k]||!SEL[k].size)return true;return SEL[k].has(row[k]);});}
 
 /* ---------- 기간 ---------- */
@@ -363,36 +375,39 @@ function agg(rows){ var o={gmv:0,real:0,cancel:0,qty:0,orders:{},buyers:{},rowsN
   o.ordersN=Object.keys(o.orders).length; o.buyersN=Object.keys(o.buyers).length; return o; }
 function filt(rows,fn){return rows.filter(fn);}
 function isRep(r){return r.customer_type==="기존(재구매)";}
-function isNew(r){return r.customer_type==="신규";}
+function isNew(r){return r.customer_type==="신규";}                                   // 신규 가입 코호트(첫구매 시점 분석용)
+function isFirstBuy(r){return r.customer_type==="신규"||r.customer_type==="기존(첫구매)";} // 신규 첫구매 KR
 function isCps(r){return r.sales_code!=null&&String(r.sales_code)!=="";}
+function onSite(r){return r.order_type===ONSITE_ORDER_TYPE;}
 function groupSum(rows,keyFn,valFn){var m={};rows.forEach(function(r){var k=keyFn(r);if(k==null||k==="")k="(미상)";m[k]=(m[k]||0)+(valFn?valFn(r):num(r.total_purchase));});return m;}
 function groupBuyers(rows,keyFn){var m={};rows.forEach(function(r){var k=keyFn(r);if(k==null||k==="")k="(미상)";(m[k]=m[k]||{})[r.buyer_hash]=1;});var o={};Object.keys(m).forEach(function(k){o[k]=Object.keys(m[k]).length;});return o;}
 
 /* ---------- 렌더: Control Tower ---------- */
 var LAST={}; // 최근 계산 결과(요약/CSV용)
 function renderControlTower(cum, v, c){
-  // cum:{gmv,rep,new,cps} 누적 · v/c: agg of VIEW/CMP + seg
-  var kr=[
-    {k:"gmv", n:"Q3 GMV", cum:cum.gmv, tgt:TARGET.gmv, cur:v.gmv, prev:c.gmv},
-    {k:"rep", n:"재구매 GMV", cum:cum.rep, tgt:TARGET.rep, cur:v.repGmv, prev:c.repGmv},
-    {k:"new", n:"신규 첫구매 GMV", cum:cum.new, tgt:TARGET.new, cur:v.newGmv, prev:c.newGmv},
-    {k:"cps", n:"CPS·제휴 GMV", cum:cum.cps, tgt:TARGET.cps, cur:v.cpsGmv, prev:c.cpsGmv}
+  var krs=[
+    {k:"total", n:"전체 거래실적", cum:cum.gmv, base:null,          tgt:null,           cur:v.gmv,    prev:c.gmv},
+    {k:"rep",   n:"재구매",       cum:cum.rep, base:OKR.rep.base,   tgt:OKR.rep.target, cur:v.repGmv, prev:c.repGmv},
+    {k:"new",   n:"신규 첫구매",  cum:cum["new"], base:OKR["new"].base, tgt:OKR["new"].target, cur:v.newGmv, prev:c.newGmv},
+    {k:"cps",   n:"CPS·제휴",     cum:cum.cps, base:OKR.cps.base,   tgt:OKR.cps.target, cur:v.cpsGmv, prev:c.cpsGmv}
   ];
-  var daysLeft=Math.max(1, daysBetween(Q3_END,$("vto").value));
-  $("ct_kpis").innerHTML=kr.map(function(x){ var rate=x.cum/x.tgt; var gap=Math.max(0,x.tgt-x.cum);
-    return '<div class="kpi"><div class="n">'+x.n+'</div><div class="v">'+eok(x.cum)+'</div>'+
-      '<div class="small">목표 '+eok(x.tgt)+' · <b>'+(rate*100).toFixed(1)+'%</b></div>'+
-      '<div class="pbar"><i style="width:'+Math.min(100,rate*100).toFixed(1)+'%"></i></div>'+
-      '<div class="small" style="margin-top:5px">잔여 Gap '+eok(gap)+'</div></div>';
+  var daysLeft=Math.max(1, daysBetween(Q3_FINAL,$("vto").value));
+  $("ct_kpis").innerHTML=krs.map(function(x){
+    if(x.tgt){ var rate=x.cum/x.tgt; var gap=Math.max(0,x.tgt-x.cum); var vsBase=x.base?((x.cum/x.base-1)*100):null;
+      return '<div class="kpi"><div class="n">'+x.n+' <span class="small">(Q3 누적)</span></div><div class="v">'+eok(x.cum)+'</div>'+
+        '<div class="small">목표 '+eok(x.tgt)+' · <b>'+(rate*100).toFixed(1)+'%</b></div>'+
+        '<div class="pbar"><i style="width:'+Math.min(100,rate*100).toFixed(1)+'%"></i></div>'+
+        '<div class="small" style="margin-top:5px">Gap '+eok(gap)+' · 필요 '+eok(gap/daysLeft)+'/일'+(vsBase!=null?' · Q2대비 '+(vsBase>=0?'+':'')+vsBase.toFixed(0)+'%':'')+'</div></div>';
+    }
+    return '<div class="kpi"><div class="n">'+x.n+' <span class="small">(Q3 누적)</span></div><div class="v">'+eok(x.cum)+'</div>'+
+      '<div class="small">4구분 합계 · CPS 별개</div><div class="small cmp-only" style="margin-top:5px">조회 '+eok(x.cur)+' '+chgPctHtml(x.cur,x.prev)+'</div></div>';
   }).join("");
-  $("ct_table").querySelector("tbody").innerHTML=kr.slice(1).map(function(x){ var rate=x.cum/x.tgt; var gap=Math.max(0,x.tgt-x.cum); var need=gap/daysLeft;
-    return '<tr><td>'+x.n.replace(" GMV","").replace(" 첫구매","")+'</td><td>'+eok(x.cur)+'</td><td>'+eok(x.prev)+'</td><td>'+chgPctHtml(x.cur,x.prev)+'</td><td>'+eok(x.cum)+'</td><td>'+eok(x.tgt)+'</td><td>'+(rate*100).toFixed(1)+'%</td><td>'+eok(need)+'/일</td></tr>';
+  $("ct_table").querySelector("tbody").innerHTML=krs.filter(function(x){return x.tgt;}).map(function(x){ var rate=x.cum/x.tgt; var gap=Math.max(0,x.tgt-x.cum);
+    return '<tr><td>'+x.n+'</td><td>'+eok(x.cur)+'</td><td class="cmp-only">'+eok(x.prev)+'</td><td class="cmp-only">'+chgPctHtml(x.cur,x.prev)+'</td><td>'+eok(x.cum)+'</td><td>'+eok(x.base)+'</td><td>'+eok(x.tgt)+'</td><td><b>'+(rate*100).toFixed(1)+'%</b></td><td>'+eok(gap/daysLeft)+'/일</td></tr>';
   }).join("");
-  LAST.ct=kr.map(function(x){return {KR:x.n,조회:x.cur,비교:x.prev,누적:x.cum,목표:x.tgt,달성률:(x.cum/x.tgt)};});
-  // AI 총평(수치 기반 템플릿)
-  var sTxt=[]; kr.slice(1).forEach(function(x){ var r=ratio(x.cur,x.prev); sTxt.push(x.n.replace(" GMV","")+" 조회 "+eok(x.cur)+"("+(r>=0?"+":"")+(r*100).toFixed(1)+"%)"); });
-  var lead = (v.newGmv<c.newGmv? "신규 첫구매 회복이 우선" : (v.cpsGmv>c.cpsGmv? "CPS·제휴 성장 유지" : "재구매 중심 성장 관리"));
-  $("ct_ai").innerHTML='<div class="title">🤖 AI 총평</div><b>이번 주는 '+lead+'.</b> '+sTxt.join(" · ")+'. 목표 대비 달성률 GMV '+(kr[0].cum/kr[0].tgt*100).toFixed(1)+'% · 재구매 '+(cum.rep/TARGET.rep*100).toFixed(1)+'% · 신규 '+(cum.new/TARGET.new*100).toFixed(1)+'% · CPS '+(cum.cps/TARGET.cps*100).toFixed(1)+'%. 잔여 '+daysLeft+'일 기준 일평균 필요액을 상단 표에서 확인.';
+  LAST.ct=krs.map(function(x){return {KR:x.n,조회:x.cur,비교:x.prev,누적:x.cum,"Baseline(Q2)":x.base,목표:x.tgt,달성률:(x.tgt?x.cum/x.tgt:null)};});
+  var lead = (cum.rep/OKR.rep.target < cum["new"]/OKR["new"].target ? "재구매 달성률 방어가 우선" : "신규 첫구매 회복이 우선");
+  $("ct_ai").innerHTML='<div class="title">🤖 AI 총평 · Q3 목표관리</div><b>'+lead+'.</b> Q3 누적('+Q3_START+'~'+Q3_FINAL+', 온사이트·GMV) — 재구매 '+eok(cum.rep)+'/'+eok(OKR.rep.target)+' ('+(cum.rep/OKR.rep.target*100).toFixed(1)+'%) · 신규 '+eok(cum["new"])+'/'+eok(OKR["new"].target)+' ('+(cum["new"]/OKR["new"].target*100).toFixed(1)+'%) · CPS '+eok(cum.cps)+'/'+eok(OKR.cps.target)+' ('+(cum.cps/OKR.cps.target*100).toFixed(1)+'%). 잔여 '+daysLeft+'일 · 일평균 필요액은 상단 표 참고.';
 }
 
 /* ---------- Action Engine (전체) ---------- */
@@ -670,16 +685,16 @@ function renderRepeatSpark(view,cmp,vf,cf){
 function refresh(){
   var vf=$("vfrom").value, vt=$("vto").value, cf=$("cfrom").value, ct=$("cto").value;
   if(!vf||!vt||!cf||!ct){return;}
-  var sf=serverFilters(), pn=$("seller_id")&&""; // product_name 미사용
+  var sf=serverFilters(), pn=""; // product_name 미사용
   $("loading").classList.add("on"); $("err").textContent="";
-  $("notice").textContent="조회기간 "+vf+"~"+vt+" · 비교기간 "+cf+"~"+ct+" · Q3 누적 "+Q3_START+"~"+vt+" (일시 KST)";
+  $("notice").textContent="조회 "+vf+"~"+vt+(MODE==="compare"?(" · 비교 "+cf+"~"+ct):" · (조회 모드)")+" · Q3 누적(고정) "+Q3_START+"~"+Q3_FINAL+" · 온사이트("+ONSITE_ORDER_TYPE+")·GMV 기준 · KST";
 
   var jobs=[
-    rpc("dash_summary",{p:{from:Q3_START,to:vt,filters:sf}}),
-    rpc("dash_summary",{p:{from:Q3_START,to:vt,filters:Object.assign({customer_type:["기존(재구매)"]},sf)}}),
-    rpc("dash_summary",{p:{from:Q3_START,to:vt,filters:Object.assign({customer_type:["신규"]},sf)}}),
+    rpc("dash_summary",{p:{from:Q3_START,to:Q3_FINAL,filters:sf}}),                                                                   // 전체 거래실적(온사이트)
+    rpc("dash_summary",{p:{from:Q3_START,to:Q3_FINAL,filters:Object.assign({},sf,{customer_type:["기존(재구매)"]})}}),                  // 재구매
+    rpc("dash_summary",{p:{from:Q3_START,to:Q3_FINAL,filters:Object.assign({},sf,{customer_type:["신규","기존(첫구매)"]})}}),           // 신규 첫구매
     loadRawUnion(cf,vt,sf,pn),
-    THUMB?Promise.resolve(0):cpsCumulative(Q3_START,vt,sf),
+    THUMB?Promise.resolve(0):cpsCumulative(Q3_START,Q3_FINAL,sf),
     THUMB?Promise.resolve(null):memberList(vf,vt)
   ];
   Promise.all(jobs).then(function(res){
@@ -693,10 +708,10 @@ function refresh(){
     RAW_CMP=rows.filter(function(r){var d=d2(r.order_datetime);return d>=cf&&d<=ct;});
     var v=agg(RAW_VIEW), c=agg(RAW_CMP);
     v.repGmv=agg(filt(RAW_VIEW,isRep)).gmv; c.repGmv=agg(filt(RAW_CMP,isRep)).gmv;
-    v.newGmv=agg(filt(RAW_VIEW,isNew)).gmv; c.newGmv=agg(filt(RAW_CMP,isNew)).gmv;
+    v.newGmv=agg(filt(RAW_VIEW,isFirstBuy)).gmv; c.newGmv=agg(filt(RAW_CMP,isFirstBuy)).gmv; // 신규 첫구매 = 신규+기존첫구매
     v.cpsGmv=agg(filt(RAW_VIEW,isCps)).gmv; c.cpsGmv=agg(filt(RAW_CMP,isCps)).gmv;
 
-    var cum={ gmv:num(sTot.total_purchase), rep:num(sRep.total_purchase), new:num(sNew.total_purchase), cps:cpsCum };
+    var cum={ gmv:num(sTot.total_purchase), rep:num(sRep.total_purchase), "new":num(sNew.total_purchase), cps:cpsCum };
 
     // 렌더 (각 섹션 독립 try)
     try{ renderRepeat(RAW_VIEW,RAW_CMP); renderRepeatSpark(RAW_VIEW,RAW_CMP,vf,cf); }catch(e){console.error("repeat",e);}
